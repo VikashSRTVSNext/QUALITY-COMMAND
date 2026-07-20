@@ -208,7 +208,7 @@ const SafetyChart = ({
   const gradId = React.useId();
 
   return (
-    <div className="w-full h-[55px] mt-1 relative select-none">
+    <div className="w-full h-[70px] 2xl:h-[55px] mt-1 relative select-none">
       <svg
         width="100%"
         height="100%"
@@ -332,10 +332,10 @@ const SemiCircleGauge = ({
   const iconY = 25;
 
   return (
-    <div className="flex items-center justify-center relative w-[120px] h-[64px] select-none">
+    <div className="flex items-center justify-center relative w-[145px] h-[78px] 2xl:w-[120px] 2xl:h-[64px] select-none">
       <svg
-        width="120"
-        height="64"
+        width="100%"
+        height="100%"
         viewBox="0 0 120 64"
         className="overflow-visible"
       >
@@ -843,6 +843,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
   const navigateToHome = () => navigate("/");
 
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
   const getTimelineNodeColor = (card: (typeof processPerformanceData)[0]) => {
     if (card.section === "SMT") return "#0091ff";
     if (card.status === "Critical") return "#ef4444";
@@ -859,13 +869,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const renderFullSparkline = (points: number[], strokeColor: string) => {
     const width = 160;
     const height = 24;
+    const padding = 6;
+    const chartHeight = height - padding * 2;
     const max = Math.max(...points);
     const min = Math.min(...points);
     const range = max - min || 1;
     const svgPoints = points
       .map((p, i) => {
         const x = (i / (points.length - 1)) * width;
-        const y = height - ((p - min) / range) * height;
+        const y = padding + chartHeight - ((p - min) / range) * chartHeight;
         return `${x},${y}`;
       })
       .join(" ");
@@ -1011,7 +1023,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             <ChevronDown size={11} className="text-[#526a8a]" />
           </button>
 
-          <button className="p-1.5 hover:bg-[#122339] rounded border border-[#1b3252] cursor-pointer text-[#8fa0b5] outline-none">
+          <button
+            onClick={toggleFullscreen}
+            className="p-1.5 hover:bg-[#122339] rounded border border-[#1b3252] cursor-pointer text-[#8fa0b5] outline-none"
+          >
             <Maximize2 size={11} />
           </button>
         </div>
@@ -1047,7 +1062,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   {card.change}
                 </span>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 h-[18px] pointer-events-none">
+              <div className="absolute bottom-[8px] left-0 right-0 h-[24px] pointer-events-none">
                 {renderFullSparkline(card.points, accent)}
               </div>
             </div>
@@ -1111,7 +1126,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               <div key={idx} className="flex flex-col w-full min-w-0">
                 {/* Card */}
                 <div
-                  className={`bg-[#040910] border rounded-lg p-2.5 pb-3 flex flex-col h-[142px] transition-all duration-300 ${
+                  className={`bg-[#040910] border rounded-lg p-1.5 2xl:p-2.5 pb-2 2xl:pb-3 flex flex-col h-[126px] 2xl:h-[142px] transition-all duration-300 ${
                     item.status === "Critical"
                       ? "animate-border-pulse-critical"
                       : ""
@@ -1126,32 +1141,32 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   }}
                 >
                   {/* Header */}
-                  <div className="flex items-start gap-1.5 mb-2 flex-shrink-0">
+                  <div className="flex items-start gap-1 mb-1 2xl:mb-2 flex-shrink-0">
                     <item.icon
-                      size={14}
-                      className="text-white flex-shrink-0 mt-[1.5px]"
+                      size={12}
+                      className="text-white flex-shrink-0 mt-[1px] 2xl:size-[14px]"
                     />
-                    <span className="text-white text-[12.5px] lg:text-[13px] font-black uppercase leading-tight">
+                    <span className="text-white text-[10.5px] 2xl:text-[13px] font-black uppercase leading-tight truncate">
                       {item.name}
                     </span>
                   </div>
                   {/* Body */}
-                  <div className="flex-1 flex flex-col justify-start gap-1 mt-0.5 min-h-0">
+                  <div className="flex-1 flex flex-col justify-start gap-0.5 mt-0.5 min-h-0">
                     {item.type === "yield" && (
                       <>
-                        <div className="flex justify-between text-[12.5px] lg:text-[13px]">
+                        <div className="flex justify-between text-[10px] 2xl:text-[13px]">
                           <span className="text-[#8fa0b5]">Done</span>
                           <span className="text-white font-mono">
                             {item.data.done}
                           </span>
                         </div>
-                        <div className="flex justify-between text-[12.5px] lg:text-[13px]">
+                        <div className="flex justify-between text-[10px] 2xl:text-[13px]">
                           <span className="text-[#8fa0b5]">OK</span>
                           <span className="text-white font-mono">
                             {item.data.ok}
                           </span>
                         </div>
-                        <div className="flex justify-between text-[12.5px] lg:text-[13px]">
+                        <div className="flex justify-between text-[10px] 2xl:text-[13px]">
                           <span className="text-[#8fa0b5]">Yield</span>
                           <span
                             className="font-bold font-mono"
@@ -1164,11 +1179,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     )}
                     {item.type === "failure" && (
                       <div className="flex-1 flex flex-col items-center justify-center">
-                        <span className="text-[#8fa0b5] text-[12.5px] lg:text-[13px]">
+                        <span className="text-[#8fa0b5] text-[10px] 2xl:text-[13px]">
                           Failure %
                         </span>
                         <span
-                          className="text-[19px] lg:text-[21px] font-black mt-0.5 font-mono"
+                          className="text-[15px] 2xl:text-[21px] font-black mt-0.5 font-mono"
                           style={{
                             color: item.color,
                             textShadow: `0 0 8px ${item.color}30`,
@@ -1180,16 +1195,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     )}
                   </div>
                   {/* Footer (inside card) */}
-                  <div className="flex items-center gap-1.5 mt-auto flex-shrink-0 pt-2">
+                  <div className="flex items-center gap-1 mt-auto flex-shrink-0 pt-1 2xl:pt-2">
                     <div
-                      className="w-2 h-2 rounded-full"
+                      className="w-1.5 h-1.5 2xl:w-2 2xl:h-2 rounded-full"
                       style={{
                         backgroundColor: item.color,
                         boxShadow: `0 0 8px ${item.color}`,
                       }}
                     />
                     <span
-                      className="text-[11px]"
+                      className="text-[9.5px] 2xl:text-[11px]"
                       style={{
                         color: item.color,
                         textShadow:
@@ -1230,7 +1245,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       </section>
 
       {/* Row 3: Middle Analysis Hub */}
-      <main className="grid grid-cols-1 lg:grid-cols-[2.8fr_5fr_2.5fr] gap-4">
+      <main className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.8fr)_minmax(0,5fr)_minmax(0,2.5fr)] gap-4">
         {/* Section 1: Factory Quality Twin */}
         <section className="bg-[#070e17] border border-[#142337] rounded-xl p-4 flex flex-col h-[400px]">
           <div className="flex items-center justify-between border-b border-[#142337]/50 pb-2 mb-3 flex-shrink-0">
@@ -1288,8 +1303,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-hidden flex flex-col">
-            <table className="w-full text-left text-[12px] border-collapse relative h-full">
+          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+            <table className="w-full min-w-[720px] text-left text-[12px] border-collapse relative">
               <thead>
                 <tr className="border-b border-[#142337] text-[#526a8a] font-bold text-[10px] uppercase">
                   <th className="pb-1.5 font-black pl-2">#</th>
@@ -1582,9 +1597,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       </main>
 
       {/* Row 4: Bottom Operational KPIs */}
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-1.5">
+      <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4 mt-1.5">
         {/* Card 1: Safety */}
-        <div className="bg-[#070e17] border border-[#142337] rounded-xl p-3 flex flex-col h-[172px] justify-between">
+        <div className="bg-[#070e17] border border-[#142337] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
           <div className="flex items-center gap-1.5 border-b border-[#142337]/50 pb-1.5 flex-shrink-0">
             <Shield size={15} className="text-[#10b981]" />
             <span className="text-[#8fa0b5] text-[12px] font-black uppercase tracking-wider">
@@ -1661,7 +1676,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
 
         {/* Card 2: Sustainability */}
-        <div className="bg-[#070e17] border border-[#142337] rounded-xl p-3 flex flex-col h-[172px] justify-between">
+        <div className="bg-[#070e17] border border-[#142337] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
           {/* Header */}
           <div className="flex items-center gap-1.5 border-b border-[#142337]/50 pb-1.5 flex-shrink-0">
             <Leaf size={15} className="text-[#10b981]" />
@@ -1740,7 +1755,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
 
         {/* Card 3: Customer Reflection */}
-        <div className="bg-[#070e17] border border-[#142337] rounded-xl p-3 flex flex-col h-[172px] justify-between">
+        <div className="bg-[#070e17] border border-[#142337] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
           <div className="flex items-center gap-1.5 border-b border-[#142337]/50 pb-1.5 flex-shrink-0">
             <Target size={15} className="text-[#a855f7]" />
             <span className="text-[#8fa0b5] text-[12px] font-black uppercase tracking-wider">
@@ -1796,7 +1811,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
 
         {/* Card 4: CI */}
-        <div className="bg-[#070e17] border border-[#142337] rounded-xl p-3 flex flex-col h-[172px] justify-between">
+        <div className="bg-[#070e17] border border-[#142337] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
           <div className="flex items-center gap-1.5 border-b border-[#142337]/50 pb-1.5 flex-shrink-0">
             <Trophy size={15} className="text-[#0ea5e9]" />
             <span className="text-[#8fa0b5] text-[12px] font-black uppercase tracking-wider">
