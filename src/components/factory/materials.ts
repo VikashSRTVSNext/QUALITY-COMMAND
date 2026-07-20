@@ -50,6 +50,7 @@ export const MAT = {
   ledGreen: emissive(PALETTE.green, 1.4),
   ledAmber: emissive(PALETTE.amber, 1.4),
   ledRed: emissive(PALETTE.red, 1.6),
+  ledWhite: emissive(0xffffff, 1.2),
   screen: emissive(PALETTE.cyan, 0.8),
   screenDim: std(PALETTE.screen, 0.3, 0.6, { emissive: PALETTE.cyan, emissiveIntensity: 0.5 }),
 } as const;

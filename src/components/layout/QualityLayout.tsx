@@ -1247,7 +1247,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       {/* Row 3: Middle Analysis Hub */}
       <main className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.8fr)_minmax(0,5fr)_minmax(0,2.5fr)] gap-4">
         {/* Section 1: Factory Quality Twin */}
-        <section className="bg-[#070e17] border border-[#142337] rounded-xl p-4 flex flex-col h-[400px]">
+        <section className="bg-[#070e17] border border-white/20 rounded-xl p-4 flex flex-col h-[400px]">
           <div className="flex items-center justify-between border-b border-[#142337]/50 pb-2 mb-3 flex-shrink-0">
             <span className="text-[15.5px] font-black tracking-widest text-[#06b6d4]">
               FACTORY QUALITY TWIN
@@ -1268,7 +1268,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </div>
           </div>
 
-          <div className="flex-1 relative bg-[#040910] border border-[#142337]/60 rounded-lg overflow-hidden flex items-center justify-center">
+          <div className="flex-1 relative bg-[#040910] border border-white/15 rounded-lg overflow-hidden flex items-center justify-center">
             <FactoryQualityTwin
               preview={true}
               onMaximize={() => setIsTwinModalOpen(true)}

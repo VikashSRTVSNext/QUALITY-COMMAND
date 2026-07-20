@@ -1,5 +1,4 @@
 import { memo, useMemo, useRef, ReactNode } from "react";
-import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { ZoneDef, STATUS_HEX } from "./zones";
 import { MAT } from "./materials";
@@ -10,8 +9,6 @@ interface FactoryZoneProps {
   onSelect: (id: string) => void;
   children?: ReactNode;
 }
-
-const PULSE_SPEED = { healthy: 0.8, warning: 1.5, critical: 2.6 };
 
 /**
  * Per-cell health frame: a transparent tinted floor highlight + an emissive
@@ -25,23 +22,18 @@ export const FactoryZone = memo(function FactoryZone({ zone, selected, onSelect,
   const { x, z, w, d, status } = zone;
   const hex = STATUS_HEX[status];
 
-  // Independent emissive material per zone so each pulses on its own.
+  // Independent border material: flat matte material to look clean, high premium and minimalist without fluorescent neon glow
   const borderMat = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: hex, emissive: hex, emissiveIntensity: 2, toneMapped: false }),
+    () => new THREE.MeshStandardMaterial({ color: hex, metalness: 0.1, roughness: 0.8 }),
     [hex],
   );
   const floorMat = useMemo(
-    () => new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.08, depthWrite: false }),
+    () => new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: selected ? 0.12 : 0.06, depthWrite: false }),
     [hex],
   );
 
   const borderRef = useRef<THREE.Group>(null);
-  useFrame((state) => {
-    const t = state.clock.elapsedTime;
-    const p = 0.5 + 0.5 * Math.sin(t * PULSE_SPEED[status]);
-    borderMat.emissiveIntensity = (selected ? 1.5 : 0.95) + p * (status === "critical" ? 0.8 : 0.35);
-    floorMat.opacity = (selected ? 0.13 : 0.06) + p * 0.03;
-  });
+  // Removed pulsing animation loop to save performance and make it look clean/minimalist
 
   const bt = 0.14; // border thickness
   const by = 0.16;

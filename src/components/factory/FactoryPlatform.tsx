@@ -63,7 +63,7 @@ export const FactoryPlatform = memo(function FactoryPlatform() {
         [-(w / 2) + 0.2, 0, bT, d],
         [(w / 2) - 0.2, 0, bT, d],
       ].map(([px, pz, sw, sd], i) => (
-        <mesh key={i} position={[px, 0.14, pz]} material={MAT.ledCyan}>
+        <mesh key={i} position={[px, 0.14, pz]} material={MAT.ledWhite}>
           <boxGeometry args={[sw, 0.08, sd]} />
         </mesh>
       ))}

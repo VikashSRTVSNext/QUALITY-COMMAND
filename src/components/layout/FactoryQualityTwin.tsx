@@ -17,12 +17,12 @@ interface FactoryQualityTwinProps {
 
 const font = "'Segoe UI', system-ui, -apple-system, sans-serif";
 
-export default function FactoryQualityTwin({ preview = false, onMaximize }: FactoryQualityTwinProps) {
+export default function FactoryQualityTwin({ preview = false }: FactoryQualityTwinProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const selectedZone = ZONES.find((z) => z.id === selected) || null;
 
   const handleSelect = (id: string) => {
-    if (preview) { onMaximize?.(); return; }
+    if (preview) { return; } // disabled explore view action on preview canvas click
     setSelected((prev) => (prev === id ? null : id));
   };
 
@@ -37,9 +37,8 @@ export default function FactoryQualityTwin({ preview = false, onMaximize }: Fact
       }}
     >
       <Canvas
-        shadows
-        dpr={[1, 1.5]}
-        camera={{ position: [34, 60, 34], fov: 34, near: 0.5, far: 400 }}
+        dpr={1}
+        camera={{ position: [34, 60, 34], fov: 54, near: 0.5, far: 400 }}
         gl={{ antialias: true, toneMappingExposure: 0.72, powerPreference: "high-performance" }}
         performance={{ min: 0.5 }}
       >
@@ -65,13 +64,13 @@ export default function FactoryQualityTwin({ preview = false, onMaximize }: Fact
 
       {/* Preview tag */}
       {preview && (
-        <div style={{ position: "absolute", top: 12, left: 12, display: "flex", alignItems: "center", gap: 6, background: "rgba(6,10,16,0.75)", backdropFilter: "blur(4px)", padding: "4px 8px", borderRadius: 6, border: "1px solid rgba(28,42,56,0.6)", pointerEvents: "none" }}>
+        <div style={{ position: "absolute", top: 12, left: 12, display: "flex", alignItems: "center", gap: 6, background: "rgba(6,10,16,0.75)", backdropFilter: "blur(4px)", padding: "4px 8px", borderRadius: 6, border: "1px solid rgba(255, 255, 255, 0.15)", pointerEvents: "none" }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2dd4ee", boxShadow: "0 0 6px #2dd4ee" }} />
           <span style={{ color: "#7f93a6", fontSize: 10, fontWeight: "bold", letterSpacing: "0.08em" }}>3D DIGITAL TWIN</span>
         </div>
       )}
 
-      {/* Preview click-to-explore overlay */}
+      {/* Preview click-to-explore overlay commented out for now
       {preview && (
         <div onClick={onMaximize} className="absolute inset-0 bg-transparent hover:bg-[#030712]/20 transition-all duration-300 flex items-center justify-center group">
           <div className="opacity-0 group-hover:opacity-100 bg-[#090f16]/90 border border-[#2dd4ee]/40 text-[#2dd4ee] text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 transition-opacity duration-300">
@@ -79,6 +78,7 @@ export default function FactoryQualityTwin({ preview = false, onMaximize }: Fact
           </div>
         </div>
       )}
+      */}
 
       {/* Legend */}
       {!preview && (

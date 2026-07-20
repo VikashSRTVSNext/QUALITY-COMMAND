@@ -18,35 +18,30 @@ export const Lighting = memo(function Lighting() {
       <hemisphereLight args={[0x9fc4ff, 0x0a0f16, 0.32]} />
       <ambientLight intensity={0.1} />
 
-      {/* Key light — casts the soft shadows */}
+      {/* Key light — simplified directional light without heavy shadow mapping */}
       <directionalLight
         position={[26, 40, 18]}
         intensity={1.25}
         color={0xdcecff}
-        castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-bias={-0.0004}
-      >
-        <orthographicCamera attach="shadow-camera" args={[-32, 32, 32, -32, 0.1, 120]} />
-      </directionalLight>
+      />
 
       {/* Cool rim light for edge separation */}
       <directionalLight position={[-30, 18, -24]} intensity={0.32} color={0x2dd4ee} />
 
-      {/* Grounding shadow under the whole plant */}
+      {/* Grounding shadow under the whole plant - rendered ONCE to prevent render lag */}
       <ContactShadows
         position={[PLATFORM.cx, 0.02, PLATFORM.cz]}
         scale={Math.max(PLATFORM.w, PLATFORM.d) * 1.3}
-        resolution={512}
+        resolution={256}
         blur={2.6}
         opacity={0.5}
         far={20}
-        frames={60}
+        frames={1}
         color={0x000000}
       />
 
-      {/* Procedural studio environment for reflections (no HDR file) */}
-      <Environment resolution={256} frames={1}>
+      {/* Procedural studio environment with low resolution for instant shader compilation */}
+      <Environment resolution={128} frames={1}>
         <Lightformer intensity={0.7} color={0xbfe0ff} position={[0, 24, 0]} scale={[40, 40, 1]} rotation-x={Math.PI / 2} />
         <Lightformer intensity={0.45} color={0x2dd4ee} position={[-24, 10, -10]} scale={[10, 24, 1]} />
         <Lightformer intensity={0.35} color={0x9fc4ff} position={[24, 8, 12]} scale={[10, 20, 1]} />
