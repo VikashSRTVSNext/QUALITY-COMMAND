@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: "Outfit", "Inter", sans-serif;
+    background-color: #08111a;
+    color: #f8fafc;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Scrollbar styled for industrial dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0e1424;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1d324b;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2b395e;
+}
+
+/* Glow styles for industrial Nokia styling indicators */
+.status-glow-success {
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+.status-glow-warning {
+  box-shadow: 0 0 10px rgba(234, 179, 8, 0.4);
+}
+.status-glow-danger {
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+.status-glow-info {
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+}
+.status-glow-primary {
+  box-shadow: 0 0 10px rgba(0, 90, 255, 0.4);
+}
+
+/* Premium soft animations and glows */
+@keyframes soft-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes border-glow-pulse {
+  0%,
+  100% {
+    border-color: rgba(239, 68, 68, 0.35);
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.1);
+  }
+  50% {
+    border-color: rgba(239, 68, 68, 0.85);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
+  }
+}
+
+.animate-soft-pulse {
+  animation: soft-pulse 2s infinite ease-in-out;
+}
+
+.animate-border-pulse-critical {
+  animation: border-glow-pulse 2.5s infinite ease-in-out;
+}
+
+/* Connectors and flows */
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.animate-flow-dash {
+  stroke-dasharray: 6, 4;
+  animation: flow-dash 1.5s linear infinite;
+}
+
+@keyframes map-glow-healthy {
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+  }
+}
+.animate-map-glow-healthy {
+  animation: map-glow-healthy 3s infinite ease-in-out;
+}
+
+@keyframes map-glow-risk {
+  0%,
+  100% {
+    border-color: rgba(234, 179, 8, 0.3);
+    box-shadow: 0 0 8px rgba(234, 179, 8, 0.2);
+  }
+  50% {
+    border-color: rgba(234, 179, 8, 0.85);
+    box-shadow: 0 0 16px rgba(234, 179, 8, 0.45);
+  }
+}
+.animate-map-glow-risk {
+  animation: map-glow-risk 2.5s infinite ease-in-out;
+}
+
+/* Normal document flow handles styling without sizing locks */
