@@ -2,7 +2,11 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { RefreshCw, Calendar, Clock, Menu, ChevronDown } from "lucide-react";
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  isOnline?: boolean;
+}
+
+export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
   const [time, setTime] = useState(new Date());
   const [currentShift, setCurrentShift] = useState<"A" | "B" | "C">("A");
   const navigate = useNavigate();
@@ -89,7 +93,9 @@ export const Header: React.FC = () => {
         {/* Date Display */}
         <div className="hidden 2xl:flex items-center gap-1 text-[14px] lg:text-[15px] 2xl:text-[17px] text-[#97a7bb] font-medium font-mono">
           <Calendar size={12} className="text-[#97a7bb]" />
-          <span className="whitespace-nowrap">Wed, Jul, 2026</span>
+          <span className="whitespace-nowrap">
+            {time.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+          </span>
         </div>
 
         {/* Live Clock */}
@@ -126,13 +132,25 @@ export const Header: React.FC = () => {
           </span>
         </div>
 
-        {/* Systems status badge */}
-        <div className="flex items-center bg-[#0e1424] border border-[#1d324b]/80 rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold text-[#10b981] gap-1 lg:gap-1.5 status-glow-success shadow-[0_0_12px_rgba(16,185,129,0.15)]">
-          <span className="w-1 lg:w-1.5 h-1 lg:h-1.5 rounded-full bg-[#10b981] animate-soft-pulse" />
+        {/* Live connection status badge — driven by /dashboard/status API */}
+        <div
+          className={`flex items-center bg-[#0e1424] border rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold gap-1 lg:gap-1.5 transition-all duration-500 ${
+            isOnline
+              ? "border-[#10b981]/80 text-[#10b981] status-glow-success shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+              : "border-[#ef4444]/60 text-[#ef4444] shadow-[0_0_12px_rgba(239,68,68,0.15)]"
+          }`}
+        >
+          <span
+            className={`w-1 lg:w-1.5 h-1 lg:h-1.5 rounded-full ${
+              isOnline ? "bg-[#10b981] animate-soft-pulse" : "bg-[#ef4444]"
+            }`}
+          />
           <span className="whitespace-nowrap hidden 2xl:inline">
-            PLANT SYSTEMS ONLINE
+            {isOnline ? "PLANT SYSTEMS ONLINE" : "PLANT SYSTEMS OFFLINE"}
           </span>
-          <span className="whitespace-nowrap 2xl:hidden">ONLINE</span>
+          <span className="whitespace-nowrap 2xl:hidden">
+            {isOnline ? "ONLINE" : "OFFLINE"}
+          </span>
         </div>
 
         {/* Data refresh badge */}
@@ -153,3 +171,4 @@ export const Header: React.FC = () => {
   );
 };
 export default Header;
+

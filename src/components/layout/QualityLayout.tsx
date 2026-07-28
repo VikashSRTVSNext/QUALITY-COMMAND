@@ -14,6 +14,7 @@ import {
   Camera,
   Scan,
   Thermometer,
+  Droplets,
   Wrench,
   User,
   ChevronRight,
@@ -29,6 +30,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import qualityData from "../../data/qualityData.json";
+import { ZONES, ZoneDef } from "../factory/zones";
 
 import FactoryQualityTwin from "./FactoryQualityTwin";
 
@@ -196,15 +198,23 @@ const SafetyChart = ({
   const minVal = yTicks[yTicks.length - 1];
   const range = maxVal - minVal || 1;
 
-  const svgPoints = points
-    .map((p, i) => {
-      const x = paddingLeft + (i / (points.length - 1)) * chartWidth;
-      const y = paddingTop + chartHeight - ((p - minVal) / range) * chartHeight;
-      return `${x},${y}`;
-    })
-    .join(" ");
+  const hasPoints = points && points.length >= 2;
 
-  const areaPoints = `${paddingLeft},${paddingTop + chartHeight} ${svgPoints} ${paddingLeft + chartWidth},${paddingTop + chartHeight}`;
+  const svgPoints = hasPoints
+    ? points
+        .map((p, i) => {
+          const x = paddingLeft + (i / (points.length - 1)) * chartWidth;
+          const y =
+            paddingTop + chartHeight - ((p - minVal) / range) * chartHeight;
+          return `${x},${y}`;
+        })
+        .join(" ")
+    : "";
+
+  const areaPoints = hasPoints
+    ? `${paddingLeft},${paddingTop + chartHeight} ${svgPoints} ${paddingLeft + chartWidth},${paddingTop + chartHeight}`
+    : "";
+
   const gradId = React.useId();
 
   return (
@@ -252,33 +262,36 @@ const SafetyChart = ({
         })}
 
         {/* Area fill */}
-        <polygon points={areaPoints} fill={`url(#${gradId})`} />
+        {hasPoints && <polygon points={areaPoints} fill={`url(#${gradId})`} />}
 
         {/* Line */}
-        <polyline
-          fill="none"
-          stroke={color}
-          strokeWidth="1"
-          points={svgPoints}
-        />
+        {hasPoints && (
+          <polyline
+            fill="none"
+            stroke={color}
+            strokeWidth="1"
+            points={svgPoints}
+          />
+        )}
 
         {/* Dots */}
-        {points.map((p, i) => {
-          const x = paddingLeft + (i / (points.length - 1)) * chartWidth;
-          const y =
-            paddingTop + chartHeight - ((p - minVal) / range) * chartHeight;
-          return (
-            <circle
-              key={i}
-              cx={x}
-              cy={y}
-              r="1.8"
-              fill={color}
-              stroke="#070e17"
-              strokeWidth="0.4"
-            />
-          );
-        })}
+        {hasPoints &&
+          points.map((p, i) => {
+            const x = paddingLeft + (i / (points.length - 1)) * chartWidth;
+            const y =
+              paddingTop + chartHeight - ((p - minVal) / range) * chartHeight;
+            return (
+              <circle
+                key={i}
+                cx={x}
+                cy={y}
+                r="1.8"
+                fill={color}
+                stroke="#070e17"
+                strokeWidth="0.4"
+              />
+            );
+          })}
 
         {/* X Axis Labels */}
         {xTicks.map((tick, i) => {
@@ -505,236 +518,48 @@ const processPerformanceData = [
   },
 ];
 
-const productYieldData = [
-  {
-    id: 1,
-    name: "Flexi Air 100",
-    tested: "12,450",
-    failed: "102",
-    fpy: 98.2,
-    spy: 99.1,
-    target: 98,
-    status: "Healthy",
-    rec: "Maintain current process",
-  },
-  {
-    id: 2,
-    name: "Flexi Air 200",
-    tested: "11,321",
-    failed: "146",
-    fpy: 97.1,
-    spy: 98.5,
-    target: 98,
-    status: "At Risk",
-    rec: "Increase AOI sampling",
-  },
-  {
-    id: 3,
-    name: "Giga Node 10G",
-    tested: "9,876",
-    failed: "210",
-    fpy: 95.7,
-    spy: 97.4,
-    target: 98,
-    status: "At Risk",
-    rec: "Improve solder paste print",
-  },
-  {
-    id: 4,
-    name: "Giga Node 25G",
-    tested: "10,223",
-    failed: "98",
-    fpy: 98.6,
-    spy: 99.6,
-    target: 98,
-    status: "Healthy",
-    rec: "Maintain current process",
-  },
-  {
-    id: 5,
-    name: "OptiX Edge 100",
-    tested: "8,765",
-    failed: "189",
-    fpy: 95.8,
-    spy: 97.2,
-    target: 98,
-    status: "At Risk",
-    rec: "Review AXI voiding trend",
-  },
-  {
-    id: 6,
-    name: "OptiX Edge 200",
-    tested: "9,112",
-    failed: "75",
-    fpy: 99.2,
-    spy: 98.7,
-    target: 98,
-    status: "Healthy",
-    rec: "Maintain current process",
-  },
-  {
-    id: 7,
-    name: "Wave 5G Lite",
-    tested: "13,002",
-    failed: "156",
-    fpy: 98.8,
-    spy: 97.4,
-    target: 98,
-    status: "Healthy",
-    rec: "Maintain current process",
-  },
-  {
-    id: 8,
-    name: "Wave 5G Pro",
-    tested: "11,876",
-    failed: "203",
-    fpy: 96.6,
-    spy: 94.1,
-    target: 98,
-    status: "At Risk",
-    rec: "Check screw torque failures",
-  },
-  {
-    id: 9,
-    name: "Cloud Router X1",
-    tested: "7,654",
-    failed: "92",
-    fpy: 98.8,
-    spy: 97.0,
-    target: 98,
-    status: "Healthy",
-    rec: "Maintain current settings",
-  },
-  {
-    id: 10,
-    name: "Cloud Router X2",
-    tested: "12,222",
-    failed: "118",
-    fpy: 97.5,
-    spy: 95.3,
-    target: 98,
-    status: "At Risk",
-    rec: "Optimize reflow profile",
-  },
-  {
-    id: 11,
-    name: "Access Point AX",
-    tested: "12,221",
-    failed: "134",
-    fpy: 98.9,
-    spy: 97.6,
-    target: 98,
-    status: "Healthy",
-    rec: "Maintain current settings",
-  },
-  {
-    id: 12,
-    name: "Access Point BE",
-    tested: "9,443",
-    failed: "167",
-    fpy: 97.3,
-    spy: 94.9,
-    target: 98,
-    status: "At Risk",
-    rec: "Check thermal performance",
-  },
-  {
-    id: 13,
-    name: "5G CPE Indoor",
-    tested: "8,834",
-    failed: "89",
-    fpy: 97.9,
-    spy: 98.5,
-    target: 98,
-    status: "Healthy",
-    rec: "Maintain current settings",
-  },
-  {
-    id: 14,
-    name: "5G CPE Outdoor",
-    tested: "6,789",
-    failed: "121",
-    fpy: 97.3,
-    spy: 97.0,
-    target: 98,
-    status: "At Risk",
-    rec: "Improve conformal coating",
-  },
-  {
-    id: 15,
-    name: "Enterprise Switch 1",
-    tested: "5,432",
-    failed: "64",
-    fpy: 98.2,
-    spy: 97.0,
-    target: 98,
-    status: "Healthy",
-    rec: "Maintain current process",
-  },
-];
-
-const attentionCenterAlertsData = [
-  {
-    id: 1,
-    title: "FPY dropped below threshold - TRX Board",
-    time: "14m ago",
-    current: "94.8%",
-    target: "98%",
-    dev: "-3.2%",
-    level: "Critical",
-    impact: "High",
-    rec: "Inspect SPI alignment and verify paste deposition.",
-  },
-  {
-    id: 2,
-    title: "AOI Yield Reduction - AOI Line 02",
-    time: "28m ago",
-    current: "95.6%",
-    target: "98%",
-    dev: "-2.4%",
-    level: "Risk",
-    impact: "Medium",
-    rec: "Calibrate AOI lighting and adjust exposure settings.",
-  },
-  {
-    id: 3,
-    title: "Thermal AVI Yield Drop - Thermal AVI",
-    time: "45m ago",
-    current: "96.1%",
-    target: "98%",
-    dev: "-1.9%",
-    level: "Critical",
-    impact: "Medium",
-    rec: "Review camera ROI and improve gel detection.",
-  },
-  {
-    id: 4,
-    title: "Manual OGI increase - Manual OGI",
-    time: "1h 06m ago",
-    failed: "42",
-    target: "< 20",
-    dev: "+22",
-    level: "Risk",
-    impact: "Medium",
-    rec: "Operator retraining required. Review SOP adherence.",
-  },
-];
-
 const SHIFTS = [
   "Shift A (06:15 AM - 02:15 PM)",
   "Shift B (02:15 PM - 10:15 PM)",
   "Shift C (10:15 PM - 06:15 AM)",
+  "Full Day (06:15 AM - 06:15 AM)",
 ];
 
 export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const navigate = useNavigate();
-  const [timeStr, setTimeStr] = useState("16:16:54");
+  const [timeStr, setTimeStr] = useState(() =>
+    new Date().toLocaleTimeString("en-US", { hour12: false }),
+  );
+  const [dateStr, setDateStr] = useState(() =>
+    new Date().toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    }),
+  );
+  const [liveStatus, setLiveStatus] = useState("OFFLINE");
   const [isTwinModalOpen, setIsTwinModalOpen] = useState(false);
-  const [kpiCards, setKpiCards] = useState(qualityData.kpiCards);
+  const [kpiCards, setKpiCards] = useState(
+    qualityData.kpiCards.map((card) => {
+      const isPercent = [1, 2, 3, 4, 5, 7].includes(card.id);
+      return {
+        ...card,
+        title: card.label,
+        value: isPercent ? `${card.value.toFixed(1)}%` : `${card.value}`,
+        change: isPercent
+          ? `▲ ${card.delta_vs_yesterday.toFixed(1)}% vs Yesterday`
+          : `▲ ${card.delta_vs_yesterday} vs yesterday`,
+        points: card.trend,
+      };
+    }),
+  );
   const [activeAlertTab, setActiveAlertTab] = useState<
     "All" | "Critical" | "Risk"
   >("All");
-  const [activeShift, setActiveShift] = useState(SHIFTS[0]);
+  const [activeShift, setActiveShift] = useState(
+    "Full Day (06:15 AM - 06:15 AM)",
+  );
   const [isShiftDropdownOpen, setIsShiftDropdownOpen] = useState(false);
   const [activeYieldTab, setActiveYieldTab] = useState<"UNITS" | "TRX" | "PA">(
     "UNITS",
@@ -742,13 +567,41 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [yieldPage, setYieldPage] = useState(1);
   const ITEMS_PER_PAGE = 5;
 
+  const [processPerformance, setProcessPerformance] = useState<any[]>(
+    processPerformanceData.map((item) => ({
+      ...item,
+      data:
+        item.type === "yield"
+          ? { done: "...", ok: "...", yield: "..." }
+          : { failure: "..." },
+      status: "...",
+      color: "#1e293b",
+    })),
+  );
+  const [productYield, setProductYield] = useState<any[]>([]);
+  const [rawKpiData, setRawKpiData] = useState<any>(null);
+  const [attentionCenterAlerts, setAttentionCenterAlerts] = useState<any[]>([]);
+  const [alertsTotal, setAlertsTotal] = useState(0);
+  const [criticalTotal, setCriticalTotal] = useState(0);
+  const [safetyAccident, setSafetyAccident] = useState(0);
+  const [safetyNearMiss, setSafetyNearMiss] = useState(0);
+  const [accidentPoints, setAccidentPoints] = useState<number[]>([]);
+  const [nearMissPoints, setNearMissPoints] = useState<number[]>([]);
+  const [co2Points, setCo2Points] = useState<number[]>([]);
+  const [greenEnergyPct, setGreenEnergyPct] = useState(0);
+  const [co2Emission, setCo2Emission] = useState(0);
+  const [customerIncidents, setCustomerIncidents] = useState(0);
+  const [customerEri, setCustomerEri] = useState(0);
+  const [ciLeanSavingsPct, setCiLeanSavingsPct] = useState(0);
+  const [ciLeanSavingsVal, setCiLeanSavingsVal] = useState("...");
+  const [ciKaizenPct, setCiKaizenPct] = useState(0);
+  const [ciKaizenVal, setCiKaizenVal] = useState("...");
+  const [twinZones, setTwinZones] = useState<ZoneDef[]>(ZONES);
+  const [shopFloorConditions, setShopFloorConditions] = useState({ temp: 27.6, humidity: 56 });
+
   const currentYieldData = React.useMemo(() => {
-    if (activeYieldTab === "UNITS") return productYieldData;
-    if (activeYieldTab === "TRX")
-      return [...productYieldData].reverse().slice(0, 8);
-    if (activeYieldTab === "PA") return [...productYieldData].slice(4, 11);
-    return productYieldData;
-  }, [activeYieldTab]);
+    return productYield;
+  }, [productYield]);
 
   const totalYieldPages =
     Math.ceil(currentYieldData.length / ITEMS_PER_PAGE) || 1;
@@ -761,82 +614,401 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     setYieldPage(1);
   }, [activeYieldTab]);
 
-  // Telemetry simulation loop for top Quality KPI cards (every 5 seconds)
+  // Fetch product yield from REST API every 5 minutes and when shift or tab changes
   useEffect(() => {
-    const interval = setInterval(() => {
-      setKpiCards((prevCards) => {
-        return prevCards.map((card) => {
-          let newValue = card.value;
-          let newChange = card.change;
-          let newStatus = card.status;
-          let newPoints = [...card.points];
+    const fetchYieldData = async () => {
+      const shiftMatch = activeShift.match(/Shift\s+([A-C])/i);
+      const targetShift = shiftMatch ? shiftMatch[1].toUpperCase() : "D";
+      const targetLevel = activeYieldTab === "UNITS" ? "UNIT" : activeYieldTab;
 
-          const shift = Math.random() * 2 - 1; // -1 to 1
+      try {
+        const url = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/dashboard/product-yield?shift=${targetShift}&level=${targetLevel}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to fetch product yield");
+        const data = await res.json();
+        if (data && data.rows) {
+          const mappedRows = data.rows.map((row: any) => ({
+            id: row.id,
+            name: row.product,
+            tested: row.tested.toLocaleString(),
+            failed: row.failed.toString(),
+            fpy: row.fpy,
+            spy: row.spy,
+            target: row.target_yield,
+            status:
+              row.status === "healthy"
+                ? "Healthy"
+                : row.status === "risk" || row.status === "at_risk"
+                  ? "At Risk"
+                  : "Critical",
+            rec: row.ai_recommendation,
+            shift: row.shift,
+            sub_module: row.sub_module,
+          }));
+          setProductYield(mappedRows);
+        }
+      } catch (err) {
+        console.error("Error fetching product yield:", err);
+      }
+    };
 
-          // Cards 1-5 are all yield/audit percentages; walk each around its
-          // baseline and re-render change vs baseline.
-          const pctCard: Record<
-            number,
-            { base: number; min: number; max: number }
-          > = {
-            1: { base: 98.6, min: 97.6, max: 99.5 },
-            2: { base: 99.4, min: 98.6, max: 99.9 },
-            3: { base: 97.8, min: 96.6, max: 99.0 },
-            4: { base: 98.9, min: 98.0, max: 99.7 },
-            5: { base: 96.5, min: 94.8, max: 98.5 },
-          };
-          if (pctCard[card.id]) {
-            const { base, min, max } = pctCard[card.id];
-            const val = Math.max(min, Math.min(max, base + shift * 1.0));
-            newValue = `${val.toFixed(1)}%`;
-            newChange = `${val >= base ? "▲" : "▼"} ${Math.abs(val - base).toFixed(1)}% vs Yesterday`;
-            newStatus = "nominal";
-          } else if (card.id === 6) {
-            const val = Math.max(8, Math.min(22, Math.round(14 + shift * 5)));
-            newValue = String(val);
-            newChange = `${val <= 14 ? "▼" : "▲"} ${Math.abs(val - 14)} vs yesterday`;
-            newStatus = val > 17 ? "warning" : "nominal";
-          } else if (card.id === 7) {
-            const val = Math.max(0.8, Math.min(3.2, 1.8 + shift * 0.8));
-            newValue = `${val.toFixed(1)}%`;
-            newChange = `${val <= 1.8 ? "▼" : "▲"} ${Math.abs(val - 1.8).toFixed(1)}% vs yesterday`;
-            newStatus = val > 2.4 ? "warning" : "nominal";
-          } else if (card.id === 8) {
-            const val = Math.max(8, Math.min(42, Math.round(18 + shift * 12)));
-            newValue = String(val);
-            newChange = `${val <= 18 ? "▼" : "▲"} ${Math.abs(val - 18)} vs yesterday`;
-            const riskLabel =
-              val >= 30 ? "High Risk" : val >= 20 ? "Medium Risk" : "Low Risk";
-            return {
-              ...card,
-              value: newValue,
-              change: newChange,
-              riskLabel,
-              points: [...newPoints.slice(1), val],
-            };
+    fetchYieldData();
+    const interval = setInterval(fetchYieldData, 5 * 60 * 1000); // 5 minutes
+    return () => clearInterval(interval);
+  }, [activeShift, activeYieldTab]);
+
+  // SSE stream integration
+  useEffect(() => {
+    // Point at the FastAPI yield feed via env; falls back to the legacy tunnel.
+    // Local docker stack: VITE_DASHBOARD_SSE_URL=http://localhost:8000/dashboard/stream
+    const sseUrl = import.meta.env.VITE_DASHBOARD_SSE_URL;
+    const es = new EventSource(sseUrl);
+
+    const mapStatus = (
+      status: string,
+    ): "healthy" | "warning" | "critical" | "unknown" => {
+      if (status === "at_risk" || status === "warning") return "warning";
+      if (status === "critical") return "critical";
+      if (status === "healthy") return "healthy";
+      return "unknown";
+    };
+
+    const matchKey = (name: string) => {
+      if (name === "SMT DEFECTS") return "smt_defects_mft";
+      return name.toLowerCase().replace(/\s+/g, "_");
+    };
+
+    const handleData = (data: any) => {
+      if (!data) return;
+
+      // 1. Shift & Connection Status
+      if (data.meta) {
+        if (data.meta.shift) {
+          const s = data.meta.shift;
+          if (s.name && s.start && s.end) {
+            setActiveShift(`${s.name} (${s.start} - ${s.end})`);
+          } else if (s.name) {
+            setActiveShift(s.name);
           }
+        }
+        const incomingStatus =
+          data.meta.status ||
+          data.meta.connection_status ||
+          data.meta.connection;
+        if (incomingStatus) {
+          setLiveStatus(incomingStatus);
+        }
+      }
 
-          const currentVal = Number(newValue.replace(/[^0-9.-]/g, ""));
-          newPoints = [...newPoints.slice(1), currentVal];
+      // 2. KPIs
+      if (data.kpis) {
+        setRawKpiData(data.kpis);
+      }
+
+      // 2b. Shop Floor Conditions
+      if (data.shop_floor_conditions) {
+        const sfc = data.shop_floor_conditions;
+        setShopFloorConditions((prev) => ({
+          temp: sfc.temp ?? sfc.temperature ?? prev.temp,
+          humidity: sfc.humidity ?? prev.humidity,
+        }));
+      }
+
+      // 3. Process Performance
+      if (data.process_performance) {
+        const sseSmt = data.process_performance.SMT || [];
+        const sseRfm = data.process_performance.RFM || [];
+        const allSseItems = [...sseSmt, ...sseRfm];
+
+        setProcessPerformance((prev) => {
+          return prev.map((item) => {
+            const itemKey = matchKey(item.name);
+            const incoming = allSseItems.find((x: any) => x.key === itemKey);
+            if (incoming) {
+              const statusMapped =
+                incoming.status === "healthy"
+                  ? "Healthy"
+                  : incoming.status === "at_risk"
+                    ? "At Risk"
+                    : "Critical";
+              const colorMapped =
+                incoming.status === "healthy"
+                  ? "#10b981"
+                  : incoming.status === "at_risk"
+                    ? "#eab308"
+                    : "#ef4444";
+
+              if (incoming.failure_pct !== undefined) {
+                return {
+                  ...item,
+                  data: { failure: `${incoming.failure_pct.toFixed(1)}%` },
+                  status: statusMapped,
+                  color: colorMapped,
+                };
+              } else {
+                return {
+                  ...item,
+                  data: {
+                    done: incoming.done.toLocaleString(),
+                    ok: incoming.ok.toLocaleString(),
+                    yield: `${incoming.yield.toFixed(2)}%`,
+                  },
+                  status: statusMapped,
+                  color: colorMapped,
+                };
+              }
+            }
+            return item;
+          });
+        });
+      }
+
+      // 4. Factory Quality Twin
+      if (data.factory_quality_twin) {
+        setTwinZones((prev) => {
+          return prev.map((zone) => {
+            const incoming = data.factory_quality_twin.find(
+              (z: any) => z.station.toUpperCase() === zone.name.toUpperCase(),
+            );
+            if (incoming) {
+              return {
+                ...zone,
+                status: mapStatus(incoming.status),
+              };
+            }
+            return zone;
+          });
+        });
+      }
+
+      // 5. Product Yield - Handled by separate REST API polling now
+
+
+      // 6. Attention Center Alerts
+      if (data.attention_center) {
+        if (data.attention_center.alerts) {
+          const mappedAlerts = data.attention_center.alerts.map((a: any) => ({
+            id: a.id,
+            title: a.title,
+            time: `${a.age_minutes}m ago`,
+            current: `${a.current}%`,
+            target: `${a.target}%`,
+            dev: `${a.deviation >= 0 ? "+" : ""}${a.deviation}%`,
+            level: a.severity === "critical" ? "Critical" : "Risk",
+            impact: a.impact.charAt(0).toUpperCase() + a.impact.slice(1),
+            rec: a.ai_recommendation,
+          }));
+          setAttentionCenterAlerts(mappedAlerts);
+        }
+        setAlertsTotal(
+          data.attention_center.alerts_total ??
+            data.attention_center.alerts?.length ??
+            0,
+        );
+        setCriticalTotal(
+          data.attention_center.critical_total ??
+            data.attention_center.alerts?.filter(
+              (x: any) => x.severity === "critical",
+            ).length ??
+            0,
+        );
+      }
+
+      // 7. Safety
+      if (data.safety) {
+        if (data.safety.accident !== undefined) {
+          setSafetyAccident(data.safety.accident.value);
+          if (data.safety.accident.trend)
+            setAccidentPoints(data.safety.accident.trend);
+        }
+        if (data.safety.near_miss !== undefined) {
+          setSafetyNearMiss(data.safety.near_miss.value);
+          if (data.safety.near_miss.trend)
+            setNearMissPoints(data.safety.near_miss.trend);
+        }
+      }
+
+      // 8. Sustainability
+      if (data.sustainability) {
+        if (data.sustainability.green_energy_pct !== undefined)
+          setGreenEnergyPct(data.sustainability.green_energy_pct.value);
+        if (data.sustainability.co2_emission_tco2 !== undefined) {
+          setCo2Emission(data.sustainability.co2_emission_tco2.value);
+          if (data.sustainability.co2_emission_tco2.trend)
+            setCo2Points(data.sustainability.co2_emission_tco2.trend);
+        }
+      }
+
+      // 9. Customer Reflection
+      if (data.customer_reflection) {
+        if (data.customer_reflection.incidents !== undefined)
+          setCustomerIncidents(data.customer_reflection.incidents.value);
+        if (data.customer_reflection.eri_pct !== undefined)
+          setCustomerEri(data.customer_reflection.eri_pct.value);
+      }
+
+      // 10. CI
+      if (data.ci) {
+        if (data.ci.lean_savings) {
+          setCiLeanSavingsPct(data.ci.lean_savings.pct);
+          const val = data.ci.lean_savings.achieved;
+          const formattedVal =
+            val >= 1000 ? `${(val / 1000).toFixed(0)}K €` : `${val} €`;
+          setCiLeanSavingsVal(formattedVal);
+        }
+        if (data.ci.kaizen) {
+          setCiKaizenPct(data.ci.kaizen.pct);
+          const val = data.ci.kaizen.achieved;
+          const formattedVal =
+            val >= 1000 ? `${(val / 1000).toFixed(0)}K` : `${val}`;
+          setCiKaizenVal(formattedVal);
+        }
+      }
+    };
+
+    es.addEventListener("snapshot", (e) => {
+      try {
+        const parsed = JSON.parse(e.data);
+        handleData(parsed);
+      } catch (err) {
+        console.error("Error parsing snapshot event", err);
+      }
+    });
+
+    es.onmessage = (e) => {
+      try {
+        const parsed = JSON.parse(e.data);
+        if (parsed.kpis || parsed.meta) {
+          handleData(parsed);
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    es.onopen = () => {
+      setLiveStatus("ONLINE");
+    };
+
+    es.onerror = (err) => {
+      console.error("SSE connection error", err);
+      setLiveStatus("OFFLINE");
+    };
+
+    return () => {
+      es.close();
+    };
+  }, []);
+
+  // Update KPI cards when active shift or raw KPI data changes
+  useEffect(() => {
+    if (!rawKpiData) return;
+
+    setKpiCards((prev) => {
+      return prev.map((card) => {
+        const keyMap: Record<number, string> = {
+          1: "fpy_unit",
+          2: "spy_unit",
+          3: "fpy_module",
+          4: "spy_module",
+          5: "customer_audit",
+        };
+        const sseKey = keyMap[card.id];
+        if (!sseKey) return card;
+
+        let val: number | null = null;
+        let delta: number = 0;
+        let trend: any = null;
+
+        // Parse active shift name (e.g., "Shift A (06:15 AM - 02:15 PM)" -> "A")
+        const shiftMatch = activeShift.match(/Shift\s+([A-C])/i);
+        const shiftLetter = shiftMatch ? shiftMatch[1].toUpperCase() : null;
+
+        const isShiftSpecificKpi = ["fpy_unit", "spy_unit", "fpy_module", "spy_module"].includes(sseKey);
+
+        if (isShiftSpecificKpi && rawKpiData.by_shift && shiftLetter) {
+          // New format with by_shift array
+          const shiftData = rawKpiData.by_shift.find(
+            (s: any) => s.shift && s.shift.toUpperCase() === shiftLetter
+          );
+          if (shiftData && shiftData[sseKey] !== undefined && shiftData[sseKey] !== null) {
+            val = shiftData[sseKey];
+            // Get delta/trend from day summary if available, since shift entries don't have delta
+            if (rawKpiData.day) {
+              const dayItem = rawKpiData.day[sseKey];
+              if (dayItem && typeof dayItem === "object") {
+                delta = dayItem.delta_vs_yesterday ?? 0;
+                trend = dayItem.trend;
+              }
+            }
+          } else {
+            // Shift C or missing shift has no data -> set to 0
+            val = 0;
+            delta = 0;
+            trend = null;
+          }
+        }
+
+        // Fall back to day-level KPIs if KPI is not shift-specific or shift-specific was not resolved
+        if (val === null) {
+          if (rawKpiData.day) {
+            const dayItem = rawKpiData.day[sseKey];
+            if (dayItem !== undefined && dayItem !== null) {
+              val = typeof dayItem === "object" ? dayItem.value : dayItem;
+              delta = typeof dayItem === "object" ? dayItem.delta_vs_yesterday : 0;
+              trend = typeof dayItem === "object" ? dayItem.trend : null;
+            }
+          } else if (Array.isArray(rawKpiData)) {
+            // Support legacy array format
+            const incoming = rawKpiData.find((k: any) => k && k.key === sseKey);
+            if (incoming) {
+              val = typeof incoming === "object" ? incoming.value : incoming;
+              delta = typeof incoming === "object" ? incoming.delta_vs_yesterday : 0;
+              trend = typeof incoming === "object" ? incoming.trend : null;
+            }
+          } else if (typeof rawKpiData === "object") {
+            // Support flat object format
+            const incoming = rawKpiData[sseKey];
+            if (incoming !== undefined && incoming !== null) {
+              val = typeof incoming === "object" ? incoming.value : incoming;
+              delta = typeof incoming === "object" ? incoming.delta_vs_yesterday : 0;
+              trend = typeof incoming === "object" ? incoming.trend : null;
+            }
+          }
+        }
+
+        if (val !== null && val !== undefined) {
+          const deltaSign = delta >= 0 ? "▲" : "▼";
+          const changeStr = typeof delta === "number"
+            ? `${deltaSign} ${Math.abs(delta).toFixed(1)}% vs Yesterday`
+            : card.change;
 
           return {
             ...card,
-            value: newValue,
-            change: newChange,
-            status: newStatus,
-            points: newPoints,
+            value: `${val.toFixed(1)}%`,
+            change: changeStr,
+            points: trend || card.points,
           };
-        });
+        }
+
+        return card;
       });
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    });
+  }, [activeShift, rawKpiData]);
 
   // Keep clock running
   useEffect(() => {
     const timer = setInterval(() => {
       const d = new Date();
       setTimeStr(d.toLocaleTimeString("en-US", { hour12: false }));
+      setDateStr(
+        d.toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "2-digit",
+          year: "numeric",
+        }),
+      );
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -937,6 +1109,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     }
   };
 
+  const isStatusLive = ["LIVE", "ONLINE", "CONNECTED", "ACTIVE"].includes(
+    liveStatus.toUpperCase(),
+  );
+  const safetyXTicks = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const month = d.toLocaleString("en-US", { month: "short" });
+    const day = d.getDate().toString().padStart(2, "0");
+    return `${month} ${day}`;
+  });
+
   return (
     <div className="w-full min-h-screen bg-[#02070e] text-[#f8fafc] flex flex-col p-4 box-border gap-4 font-sans select-none">
       {/* Top Branding & SubHeader Row */}
@@ -972,14 +1155,22 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
         {/* Right Side Widgets / Telemetry */}
         <div className="flex items-center gap-3.5 flex-wrap text-[#8fa0b5] font-mono text-[14px]">
-          <span className="text-[#526a8a]">Wed, Jul 09, 2026</span>
+          <span className="text-[#526a8a]">{dateStr}</span>
           <span className="h-3.5 w-[1px] bg-[#142337]" />
           <span className="text-white font-bold">{timeStr}</span>
           <span className="h-3.5 w-[1px] bg-[#142337]" />
 
-          <div className="flex items-center gap-1.5 border border-[#10b981]/30 bg-[#10b981]/5 px-2.5 py-0.5 rounded text-[#10b981] text-[13px] font-black">
-            <span className="w-2 h-2 rounded-full bg-[#10b981]" />
-            LIVE
+          <div
+            className={`flex items-center gap-1.5 border px-2.5 py-0.5 rounded text-[13px] font-black ${
+              isStatusLive
+                ? "border-[#10b981]/30 bg-[#10b981]/5 text-[#10b981]"
+                : "border-[#ef4444]/30 bg-[#ef4444]/5 text-[#ef4444]"
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${isStatusLive ? "bg-[#10b981]" : "bg-[#ef4444]"}`}
+            />
+            {liveStatus}
           </div>
 
           <div className="relative">
@@ -1018,11 +1209,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             )}
           </div>
 
-          <button className="flex items-center gap-1.5 bg-[#0a1523] border border-[#1b3252] hover:bg-[#122339] rounded px-2.5 py-0.5 text-[13px] font-bold cursor-pointer text-[#8fa0b5] outline-none">
-            <Filter size={11} /> Filters
-            <ChevronDown size={11} className="text-[#526a8a]" />
-          </button>
-
           <button
             onClick={toggleFullscreen}
             className="p-1.5 hover:bg-[#122339] rounded border border-[#1b3252] cursor-pointer text-[#8fa0b5] outline-none"
@@ -1033,7 +1219,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       </header>
 
       {/* Row 1: Top KPI Cards */}
-      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {kpiCards.slice(0, 5).map((card) => {
           const accent = card.color ?? "#a3e635";
           return (
@@ -1068,6 +1254,43 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </div>
           );
         })}
+
+        {/* Shop Floor Conditions Card */}
+        <div
+          className="bg-[#070e17] border border-[#142337] rounded-xl p-2.5 flex flex-col justify-between h-[114px] relative overflow-hidden transition-all duration-300 hover:-translate-y-1"
+          style={{ boxShadow: "0 4px 12px #06b6d415" }}
+        >
+          <div className="flex items-center justify-between z-10">
+            <div className="flex items-center gap-1.5">
+              <Thermometer size={18} className="flex-shrink-0 text-[#06b6d4]" />
+              <span className="text-white text-[11px] uppercase font-bold tracking-wider leading-tight">
+                SHOP FLOOR CONDITIONS
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center justify-around z-10 mt-1">
+            {/* Temperature */}
+            <div className="flex flex-col items-center">
+              <span className="text-[22px] font-black font-mono leading-none text-[#06b6d4]" style={{ textShadow: "0 0 8px #06b6d440" }}>
+                {shopFloorConditions.temp}°
+              </span>
+              <span className="text-[10px] text-[#526a8a] mt-0.5 font-medium">Temperature</span>
+            </div>
+            {/* Divider */}
+            <div className="w-[1px] h-8 bg-[#1d324b]" />
+            {/* Humidity */}
+            <div className="flex flex-col items-center">
+              <span className="text-[22px] font-black font-mono leading-none text-[#06b6d4]" style={{ textShadow: "0 0 8px #06b6d440" }}>
+                {shopFloorConditions.humidity}%
+              </span>
+              <span className="text-[10px] text-[#526a8a] mt-0.5 font-medium">Humidity</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 z-10">
+            <Droplets size={10} className="text-[#06b6d4]" />
+            <span className="text-[10px] text-[#526a8a]">Live sensor reading</span>
+          </div>
+        </div>
       </section>
 
       {/* Row 2: Process Performance */}
@@ -1114,12 +1337,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-2">
-          {processPerformanceData.map((item, idx) => {
+          {processPerformance.map((item, idx) => {
             const cardColor = getCardBorderColor(item);
             const colorCurrent = getTimelineNodeColor(item);
             const colorNext =
-              idx < processPerformanceData.length - 1
-                ? getTimelineNodeColor(processPerformanceData[idx + 1])
+              idx < processPerformance.length - 1
+                ? getTimelineNodeColor(processPerformance[idx + 1])
                 : "";
 
             return (
@@ -1272,6 +1495,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             <FactoryQualityTwin
               preview={true}
               onMaximize={() => setIsTwinModalOpen(true)}
+              zones={twinZones}
             />
           </div>
         </section>
@@ -1458,10 +1682,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </span>
             <div className="flex gap-2 text-[11px]">
               <div className="bg-[#ef4444] text-white font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-[0_0_10px_rgba(239,68,68,0.4)]">
-                6 Alerts
+                {alertsTotal} Alerts
               </div>
               <div className="bg-[#070e17] border border-[#ef4444]/40 text-[#ef4444] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-[0_0_8px_rgba(239,68,68,0.2)]">
-                1 Critical
+                {criticalTotal} Critical
               </div>
             </div>
           </div>
@@ -1489,7 +1713,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-2">
-            {attentionCenterAlertsData
+            {attentionCenterAlerts
               .filter(
                 (alert) =>
                   activeAlertTab === "All" || alert.level === activeAlertTab,
@@ -1614,7 +1838,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 </span>
                 <div className="flex items-baseline gap-1.5 mt-1">
                   <span className="text-[#ef4444] text-[24px] font-black leading-none font-mono">
-                    2
+                    {safetyAccident}
                   </span>
                   <span className="text-[#526a8a] text-[10px] font-bold">
                     This Month
@@ -1623,19 +1847,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               </div>
               <div className="flex-1 flex flex-col justify-end">
                 <SafetyChart
-                  points={[
-                    0.8, 2.0, 1.7, 2.2, 3.0, 4.5, 1.7, 1.5, 0.8, 1.2, 1.8,
-                  ]}
+                  points={accidentPoints}
                   yTicks={[4, 3, 2, 1, 0]}
-                  xTicks={[
-                    "Jul 03",
-                    "Jul 04",
-                    "Jul 05",
-                    "Jul 06",
-                    "Jul 07",
-                    "Jul 08",
-                    "Jul 09",
-                  ]}
+                  xTicks={safetyXTicks}
                   color="#ef4444"
                 />
               </div>
@@ -1648,7 +1862,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 </span>
                 <div className="flex items-baseline gap-1.5 mt-1">
                   <span className="text-[#3b82f6] text-[24px] font-black leading-none font-mono">
-                    7
+                    {safetyNearMiss}
                   </span>
                   <span className="text-[#526a8a] text-[10px] font-bold">
                     This Month
@@ -1657,17 +1871,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               </div>
               <div className="flex-1 flex flex-col justify-end">
                 <SafetyChart
-                  points={[11, 14, 10, 12, 10, 13, 14, 9, 6, 8, 11]}
+                  points={nearMissPoints}
                   yTicks={[20, 15, 10, 5, 0]}
-                  xTicks={[
-                    "Jul 03",
-                    "Jul 04",
-                    "Jul 05",
-                    "Jul 06",
-                    "Jul 07",
-                    "Jul 08",
-                    "Jul 09",
-                  ]}
+                  xTicks={safetyXTicks}
                   color="#3b82f6"
                 />
               </div>
@@ -1695,16 +1901,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 </span>
 
                 <div className="text-[#10b981] text-[24px] font-black font-mono mt-1 leading-none">
-                  99.7%
+                  {greenEnergyPct}%
                 </div>
               </div>
 
               <div className="flex-1 flex items-center justify-center min-h-0">
                 <SemiCircleGauge
-                  value={99.7}
-                  min={90}
+                  value={greenEnergyPct}
+                  min={0}
                   max={100}
-                  labelMin="90%"
+                  labelMin="0%"
                   labelMax="100%"
                   color="#10b981"
                   icon={CustomSymmetricalLeafIcon}
@@ -1722,7 +1928,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
                 <div className="mt-1 flex items-baseline leading-none">
                   <span className="text-[#3b82f6] text-[21px] font-black font-mono">
-                    1,284
+                    {co2Emission.toLocaleString()}
                   </span>
                   <span className="ml-1 text-[11px] text-[#8fa0b5]">tCO₂</span>
                 </div>
@@ -1732,20 +1938,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               <div className="flex-1 min-h-[55px] flex items-center">
                 <div className="w-full h-full">
                   <SafetyChart
-                    points={[
-                      1400, 1360, 1300, 1390, 1480, 1380, 1260, 1330, 1400,
-                      1360, 1270, 1290, 1320,
-                    ]}
+                    points={co2Points}
                     yTicks={[1600, 1400, 1200, 1000]}
-                    xTicks={[
-                      "Jul 03",
-                      "Jul 04",
-                      "Jul 05",
-                      "Jul 06",
-                      "Jul 07",
-                      "Jul 08",
-                      "Jul 09",
-                    ]}
+                    xTicks={safetyXTicks}
                     color="#3b82f6"
                   />
                 </div>
@@ -1770,7 +1965,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 </span>
                 <div className="flex items-baseline gap-1.5 mt-1">
                   <span className="text-[#a855f7] text-[24px] font-black leading-none font-mono">
-                    3
+                    {customerIncidents}
                   </span>
                   <span className="text-[#526a8a] text-[10px] font-bold font-sans">
                     This Month
@@ -1791,15 +1986,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   ERI (%)
                 </span>
                 <span className="text-[#a855f7] text-[24px] font-black mt-1 leading-none font-mono">
-                  96.2%
+                  {customerEri}%
                 </span>
               </div>
               <div className="flex-1 flex items-center justify-center w-full mt-2">
                 <SemiCircleGauge
-                  value={96.2}
-                  min={85}
+                  value={customerEri}
+                  min={0}
                   max={100}
-                  labelMin="85%"
+                  labelMin="0%"
                   labelMax="100%"
                   color="#a855f7"
                   icon={CustomEriIcon}
@@ -1830,7 +2025,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               </div>
               <div className="flex-1 flex items-center justify-center w-full mt-2">
                 <SemiCircleGauge
-                  value={72}
+                  value={ciLeanSavingsPct}
                   min={0}
                   max={100}
                   labelMin="0%"
@@ -1841,7 +2036,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               </div>
               <div className="flex justify-between text-[10px] text-[#526a8a] font-bold">
                 <span>Achieved</span>
-                <span className="text-white font-mono">360K €</span>
+                <span className="text-white font-mono">{ciLeanSavingsVal}</span>
               </div>
             </div>
 
@@ -1856,7 +2051,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               </div>
               <div className="flex-1 flex items-center justify-center w-full mt-2">
                 <SemiCircleGauge
-                  value={71}
+                  value={ciKaizenPct}
                   min={0}
                   max={100}
                   labelMin="0%"
@@ -1867,7 +2062,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               </div>
               <div className="flex justify-between text-[10px] text-[#526a8a] font-bold">
                 <span>Achieved</span>
-                <span className="text-white font-mono">142K</span>
+                <span className="text-white font-mono">{ciKaizenVal}</span>
               </div>
             </div>
           </div>
@@ -1896,7 +2091,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
             {/* Model Viewport */}
             <div className="flex-1 relative min-h-0 bg-[#060a10]">
-              <FactoryQualityTwin preview={false} />
+              <FactoryQualityTwin preview={false} zones={twinZones} />
             </div>
           </div>
         </div>

@@ -2,7 +2,7 @@
 // Consumed by both the R3F scene (FactoryScene) and the HTML overlay
 // (labels / detail card) so there is a single source of truth.
 
-export type ZoneStatus = "healthy" | "warning" | "critical";
+export type ZoneStatus = "healthy" | "warning" | "critical" | "unknown";
 
 export interface ZoneDef {
   id: string;
@@ -24,35 +24,38 @@ export const STATUS_HEX: Record<ZoneStatus, number> = {
   healthy: 0x2fe0a0,
   warning: 0xf5b02e,
   critical: 0xf24b5c,
+  unknown: 0x64748b,
 };
 
 export const STATUS_CSS: Record<ZoneStatus, string> = {
   healthy: "#2fe0a0",
   warning: "#f5b02e",
   critical: "#f24b5c",
+  unknown: "#64748b",
 };
 
 export const STATUS_LABEL: Record<ZoneStatus, string> = {
   healthy: "Healthy",
   warning: "At Risk",
   critical: "Critical",
+  unknown: "Unknown",
 };
 
 // Compact 2-column × 3-row grid so the cells read as one cohesive plant floor.
 // (cell 14×11, ~1.5u aisles)
 export const ZONES: ZoneDef[] = [
-  { id: "smt",        name: "SMT",         status: "healthy",  score: 96, kind: "smt",        x: -7.75, z: -12.5, w: 14, d: 11,
-    detail: "SMT placement lines 1–4 · OEE 96% · All feeders nominal" },
-  { id: "mft",        name: "MFT",         status: "healthy",  score: 95, kind: "mft",        x:  7.75, z: -12.5, w: 14, d: 11,
-    detail: "Module function test · Pass 99.1% · Cp 1.9 / Cpk 1.8" },
-  { id: "thermalgel", name: "THERMAL GEL", status: "warning",  score: 79, kind: "thermalgel", x: -7.75, z:  0,    w: 14, d: 11,
-    detail: "Thermal gel dispense · Fail% 6.8 · Check nozzle pressure & volume" },
-  { id: "rfm",        name: "RFM",         status: "healthy",  score: 93, kind: "rfm",        x:  7.75, z:  0,    w: 14, d: 11,
-    detail: "RF module calibration · Pass 98.4% · Signal margins nominal" },
-  { id: "testing",    name: "TESTING",     status: "warning",  score: 80, kind: "testing",    x: -7.75, z:  12.5, w: 14, d: 11,
-    detail: "Functional test · Pass 97.4% · Torque drift on bench 3" },
-  { id: "packaging",  name: "PACKAGING",   status: "critical", score: 71, kind: "packaging",  x:  7.75, z:  12.5, w: 14, d: 11,
-    detail: "Final pack & label · 71% first-pass · Ship queue blocked" },
+  { id: "smt",        name: "SMT",         status: "unknown",  score: 0, kind: "smt",        x: -7.75, z: -12.5, w: 14, d: 11,
+    detail: "SMT placement lines 1–4 · Status unknown" },
+  { id: "mft",        name: "MFT",         status: "unknown",  score: 0, kind: "mft",        x:  7.75, z: -12.5, w: 14, d: 11,
+    detail: "Module function test · Status unknown" },
+  { id: "thermalgel", name: "THERMAL GEL", status: "unknown",  score: 0, kind: "thermalgel", x: -7.75, z:  0,    w: 14, d: 11,
+    detail: "Thermal gel dispense · Status unknown" },
+  { id: "rfm",        name: "RFM",         status: "unknown",  score: 0, kind: "rfm",        x:  7.75, z:  0,    w: 14, d: 11,
+    detail: "RF module calibration · Status unknown" },
+  { id: "testing",    name: "TESTING",     status: "unknown",  score: 0, kind: "testing",    x: -7.75, z:  12.5, w: 14, d: 11,
+    detail: "Functional test · Status unknown" },
+  { id: "packaging",  name: "PACKAGING",   status: "unknown",  score: 0, kind: "packaging",  x:  7.75, z:  12.5, w: 14, d: 11,
+    detail: "Final pack & label · Status unknown" },
 ];
 
 // Platform bounds derived from the zones (+ margin) — used by FactoryPlatform.

@@ -1,26 +1,176 @@
 {
   "kpiCards": [
-    { "id": 1, "title": "FPY - UNIT (%)", "value": "98.6%", "change": "▲ 0.3% vs Yesterday", "points": [97.9, 98.1, 98.0, 98.3, 98.2, 98.4, 98.3, 98.5, 98.4, 98.6, 98.5, 98.6], "status": "success", "color": "#a3e635" },
-    { "id": 2, "title": "SPY - UNIT (%)", "value": "99.4%", "change": "▲ 0.1% vs Yesterday", "points": [99.0, 99.1, 99.0, 99.2, 99.1, 99.3, 99.2, 99.3, 99.4, 99.3, 99.4, 99.4], "status": "success", "color": "#a3e635" },
-    { "id": 3, "title": "FPY - MODULE (%)", "value": "97.8%", "change": "▲ 0.4% vs Yesterday", "points": [97.0, 97.2, 97.1, 97.4, 97.3, 97.5, 97.4, 97.6, 97.7, 97.6, 97.8, 97.8], "status": "success", "color": "#06b6d4" },
-    { "id": 4, "title": "SPY - MODULE (%)", "value": "98.9%", "change": "▲ 0.2% vs Yesterday", "points": [98.3, 98.4, 98.3, 98.5, 98.6, 98.5, 98.7, 98.6, 98.8, 98.7, 98.9, 98.9], "status": "success", "color": "#06b6d4" },
-    { "id": 5, "title": "CUSTOMER AUDIT (%)", "value": "96.5%", "change": "▲ 0.8% vs Yesterday", "points": [95.6, 95.8, 95.7, 96.0, 95.9, 96.1, 96.2, 96.1, 96.3, 96.4, 96.3, 96.5], "status": "success", "color": "#8b5cf6" },
-    { "id": 6, "title": "Open CAPA", "value": "14", "change": "▲ 2 vs yesterday", "points": [12, 12, 13, 13, 14, 14], "status": "warning", "color": "#f97316" },
-    { "id": 7, "title": "Rework Rate", "value": "1.8%", "change": "▼ 0.3% vs yesterday", "points": [2.2, 2.1, 2.0, 1.9, 1.8, 1.8], "status": "success", "color": "#a3e635" },
-    { "id": 8, "title": "AI Quality Risk Index", "value": "18", "riskLabel": "Low Risk", "change": "▼ 5 vs yesterday", "points": [12, 14, 18, 15, 17, 18], "status": "info", "color": "#06b6d4" }
+    {
+      "id": 1,
+      "key": "fpy_unit",
+      "label": "FPY - UNIT (%)",
+      "value": 0,
+      "delta_vs_yesterday": 0,
+      "trend": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "status": "success",
+      "color": "#a3e635"
+    },
+    {
+      "id": 2,
+      "key": "spy_unit",
+      "label": "SPY - UNIT (%)",
+      "value": 0,
+      "delta_vs_yesterday": 0,
+      "trend": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "status": "success",
+      "color": "#a3e635"
+    },
+    {
+      "id": 3,
+      "key": "fpy_module",
+      "label": "FPY - MODULE (%)",
+      "value": 0,
+      "delta_vs_yesterday": 0,
+      "trend": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "status": "success",
+      "color": "#06b6d4"
+    },
+    {
+      "id": 4,
+      "key": "spy_module",
+      "label": "SPY - MODULE (%)",
+      "value": 0,
+      "delta_vs_yesterday": 0,
+      "trend": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "status": "success",
+      "color": "#06b6d4"
+    },
+    {
+      "id": 5,
+      "key": "customer_audit",
+      "label": "CUSTOMER QUALITY AUDIT (%)",
+      "value": 0,
+      "delta_vs_yesterday": 0,
+      "trend": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "status": "success",
+      "color": "#8b5cf6"
+    },
+    {
+      "id": 6,
+      "key": "open_capa",
+      "label": "Open CAPA",
+      "value": 0,
+      "delta_vs_yesterday": 0,
+      "trend": [0, 0, 0, 0, 0, 0],
+      "status": "warning",
+      "color": "#f97316"
+    },
+    {
+      "id": 7,
+      "key": "rework_rate",
+      "label": "Rework Rate",
+      "value": 0,
+      "delta_vs_yesterday": 0,
+      "trend": [0, 0, 0, 0, 0, 0],
+      "status": "success",
+      "color": "#a3e635"
+    },
+    {
+      "id": 8,
+      "key": "ai_quality_risk_index",
+      "label": "AI Quality Risk Index",
+      "value": 0,
+      "riskLabel": "Low Risk",
+      "delta_vs_yesterday": 0,
+      "trend": [0, 0, 0, 0, 0, 0],
+      "status": "info",
+      "color": "#06b6d4"
+    }
   ],
   "processValidationFlow": [
-    { "name": "INCOMING MATERIAL", "status": "PASS", "val": "99.1%", "wip": "124", "cp": "1.67", "def": "12" },
-    { "name": "SPI", "status": "PASS", "val": "98.5%", "wip": "86", "cp": "1.78", "def": "18" },
-    { "name": "AOI", "status": "FAIL", "val": "96.2%", "wip": "158", "cp": "1.21", "def": "112" },
-    { "name": "AXI", "status": "WARNING", "val": "97.4%", "wip": "92", "cp": "1.38", "def": "28" },
-    { "name": "THERMAL GEL", "status": "WARNING", "val": "97.0%", "wip": "76", "cp": "1.45", "def": "21" },
-    { "name": "SMART SCREWDRIVING", "status": "FAIL", "val": "95.6%", "wip": "64", "cp": "1.18", "def": "33" },
-    { "name": "FINAL ASSEMBLY", "status": "PASS", "val": "98.1%", "wip": "70", "cp": "1.62", "def": "15" },
-    { "name": "FUNCTIONAL TEST", "status": "PASS", "val": "98.9%", "wip": "56", "cp": "1.97", "def": "9" },
-    { "name": "VISUAL INSPECTION", "status": "PASS", "val": "98.6%", "wip": "48", "cp": "3", "def": "9" },
-    { "name": "PACKAGING", "status": "PASS", "val": "99.2%", "wip": "36", "cp": "7", "def": "7" },
-    { "name": "SHIPMENT", "status": "PASS", "val": "99.3%", "wip": "18", "cp": "1.81", "def": "2" }
+    {
+      "name": "INCOMING MATERIAL",
+      "status": "PASS",
+      "val": "99.1%",
+      "wip": "124",
+      "cp": "1.67",
+      "def": "12"
+    },
+    {
+      "name": "SPI",
+      "status": "PASS",
+      "val": "98.5%",
+      "wip": "86",
+      "cp": "1.78",
+      "def": "18"
+    },
+    {
+      "name": "AOI",
+      "status": "FAIL",
+      "val": "96.2%",
+      "wip": "158",
+      "cp": "1.21",
+      "def": "112"
+    },
+    {
+      "name": "AXI",
+      "status": "WARNING",
+      "val": "97.4%",
+      "wip": "92",
+      "cp": "1.38",
+      "def": "28"
+    },
+    {
+      "name": "THERMAL GEL",
+      "status": "WARNING",
+      "val": "97.0%",
+      "wip": "76",
+      "cp": "1.45",
+      "def": "21"
+    },
+    {
+      "name": "SMART SCREWDRIVING",
+      "status": "FAIL",
+      "val": "95.6%",
+      "wip": "64",
+      "cp": "1.18",
+      "def": "33"
+    },
+    {
+      "name": "FINAL ASSEMBLY",
+      "status": "PASS",
+      "val": "98.1%",
+      "wip": "70",
+      "cp": "1.62",
+      "def": "15"
+    },
+    {
+      "name": "FUNCTIONAL TEST",
+      "status": "PASS",
+      "val": "98.9%",
+      "wip": "56",
+      "cp": "1.97",
+      "def": "9"
+    },
+    {
+      "name": "VISUAL INSPECTION",
+      "status": "PASS",
+      "val": "98.6%",
+      "wip": "48",
+      "cp": "3",
+      "def": "9"
+    },
+    {
+      "name": "PACKAGING",
+      "status": "PASS",
+      "val": "99.2%",
+      "wip": "36",
+      "cp": "7",
+      "def": "7"
+    },
+    {
+      "name": "SHIPMENT",
+      "status": "PASS",
+      "val": "99.3%",
+      "wip": "18",
+      "cp": "1.81",
+      "def": "2"
+    }
   ],
   "factoryQualityTwin": {
     "warehouse": 93,
@@ -32,25 +182,138 @@
     "packaging": 92
   },
   "processValidationCenter": [
-    { "name": "SPI", "build": "X21 - Build 2", "pass": "98.5%", "cp": "1.72", "cpk": "1.71", "points": [98.1, 98.3, 98.5, 98.4, 98.5], "status": "HEALTHY", "rec": "Maintain current settings", "color": "#10b981" },
-    { "name": "AOI", "build": "X21 - Build 2", "pass": "96.2%", "cp": "1.32", "cpk": "1.21", "points": [97.5, 97.0, 96.8, 96.5, 96.2], "status": "AT RISK", "rec": "Recalibrate AOI cameras", "color": "#f97316" },
-    { "name": "AXI", "build": "X21 - Build 2", "pass": "97.4%", "cp": "1.51", "cpk": "1.38", "points": [97.0, 97.2, 97.1, 97.3, 97.4], "status": "AT RISK", "rec": "Monitor voiding trend", "color": "#f97316" },
-    { "name": "Thermal Gel", "build": "X21 - Build 2", "pass": "97.0%", "cp": "1.58", "cpk": "1.45", "points": [96.8, 96.9, 97.0, 97.0, 97.0], "status": "AT RISK", "rec": "Check nozzle wear", "color": "#f97316" },
-    { "name": "Robot Screw", "build": "X21 - Build 2", "pass": "95.6%", "cp": "1.28", "cpk": "1.18", "points": [96.5, 96.1, 95.9, 95.7, 95.6], "status": "CRITICAL", "rec": "Inspect torque tools", "color": "#ef4444" },
-    { "name": "Functional Test", "build": "X21 - Build 2", "pass": "98.9%", "cp": "1.87", "cpk": "1.74", "points": [98.5, 98.7, 98.8, 98.9, 98.9], "status": "HEALTHY", "rec": "Maintain settings", "color": "#10b981" },
-    { "name": "Visual Inspect", "build": "X21 - Build 2", "pass": "98.6%", "cp": "1.76", "cpk": "1.66", "points": [98.4, 98.5, 98.5, 98.6, 98.6], "status": "HEALTHY", "rec": "Maintain sampling plan", "color": "#10b981" }
+    {
+      "name": "SPI",
+      "build": "X21 - Build 2",
+      "pass": "98.5%",
+      "cp": "1.72",
+      "cpk": "1.71",
+      "points": [98.1, 98.3, 98.5, 98.4, 98.5],
+      "status": "HEALTHY",
+      "rec": "Maintain current settings",
+      "color": "#10b981"
+    },
+    {
+      "name": "AOI",
+      "build": "X21 - Build 2",
+      "pass": "96.2%",
+      "cp": "1.32",
+      "cpk": "1.21",
+      "points": [97.5, 97.0, 96.8, 96.5, 96.2],
+      "status": "AT RISK",
+      "rec": "Recalibrate AOI cameras",
+      "color": "#f97316"
+    },
+    {
+      "name": "AXI",
+      "build": "X21 - Build 2",
+      "pass": "97.4%",
+      "cp": "1.51",
+      "cpk": "1.38",
+      "points": [97.0, 97.2, 97.1, 97.3, 97.4],
+      "status": "AT RISK",
+      "rec": "Monitor voiding trend",
+      "color": "#f97316"
+    },
+    {
+      "name": "Thermal Gel",
+      "build": "X21 - Build 2",
+      "pass": "97.0%",
+      "cp": "1.58",
+      "cpk": "1.45",
+      "points": [96.8, 96.9, 97.0, 97.0, 97.0],
+      "status": "AT RISK",
+      "rec": "Check nozzle wear",
+      "color": "#f97316"
+    },
+    {
+      "name": "Robot Screw",
+      "build": "X21 - Build 2",
+      "pass": "95.6%",
+      "cp": "1.28",
+      "cpk": "1.18",
+      "points": [96.5, 96.1, 95.9, 95.7, 95.6],
+      "status": "CRITICAL",
+      "rec": "Inspect torque tools",
+      "color": "#ef4444"
+    },
+    {
+      "name": "Functional Test",
+      "build": "X21 - Build 2",
+      "pass": "98.9%",
+      "cp": "1.87",
+      "cpk": "1.74",
+      "points": [98.5, 98.7, 98.8, 98.9, 98.9],
+      "status": "HEALTHY",
+      "rec": "Maintain settings",
+      "color": "#10b981"
+    },
+    {
+      "name": "Visual Inspect",
+      "build": "X21 - Build 2",
+      "pass": "98.6%",
+      "cp": "1.76",
+      "cpk": "1.66",
+      "points": [98.4, 98.5, 98.5, 98.6, 98.6],
+      "status": "HEALTHY",
+      "rec": "Maintain sampling plan",
+      "color": "#10b981"
+    }
   ],
   "attentionCenterAlerts": [
-    { "title": "AOI FALSE REJECT SPIKE", "time": "11 min ago", "line": "AOI Line 2", "impact": "High", "stat": "PPM: 112", "rec": "Recalibrate cameras and review lighting.", "level": "CRITICAL" },
-    { "title": "THERMAL GEL ROI FAILURE", "time": "19 min ago", "line": "TG Dispense 1", "impact": "Medium", "stat": "Fail%: 6.8%", "rec": "Check nozzle pressure & volume.", "level": "WARNING" },
-    { "title": "SCREW TORQUE DRIFT", "time": "27 min ago", "line": "Screw Line 3", "impact": "High", "stat": "Fail%: 4.2%", "rec": "Replace worn torque bit.", "level": "WARNING" },
-    { "title": "AXI VOIDING INCREASE", "time": "35 min ago", "line": "AXI Line 1", "impact": "Medium", "stat": "Void%: 18.6%", "rec": "Optimize reflow profile.", "level": "INFO" },
-    { "title": "CUSTOMER AUDIT FINDING", "time": "1 hr ago", "line": "Final Test Area", "impact": "High", "stat": "Open Items: 3", "rec": "Update work instruction & train.", "level": "PURPLE" }
+    {
+      "title": "AOI FALSE REJECT SPIKE",
+      "time": "11 min ago",
+      "line": "AOI Line 2",
+      "impact": "High",
+      "stat": "PPM: 112",
+      "rec": "Recalibrate cameras and review lighting.",
+      "level": "CRITICAL"
+    },
+    {
+      "title": "THERMAL GEL ROI FAILURE",
+      "time": "19 min ago",
+      "line": "TG Dispense 1",
+      "impact": "Medium",
+      "stat": "Fail%: 6.8%",
+      "rec": "Check nozzle pressure & volume.",
+      "level": "WARNING"
+    },
+    {
+      "title": "SCREW TORQUE DRIFT",
+      "time": "27 min ago",
+      "line": "Screw Line 3",
+      "impact": "High",
+      "stat": "Fail%: 4.2%",
+      "rec": "Replace worn torque bit.",
+      "level": "WARNING"
+    },
+    {
+      "title": "AXI VOIDING INCREASE",
+      "time": "35 min ago",
+      "line": "AXI Line 1",
+      "impact": "Medium",
+      "stat": "Void%: 18.6%",
+      "rec": "Optimize reflow profile.",
+      "level": "INFO"
+    },
+    {
+      "title": "CUSTOMER AUDIT FINDING",
+      "time": "1 hr ago",
+      "line": "Final Test Area",
+      "impact": "High",
+      "stat": "Open Items: 3",
+      "rec": "Update work instruction & train.",
+      "level": "PURPLE"
+    }
   ],
   "warehouseMaterialQuality": {
     "blockedInventory": { "value": 132, "change": "▲ 6 vs yesterday" },
     "grnQualityHold": { "value": 28, "change": "▼ 4 vs yesterday" },
-    "incomingInspectionPass": { "value": "98.7%", "change": "▲ 1.1% vs yesterday" },
+    "incomingInspectionPass": {
+      "value": "98.7%",
+      "change": "▲ 1.1% vs yesterday"
+    },
     "supplierPpm": { "value": 215, "change": "▼ 15 vs yesterday" },
     "lotTraceability": { "value": "99.4%", "change": "▲ 0.6% vs yesterday" },
     "status": "OK"

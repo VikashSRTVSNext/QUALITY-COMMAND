@@ -2,7 +2,7 @@ import { memo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
-import { ZONES, PLATFORM, STATUS_CSS, STATUS_LABEL } from "./zones";
+import { ZONES, PLATFORM, STATUS_CSS, STATUS_LABEL, ZoneDef } from "./zones";
 import { Lighting } from "./Lighting";
 import { FactoryPlatform } from "./FactoryPlatform";
 import { FactoryZone } from "./FactoryZone";
@@ -120,9 +120,10 @@ interface FactorySceneProps {
   selected: string | null;
   onSelect: (id: string) => void;
   preview: boolean;
+  zones?: ZoneDef[];
 }
 
-export const FactoryScene = memo(function FactoryScene({ selected, onSelect, preview }: FactorySceneProps) {
+export const FactoryScene = memo(function FactoryScene({ selected, onSelect, preview, zones = ZONES }: FactorySceneProps) {
   const spin = useRef<THREE.Group>(null);
 
   // Disabling automatic continuous rotation to prevent sluggish performance on laptops.
@@ -137,7 +138,7 @@ export const FactoryScene = memo(function FactoryScene({ selected, onSelect, pre
       <group ref={spin} position={[PLATFORM.cx, 0, PLATFORM.cz]}>
         <group position={[-PLATFORM.cx, 0, -PLATFORM.cz]}>
           <FactoryPlatform />
-          {ZONES.map((z) => {
+          {zones.map((z) => {
             const offset = OFFSETS[z.id] || { x: 0, y: 0 };
             const isLeft = offset.x < 0;
             const connX = isLeft ? offset.x + 50 : offset.x - 50;
@@ -210,7 +211,7 @@ export const FactoryScene = memo(function FactoryScene({ selected, onSelect, pre
           target={[PLATFORM.cx, 0, PLATFORM.cz]}
           enablePan={false}
           enableZoom
-          minDistance={28}
+          minDistance={15}
           maxDistance={90}
           minPolarAngle={0.2}
           maxPolarAngle={Math.PI / 2.3}

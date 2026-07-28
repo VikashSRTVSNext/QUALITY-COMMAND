@@ -1,7 +1,7 @@
 import { Suspense, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { FactoryScene } from "../factory/FactoryScene";
-import { ZONES, STATUS_CSS, STATUS_LABEL, ZoneStatus } from "../factory/zones";
+import { ZONES, STATUS_CSS, STATUS_LABEL, ZoneStatus, ZoneDef } from "../factory/zones";
 
 /* ============================================================
    FACTORY QUALITY TWIN — premium low-poly industrial digital twin.
@@ -13,13 +13,14 @@ import { ZONES, STATUS_CSS, STATUS_LABEL, ZoneStatus } from "../factory/zones";
 interface FactoryQualityTwinProps {
   preview?: boolean;
   onMaximize?: () => void;
+  zones?: ZoneDef[];
 }
 
 const font = "'Segoe UI', system-ui, -apple-system, sans-serif";
 
-export default function FactoryQualityTwin({ preview = false }: FactoryQualityTwinProps) {
+export default function FactoryQualityTwin({ preview = false, zones = ZONES }: FactoryQualityTwinProps) {
   const [selected, setSelected] = useState<string | null>(null);
-  const selectedZone = ZONES.find((z) => z.id === selected) || null;
+  const selectedZone = zones.find((z) => z.id === selected) || null;
 
   const handleSelect = (id: string) => {
     if (preview) { return; } // disabled explore view action on preview canvas click
@@ -38,13 +39,13 @@ export default function FactoryQualityTwin({ preview = false }: FactoryQualityTw
     >
       <Canvas
         dpr={1}
-        camera={{ position: [34, 60, 34], fov: 54, near: 0.5, far: 400 }}
+        camera={{ position: [24, 42, 24], fov: 48, near: 0.5, far: 400 }}
         gl={{ antialias: true, toneMappingExposure: 0.72, powerPreference: "high-performance" }}
         performance={{ min: 0.5 }}
       >
         <color attach="background" args={["#060b12"]} />
         <Suspense fallback={null}>
-          <FactoryScene selected={selected} onSelect={handleSelect} preview={preview} />
+          <FactoryScene selected={selected} onSelect={handleSelect} preview={preview} zones={zones} />
         </Suspense>
       </Canvas>
 
