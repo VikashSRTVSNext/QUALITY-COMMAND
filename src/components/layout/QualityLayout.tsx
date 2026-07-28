@@ -597,7 +597,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [ciKaizenPct, setCiKaizenPct] = useState(0);
   const [ciKaizenVal, setCiKaizenVal] = useState("...");
   const [twinZones, setTwinZones] = useState<ZoneDef[]>(ZONES);
-  const [shopFloorConditions, setShopFloorConditions] = useState({ temp: 27.6, humidity: 56 });
+  const [shopFloorConditions, setShopFloorConditions] = useState<{ temp: number | null; humidity: number | null }>({ temp: null, humidity: null });
 
   const currentYieldData = React.useMemo(() => {
     return productYield;
@@ -1272,7 +1272,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {/* Temperature */}
             <div className="flex flex-col items-center">
               <span className="text-[22px] font-black font-mono leading-none text-[#06b6d4]" style={{ textShadow: "0 0 8px #06b6d440" }}>
-                {shopFloorConditions.temp}°
+                {shopFloorConditions.temp !== null ? `${shopFloorConditions.temp}°` : "N/A"}
               </span>
               <span className="text-[10px] text-[#526a8a] mt-0.5 font-medium">Temperature</span>
             </div>
@@ -1281,7 +1281,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {/* Humidity */}
             <div className="flex flex-col items-center">
               <span className="text-[22px] font-black font-mono leading-none text-[#06b6d4]" style={{ textShadow: "0 0 8px #06b6d440" }}>
-                {shopFloorConditions.humidity}%
+                {shopFloorConditions.humidity !== null ? `${shopFloorConditions.humidity}%` : "N/A"}
               </span>
               <span className="text-[10px] text-[#526a8a] mt-0.5 font-medium">Humidity</span>
             </div>
