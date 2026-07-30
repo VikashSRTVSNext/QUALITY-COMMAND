@@ -11,12 +11,12 @@ RUN npm ci --legacy-peer-deps
 COPY . .
 
 # Build arguments for Vite environment variables
-ARG VITE_DASHBOARD_SSE_URL
-ARG VITE_API_BASE_URL
-ARG VITE_USE_MOCKS
+ARG VITE_API_BASE_URL=https://digitwin.dyn.nesc.nokia.net/api/factory-command-center
+ARG VITE_DASHBOARD_SSE_URL=https://digitwin.dyn.nesc.nokia.net/api/factory-command-center/dashboard/stream
+ARG VITE_USE_MOCKS=false
 
-ENV VITE_DASHBOARD_SSE_URL=$VITE_DASHBOARD_SSE_URL
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_DASHBOARD_SSE_URL=$VITE_DASHBOARD_SSE_URL
 ENV VITE_USE_MOCKS=$VITE_USE_MOCKS
 
 RUN npm run build
