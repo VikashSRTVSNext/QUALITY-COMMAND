@@ -1,0 +1,16 @@
+services:
+  nokia-command-center:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: 'https://digitwin.dyn.nesc.nokia.net/hub/api/v1'
+        VITE_CONSOLE_APP_URL: 'http://localhost:8001/api/v1'
+    container_name: nokia-command-center
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Mount the certs folder if it exists
+      - ./nginx/nginx/certs:/etc/nginx/certs:ro
+    restart: unless-stopped

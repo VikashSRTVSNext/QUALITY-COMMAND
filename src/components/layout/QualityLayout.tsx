@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   ChevronDown,
   Maximize2,
-  Filter,
   CheckCircle2,
   ShieldCheck,
   ClipboardList,
@@ -16,7 +15,6 @@ import {
   Thermometer,
   Droplets,
   Wrench,
-  User,
   ChevronRight,
   Bell,
   ChevronLeft,
@@ -37,6 +35,21 @@ import FactoryQualityTwin from "./FactoryQualityTwin";
 interface QualityLayoutProps {
   header?: React.ReactNode;
 }
+
+interface EriData {
+  period: string;
+  fiscal_year: number;
+  period_code: string;
+  period_num: number;
+  period_start: string;
+  period_end: string;
+  deliveries: number;
+  returns: number;
+  eri_pct: number | null;
+  target_pct: number | null;
+  status: string;
+}
+
 
 const ScrewIcon = ({
   size = 24,
@@ -181,6 +194,7 @@ const SafetyChart = ({
   xTicks: string[];
   color?: string;
 }) => {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const width = 200;
   const height = 55;
   // Left gutter adapts to the widest y-axis label so multi-digit values
@@ -274,7 +288,44 @@ const SafetyChart = ({
           />
         )}
 
+        {/* Vertical Guideline on Hover */}
+        {hoveredIdx !== null && hasPoints && (
+          <line
+            x1={paddingLeft + (hoveredIdx / (points.length - 1)) * chartWidth}
+            y1={paddingTop}
+            x2={paddingLeft + (hoveredIdx / (points.length - 1)) * chartWidth}
+            y2={paddingTop + chartHeight}
+            stroke={color}
+            strokeWidth="0.5"
+            strokeDasharray="2,2"
+            opacity="0.5"
+          />
+        )}
+
         {/* Dots */}
+        {hasPoints &&
+          points.map((p, i) => {
+            const x = paddingLeft + (i / (points.length - 1)) * chartWidth;
+            const y =
+              paddingTop + chartHeight - ((p - minVal) / range) * chartHeight;
+            const isHovered = hoveredIdx === i;
+            return (
+              <circle
+                key={i}
+                cx={x}
+                cy={y}
+                r={isHovered ? "2.5" : "1.8"}
+                fill={color}
+                stroke={isHovered ? "#ffffff" : "#070e17"}
+                strokeWidth="0.4"
+                style={{
+                  transition: "all 0.1s ease-in-out",
+                }}
+              />
+            );
+          })}
+
+        {/* Interactive Hit Areas */}
         {hasPoints &&
           points.map((p, i) => {
             const x = paddingLeft + (i / (points.length - 1)) * chartWidth;
@@ -282,16 +333,79 @@ const SafetyChart = ({
               paddingTop + chartHeight - ((p - minVal) / range) * chartHeight;
             return (
               <circle
-                key={i}
+                key={`hit-${i}`}
                 cx={x}
                 cy={y}
-                r="1.8"
-                fill={color}
-                stroke="#070e17"
-                strokeWidth="0.4"
+                r="7"
+                fill="transparent"
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredIdx(i)}
+                onMouseLeave={() => setHoveredIdx(null)}
               />
             );
           })}
+
+        {/* Tooltip Overlay */}
+        {hoveredIdx !== null && hasPoints && (
+          <g>
+            {(() => {
+              const x =
+                paddingLeft + (hoveredIdx / (points.length - 1)) * chartWidth;
+              const y =
+                paddingTop +
+                chartHeight -
+                ((points[hoveredIdx] - minVal) / range) * chartHeight;
+
+              const tooltipWidth = 36;
+              const tooltipHeight = 18;
+              let tx = x - tooltipWidth / 2;
+              let ty = y - tooltipHeight - 4;
+
+              // Bound adjustments
+              if (tx < 2) tx = 2;
+              if (tx + tooltipWidth > width - 2) tx = width - tooltipWidth - 2;
+              if (ty < 2) ty = y + 4; // Display below if too high
+
+              return (
+                <g style={{ pointerEvents: "none" }}>
+                  <rect
+                    x={tx}
+                    y={ty}
+                    width={tooltipWidth}
+                    height={tooltipHeight}
+                    rx="3"
+                    fill="#070e17"
+                    stroke={color}
+                    strokeWidth="0.8"
+                    opacity="0.95"
+                  />
+                  {/* Period Name */}
+                  <text
+                    x={tx + tooltipWidth / 2}
+                    y={ty + 6.5}
+                    fill="#8fa0b5"
+                    fontSize="5"
+                    fontWeight="bold"
+                    textAnchor="middle"
+                  >
+                    {xTicks[hoveredIdx]}
+                  </text>
+                  {/* Point Value */}
+                  <text
+                    x={tx + tooltipWidth / 2}
+                    y={ty + 14}
+                    fill="#ffffff"
+                    fontSize="7"
+                    fontWeight="black"
+                    textAnchor="middle"
+                  >
+                    {points[hoveredIdx]}
+                  </text>
+                </g>
+              );
+            })()}
+          </g>
+        )}
 
         {/* X Axis Labels */}
         {xTicks.map((tick, i) => {
@@ -439,10 +553,10 @@ const processPerformanceData = [
     name: "DPMOI",
     icon: Camera,
     section: "SMT",
-    type: "yield",
-    data: { done: "11,230", ok: "11,052", yield: "98.42%" },
-    status: "Healthy",
-    color: "#10b981",
+    type: "dpmo",
+    data: { defects: "...", opportunities: "...", index: "..." },
+    status: "...",
+    color: "#1e293b",
   },
   {
     name: "AXI",
@@ -481,24 +595,6 @@ const processPerformanceData = [
     color: "#ef4444",
   },
   {
-    name: "AUTO OGI",
-    icon: Search,
-    section: "RFM",
-    type: "yield",
-    data: { done: "840", ok: "832", yield: "98.05%" },
-    status: "Healthy",
-    color: "#10b981",
-  },
-  {
-    name: "MANUAL OGI",
-    icon: User,
-    section: "RFM",
-    type: "yield",
-    data: { done: "420", ok: "413", yield: "98.33%" },
-    status: "At Risk",
-    color: "#eab308",
-  },
-  {
     name: "LBTS",
     icon: Zap,
     section: "RFM",
@@ -513,6 +609,42 @@ const processPerformanceData = [
     section: "RFM",
     type: "yield",
     data: { done: "590", ok: "586", yield: "99.32%" },
+    status: "Healthy",
+    color: "#10b981",
+  },
+  {
+    name: "OTA",
+    icon: Cpu,
+    section: "RFM",
+    type: "yield",
+    data: { done: "540", ok: "531", yield: "98.33%" },
+    status: "Healthy",
+    color: "#10b981",
+  },
+  {
+    name: "RTWP",
+    icon: Zap,
+    section: "RFM",
+    type: "yield",
+    data: { done: "520", ok: "512", yield: "98.46%" },
+    status: "Healthy",
+    color: "#10b981",
+  },
+  {
+    name: "IP",
+    icon: Scan,
+    section: "RFM",
+    type: "yield",
+    data: { done: "510", ok: "502", yield: "98.43%" },
+    status: "Healthy",
+    color: "#10b981",
+  },
+  {
+    name: "AUTO OGI",
+    icon: Search,
+    section: "RFM",
+    type: "yield",
+    data: { done: "840", ok: "832", yield: "98.05%" },
     status: "Healthy",
     color: "#10b981",
   },
@@ -565,7 +697,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     "UNITS",
   );
   const [yieldPage, setYieldPage] = useState(1);
-  const ITEMS_PER_PAGE = 5;
+  const ITEMS_PER_PAGE = 8;
 
   const [processPerformance, setProcessPerformance] = useState<any[]>(
     processPerformanceData.map((item) => ({
@@ -580,6 +712,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   );
   const [productYield, setProductYield] = useState<any[]>([]);
   const [rawKpiData, setRawKpiData] = useState<any>(null);
+  const [rawProcessPerformance, setRawProcessPerformance] = useState<any>(null);
   const [attentionCenterAlerts, setAttentionCenterAlerts] = useState<any[]>([]);
   const [alertsTotal, setAlertsTotal] = useState(0);
   const [criticalTotal, setCriticalTotal] = useState(0);
@@ -587,17 +720,30 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [safetyNearMiss, setSafetyNearMiss] = useState(0);
   const [accidentPoints, setAccidentPoints] = useState<number[]>([]);
   const [nearMissPoints, setNearMissPoints] = useState<number[]>([]);
+  const [safetyXTicks, setSafetyXTicks] = useState<string[]>(() =>
+    Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const month = d.toLocaleString("en-US", { month: "short" });
+      const day = d.getDate().toString().padStart(2, "0");
+      return `${month} ${day}`;
+    }),
+  );
   const [co2Points, setCo2Points] = useState<number[]>([]);
   const [greenEnergyPct, setGreenEnergyPct] = useState(0);
   const [co2Emission, setCo2Emission] = useState(0);
   const [customerIncidents, setCustomerIncidents] = useState(0);
   const [customerEri, setCustomerEri] = useState(0);
+  const [eriData, setEriData] = useState<EriData | null>(null);
   const [ciLeanSavingsPct, setCiLeanSavingsPct] = useState(0);
   const [ciLeanSavingsVal, setCiLeanSavingsVal] = useState("...");
   const [ciKaizenPct, setCiKaizenPct] = useState(0);
   const [ciKaizenVal, setCiKaizenVal] = useState("...");
   const [twinZones, setTwinZones] = useState<ZoneDef[]>(ZONES);
-  const [shopFloorConditions, setShopFloorConditions] = useState<{ temp: number | null; humidity: number | null }>({ temp: null, humidity: null });
+  const [shopFloorConditions, setShopFloorConditions] = useState<{
+    temp: number | null;
+    humidity: number | null;
+  }>({ temp: null, humidity: null });
 
   const currentYieldData = React.useMemo(() => {
     return productYield;
@@ -657,6 +803,65 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     return () => clearInterval(interval);
   }, [activeShift, activeYieldTab]);
 
+  // Fetch safety data from REST API
+  useEffect(() => {
+    const fetchSafetyData = async () => {
+      try {
+        const url = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/dashboard/safety`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to fetch safety data");
+        const data = await res.json();
+        if (data) {
+          if (data.current) {
+            setSafetyAccident(data.current.incident ?? 0);
+            setSafetyNearMiss(data.current.near_miss ?? 0);
+          }
+          if (data.periods && Array.isArray(data.periods)) {
+            const sortedPeriods = [...data.periods].sort((a: any, b: any) =>
+              a.period.localeCompare(b.period),
+            );
+            setAccidentPoints(sortedPeriods.map((p: any) => p.incident ?? 0));
+            setNearMissPoints(sortedPeriods.map((p: any) => p.near_miss ?? 0));
+            setSafetyXTicks(
+              sortedPeriods.map((p: any) => p.period_code ?? p.period),
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching safety data:", err);
+      }
+    };
+
+    fetchSafetyData();
+    const interval = setInterval(fetchSafetyData, 5 * 60 * 1000); // 5 minutes
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch ERI data from REST API
+  useEffect(() => {
+    const fetchEriData = async () => {
+      try {
+        const url = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/dashboard/eri`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to fetch ERI data");
+        const data = await res.json();
+        if (data && data.eri) {
+          setEriData(data.eri);
+          if (data.eri.eri_pct !== undefined && data.eri.eri_pct !== null) {
+            setCustomerEri(data.eri.eri_pct);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching ERI data:", err);
+      }
+    };
+
+    fetchEriData();
+    const interval = setInterval(fetchEriData, 5 * 60 * 1000); // 5 minutes
+    return () => clearInterval(interval);
+  }, []);
+
+
   // SSE stream integration
   useEffect(() => {
     // Point at the FastAPI yield feed via env; falls back to the legacy tunnel.
@@ -671,11 +876,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       if (status === "critical") return "critical";
       if (status === "healthy") return "healthy";
       return "unknown";
-    };
-
-    const matchKey = (name: string) => {
-      if (name === "SMT DEFECTS") return "smt_defects_mft";
-      return name.toLowerCase().replace(/\s+/g, "_");
     };
 
     const handleData = (data: any) => {
@@ -716,51 +916,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
       // 3. Process Performance
       if (data.process_performance) {
-        const sseSmt = data.process_performance.SMT || [];
-        const sseRfm = data.process_performance.RFM || [];
-        const allSseItems = [...sseSmt, ...sseRfm];
-
-        setProcessPerformance((prev) => {
-          return prev.map((item) => {
-            const itemKey = matchKey(item.name);
-            const incoming = allSseItems.find((x: any) => x.key === itemKey);
-            if (incoming) {
-              const statusMapped =
-                incoming.status === "healthy"
-                  ? "Healthy"
-                  : incoming.status === "at_risk"
-                    ? "At Risk"
-                    : "Critical";
-              const colorMapped =
-                incoming.status === "healthy"
-                  ? "#10b981"
-                  : incoming.status === "at_risk"
-                    ? "#eab308"
-                    : "#ef4444";
-
-              if (incoming.failure_pct !== undefined) {
-                return {
-                  ...item,
-                  data: { failure: `${incoming.failure_pct.toFixed(1)}%` },
-                  status: statusMapped,
-                  color: colorMapped,
-                };
-              } else {
-                return {
-                  ...item,
-                  data: {
-                    done: incoming.done.toLocaleString(),
-                    ok: incoming.ok.toLocaleString(),
-                    yield: `${incoming.yield.toFixed(2)}%`,
-                  },
-                  status: statusMapped,
-                  color: colorMapped,
-                };
-              }
-            }
-            return item;
-          });
-        });
+        setRawProcessPerformance(data.process_performance);
       }
 
       // 4. Factory Quality Twin
@@ -782,7 +938,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       }
 
       // 5. Product Yield - Handled by separate REST API polling now
-
 
       // 6. Attention Center Alerts
       if (data.attention_center) {
@@ -818,13 +973,25 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       if (data.safety) {
         if (data.safety.accident !== undefined) {
           setSafetyAccident(data.safety.accident.value);
-          if (data.safety.accident.trend)
-            setAccidentPoints(data.safety.accident.trend);
+          setAccidentPoints((prev) => {
+            if (prev.length === 3) {
+              const next = [...prev];
+              next[2] = data.safety.accident.value;
+              return next;
+            }
+            return data.safety.accident.trend || prev;
+          });
         }
         if (data.safety.near_miss !== undefined) {
           setSafetyNearMiss(data.safety.near_miss.value);
-          if (data.safety.near_miss.trend)
-            setNearMissPoints(data.safety.near_miss.trend);
+          setNearMissPoints((prev) => {
+            if (prev.length === 3) {
+              const next = [...prev];
+              next[2] = data.safety.near_miss.value;
+              return next;
+            }
+            return data.safety.near_miss.trend || prev;
+          });
         }
       }
 
@@ -846,6 +1013,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         if (data.customer_reflection.eri_pct !== undefined)
           setCustomerEri(data.customer_reflection.eri_pct.value);
       }
+      if (data.eri) {
+        setEriData(data.eri);
+        if (data.eri.eri_pct !== undefined && data.eri.eri_pct !== null) {
+          setCustomerEri(data.eri.eri_pct);
+        }
+      }
+
 
       // 10. CI
       if (data.ci) {
@@ -924,14 +1098,23 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         const shiftMatch = activeShift.match(/Shift\s+([A-C])/i);
         const shiftLetter = shiftMatch ? shiftMatch[1].toUpperCase() : null;
 
-        const isShiftSpecificKpi = ["fpy_unit", "spy_unit", "fpy_module", "spy_module"].includes(sseKey);
+        const isShiftSpecificKpi = [
+          "fpy_unit",
+          "spy_unit",
+          "fpy_module",
+          "spy_module",
+        ].includes(sseKey);
 
         if (isShiftSpecificKpi && rawKpiData.by_shift && shiftLetter) {
           // New format with by_shift array
           const shiftData = rawKpiData.by_shift.find(
-            (s: any) => s.shift && s.shift.toUpperCase() === shiftLetter
+            (s: any) => s.shift && s.shift.toUpperCase() === shiftLetter,
           );
-          if (shiftData && shiftData[sseKey] !== undefined && shiftData[sseKey] !== null) {
+          if (
+            shiftData &&
+            shiftData[sseKey] !== undefined &&
+            shiftData[sseKey] !== null
+          ) {
             val = shiftData[sseKey];
             // Get delta/trend from day summary if available, since shift entries don't have delta
             if (rawKpiData.day) {
@@ -955,7 +1138,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             const dayItem = rawKpiData.day[sseKey];
             if (dayItem !== undefined && dayItem !== null) {
               val = typeof dayItem === "object" ? dayItem.value : dayItem;
-              delta = typeof dayItem === "object" ? dayItem.delta_vs_yesterday : 0;
+              delta =
+                typeof dayItem === "object" ? dayItem.delta_vs_yesterday : 0;
               trend = typeof dayItem === "object" ? dayItem.trend : null;
             }
           } else if (Array.isArray(rawKpiData)) {
@@ -963,7 +1147,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             const incoming = rawKpiData.find((k: any) => k && k.key === sseKey);
             if (incoming) {
               val = typeof incoming === "object" ? incoming.value : incoming;
-              delta = typeof incoming === "object" ? incoming.delta_vs_yesterday : 0;
+              delta =
+                typeof incoming === "object" ? incoming.delta_vs_yesterday : 0;
               trend = typeof incoming === "object" ? incoming.trend : null;
             }
           } else if (typeof rawKpiData === "object") {
@@ -971,7 +1156,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             const incoming = rawKpiData[sseKey];
             if (incoming !== undefined && incoming !== null) {
               val = typeof incoming === "object" ? incoming.value : incoming;
-              delta = typeof incoming === "object" ? incoming.delta_vs_yesterday : 0;
+              delta =
+                typeof incoming === "object" ? incoming.delta_vs_yesterday : 0;
               trend = typeof incoming === "object" ? incoming.trend : null;
             }
           }
@@ -979,9 +1165,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
         if (val !== null && val !== undefined) {
           const deltaSign = delta >= 0 ? "▲" : "▼";
-          const changeStr = typeof delta === "number"
-            ? `${deltaSign} ${Math.abs(delta).toFixed(1)}% vs Yesterday`
-            : card.change;
+          const changeStr =
+            typeof delta === "number"
+              ? `${deltaSign} ${Math.abs(delta).toFixed(1)}% vs Yesterday`
+              : card.change;
 
           return {
             ...card,
@@ -995,6 +1182,136 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       });
     });
   }, [activeShift, rawKpiData]);
+
+  // Update process performance cards when active shift or raw process performance data changes
+  useEffect(() => {
+    if (!rawProcessPerformance) return;
+
+    // Parse active shift name (e.g., "Shift A (06:15 AM - 02:15 PM)" -> "A")
+    const shiftMatch = activeShift.match(/Shift\s+([A-C])/i);
+    const shiftLetter = shiftMatch ? shiftMatch[1].toUpperCase() : null;
+
+    setProcessPerformance((prev) => {
+      return prev.map((item) => {
+        const getApiKey = (name: string) => {
+          if (name === "OTA") return "OTA_TEST";
+          return name.replace(/\s+/g, "_");
+        };
+
+        const apiKey = getApiKey(item.name);
+        const incoming = rawProcessPerformance[apiKey];
+        if (incoming) {
+          if (item.name === "DPMOI") {
+            const statusMapped =
+              incoming.index <= 10
+                ? "Healthy"
+                : incoming.index <= 50
+                  ? "At Risk"
+                  : "Critical";
+            const colorMapped =
+              statusMapped === "Healthy"
+                ? "#10b981"
+                : statusMapped === "At Risk"
+                  ? "#eab308"
+                  : "#ef4444";
+            return {
+              ...item,
+              data: {
+                defects:
+                  incoming.defects !== undefined
+                    ? incoming.defects.toLocaleString()
+                    : "...",
+                opportunities:
+                  incoming.opportunities !== undefined
+                    ? incoming.opportunities.toLocaleString()
+                    : "...",
+                index:
+                  incoming.index !== undefined
+                    ? incoming.index.toFixed(2)
+                    : "...",
+              },
+              status: statusMapped,
+              color: colorMapped,
+            };
+          }
+
+          // Fetch the active shift data if shiftLetter is set, else use daily rollup
+          let targetData = null;
+
+          if (shiftLetter) {
+            if (incoming.by_shift) {
+              targetData = incoming.by_shift.find(
+                (s: any) => s.shift && s.shift.toUpperCase() === shiftLetter,
+              );
+            }
+          } else {
+            targetData = incoming.day;
+          }
+
+          if (targetData) {
+            const statusMapped =
+              targetData.status === "healthy"
+                ? "Healthy"
+                : targetData.status === "at_risk" ||
+                    targetData.status === "warning"
+                  ? "At Risk"
+                  : "Critical";
+            const colorMapped =
+              targetData.status === "healthy"
+                ? "#10b981"
+                : targetData.status === "at_risk" ||
+                    targetData.status === "warning"
+                  ? "#eab308"
+                  : "#ef4444";
+
+            if (
+              targetData.failure_pct !== undefined &&
+              targetData.failure_pct !== null
+            ) {
+              return {
+                ...item,
+                data: { failure: `${targetData.failure_pct.toFixed(1)}%` },
+                status: statusMapped,
+                color: colorMapped,
+              };
+            } else {
+              return {
+                ...item,
+                data: {
+                  done:
+                    targetData.done !== undefined
+                      ? targetData.done.toLocaleString()
+                      : "...",
+                  ok:
+                    targetData.ok !== undefined
+                      ? targetData.ok.toLocaleString()
+                      : "...",
+                  yield:
+                    targetData.yield_pct !== undefined
+                      ? `${targetData.yield_pct.toFixed(2)}%`
+                      : "...",
+                },
+                status: statusMapped,
+                color: colorMapped,
+              };
+            }
+          } else {
+            // Default empty state for shifts with no data recorded
+            return {
+              ...item,
+              data:
+                item.type === "yield"
+                  ? { done: "0", ok: "0", yield: "0.00%" }
+                  : { failure: "0.0%" },
+              status: "N/A",
+              color: "#3b82f6",
+            };
+          }
+        }
+        return item;
+      });
+    });
+  }, [activeShift, rawProcessPerformance]);
 
   // Keep clock running
   useEffect(() => {
@@ -1112,13 +1429,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const isStatusLive = ["LIVE", "ONLINE", "CONNECTED", "ACTIVE"].includes(
     liveStatus.toUpperCase(),
   );
-  const safetyXTicks = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    const month = d.toLocaleString("en-US", { month: "short" });
-    const day = d.getDate().toString().padStart(2, "0");
-    return `${month} ${day}`;
-  });
+
+  const getYTicks = (points: number[], defaultMax: number) => {
+    const max = Math.max(defaultMax, ...points);
+    const ticks = [];
+    for (let i = 4; i >= 0; i--) {
+      ticks.push(Math.round((max / 4) * i));
+    }
+    return Array.from(new Set(ticks));
+  };
+  const incidentYTicks = getYTicks(accidentPoints, 4);
+  const nearMissYTicks = getYTicks(nearMissPoints, 5);
 
   return (
     <div className="w-full min-h-screen bg-[#02070e] text-[#f8fafc] flex flex-col p-4 box-border gap-4 font-sans select-none">
@@ -1271,24 +1592,40 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           <div className="flex items-center justify-around z-10 mt-1">
             {/* Temperature */}
             <div className="flex flex-col items-center">
-              <span className="text-[22px] font-black font-mono leading-none text-[#06b6d4]" style={{ textShadow: "0 0 8px #06b6d440" }}>
-                {shopFloorConditions.temp !== null ? `${shopFloorConditions.temp}°` : "N/A"}
+              <span
+                className="text-[22px] font-black font-mono leading-none text-[#06b6d4]"
+                style={{ textShadow: "0 0 8px #06b6d440" }}
+              >
+                {shopFloorConditions.temp !== null
+                  ? `${shopFloorConditions.temp}°`
+                  : "N/A"}
               </span>
-              <span className="text-[10px] text-[#526a8a] mt-0.5 font-medium">Temperature</span>
+              <span className="text-[10px] text-[#526a8a] mt-0.5 font-medium">
+                Temperature
+              </span>
             </div>
             {/* Divider */}
             <div className="w-[1px] h-8 bg-[#1d324b]" />
             {/* Humidity */}
             <div className="flex flex-col items-center">
-              <span className="text-[22px] font-black font-mono leading-none text-[#06b6d4]" style={{ textShadow: "0 0 8px #06b6d440" }}>
-                {shopFloorConditions.humidity !== null ? `${shopFloorConditions.humidity}%` : "N/A"}
+              <span
+                className="text-[22px] font-black font-mono leading-none text-[#06b6d4]"
+                style={{ textShadow: "0 0 8px #06b6d440" }}
+              >
+                {shopFloorConditions.humidity !== null
+                  ? `${shopFloorConditions.humidity}%`
+                  : "N/A"}
               </span>
-              <span className="text-[10px] text-[#526a8a] mt-0.5 font-medium">Humidity</span>
+              <span className="text-[10px] text-[#526a8a] mt-0.5 font-medium">
+                Humidity
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-1 z-10">
             <Droplets size={10} className="text-[#06b6d4]" />
-            <span className="text-[10px] text-[#526a8a]">Live sensor reading</span>
+            <span className="text-[10px] text-[#526a8a]">
+              Live sensor reading
+            </span>
           </div>
         </div>
       </section>
@@ -1301,10 +1638,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </span>
 
         {/* Brackets row for desktop */}
-        <div className="hidden lg:grid grid-cols-10 gap-2 items-center mb-3">
+        <div className="hidden lg:grid grid-cols-12 gap-2 items-center mb-3">
           {/* SMT Section Bracket */}
           <div className="col-span-4 flex items-center gap-2">
-            <span className="text-[#f8fafc] text-[12.5px] font-black tracking-wider uppercase flex-shrink-0">
+            <span className="text-[#f8fafc] text-[12px] font-black tracking-wider uppercase flex-shrink-0">
               PROCESS PERFORMANCE
             </span>
             <div className="flex-1 flex items-center">
@@ -1319,7 +1656,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
 
           {/* RFM Section Bracket */}
-          <div className="col-span-6 flex items-center">
+          <div className="col-span-8 flex items-center">
             {/* Downward tick */}
             <div className="h-[7px] w-[1.5px] bg-[#10b981] self-end" />
             <div className="flex-1 flex items-center">
@@ -1336,7 +1673,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-1.5 2xl:gap-2">
           {processPerformance.map((item, idx) => {
             const cardColor = getCardBorderColor(item);
             const colorCurrent = getTimelineNodeColor(item);
@@ -1349,7 +1686,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               <div key={idx} className="flex flex-col w-full min-w-0">
                 {/* Card */}
                 <div
-                  className={`bg-[#040910] border rounded-lg p-1.5 2xl:p-2.5 pb-2 2xl:pb-3 flex flex-col h-[126px] 2xl:h-[142px] transition-all duration-300 ${
+                  className={`bg-[#040910] border rounded-lg p-1 2xl:p-2 pb-1.5 2xl:pb-2.5 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 ${
                     item.status === "Critical"
                       ? "animate-border-pulse-critical"
                       : ""
@@ -1364,12 +1701,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   }}
                 >
                   {/* Header */}
-                  <div className="flex items-start gap-1 mb-1 2xl:mb-2 flex-shrink-0">
+                  <div className="flex items-start gap-1 mb-0.5 2xl:mb-1.5 flex-shrink-0">
                     <item.icon
-                      size={12}
-                      className="text-white flex-shrink-0 mt-[1px] 2xl:size-[14px]"
+                      size={10}
+                      className="text-white flex-shrink-0 mt-[1px] 2xl:size-[12px]"
                     />
-                    <span className="text-white text-[10.5px] 2xl:text-[13px] font-black uppercase leading-tight truncate">
+                    <span className="text-white text-[9.5px] 2xl:text-[12px] font-black uppercase leading-tight truncate">
                       {item.name}
                     </span>
                   </div>
@@ -1377,19 +1714,19 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   <div className="flex-1 flex flex-col justify-start gap-0.5 mt-0.5 min-h-0">
                     {item.type === "yield" && (
                       <>
-                        <div className="flex justify-between text-[10px] 2xl:text-[13px]">
+                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
                           <span className="text-[#8fa0b5]">Done</span>
                           <span className="text-white font-mono">
                             {item.data.done}
                           </span>
                         </div>
-                        <div className="flex justify-between text-[10px] 2xl:text-[13px]">
+                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
                           <span className="text-[#8fa0b5]">OK</span>
                           <span className="text-white font-mono">
                             {item.data.ok}
                           </span>
                         </div>
-                        <div className="flex justify-between text-[10px] 2xl:text-[13px]">
+                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
                           <span className="text-[#8fa0b5]">Yield</span>
                           <span
                             className="font-bold font-mono"
@@ -1400,13 +1737,41 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         </div>
                       </>
                     )}
+                    {item.type === "dpmo" && (
+                      <>
+                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
+                          <span className="text-[#8fa0b5]">Defects</span>
+                          <span className="text-white font-mono">
+                            {item.data.defects}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
+                          <span className="text-[#8fa0b5]">Opps</span>
+                          <span
+                            className="text-white font-mono truncate max-w-[45px]"
+                            title={item.data.opportunities}
+                          >
+                            {item.data.opportunities}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
+                          <span className="text-[#8fa0b5]">Index</span>
+                          <span
+                            className="font-bold font-mono"
+                            style={{ color: item.color }}
+                          >
+                            {item.data.index}
+                          </span>
+                        </div>
+                      </>
+                    )}
                     {item.type === "failure" && (
                       <div className="flex-1 flex flex-col items-center justify-center">
-                        <span className="text-[#8fa0b5] text-[10px] 2xl:text-[13px]">
+                        <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11.5px]">
                           Failure %
                         </span>
                         <span
-                          className="text-[15px] 2xl:text-[21px] font-black mt-0.5 font-mono"
+                          className="text-[13px] 2xl:text-[18px] font-black mt-0.5 font-mono"
                           style={{
                             color: item.color,
                             textShadow: `0 0 8px ${item.color}30`,
@@ -1418,7 +1783,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     )}
                   </div>
                   {/* Footer (inside card) */}
-                  <div className="flex items-center gap-1 mt-auto flex-shrink-0 pt-1 2xl:pt-2">
+                  <div className="flex items-center gap-1 mt-auto flex-shrink-0 pt-0.5 2xl:pt-1.5">
                     <div
                       className="w-1.5 h-1.5 2xl:w-2 2xl:h-2 rounded-full"
                       style={{
@@ -1427,7 +1792,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       }}
                     />
                     <span
-                      className="text-[9.5px] 2xl:text-[11px]"
+                      className="text-[8.5px] 2xl:text-[10px]"
                       style={{
                         color: item.color,
                         textShadow:
@@ -1473,7 +1838,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         <section className="bg-[#070e17] border border-white/20 rounded-xl p-4 flex flex-col h-[400px]">
           <div className="flex items-center justify-between border-b border-[#142337]/50 pb-2 mb-3 flex-shrink-0">
             <span className="text-[15.5px] font-black tracking-widest text-[#06b6d4]">
-              FACTORY QUALITY TWIN
+              QUALITY HEATMAP
             </span>
             <div className="flex gap-3 text-[12px] font-bold">
               <div className="flex items-center gap-1">
@@ -1834,7 +2199,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             <div className="flex flex-col h-full justify-between">
               <div className="flex flex-col">
                 <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
-                  ACCIDENT
+                  INCIDENT
                 </span>
                 <div className="flex items-baseline gap-1.5 mt-1">
                   <span className="text-[#ef4444] text-[24px] font-black leading-none font-mono">
@@ -1848,7 +2213,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               <div className="flex-1 flex flex-col justify-end">
                 <SafetyChart
                   points={accidentPoints}
-                  yTicks={[4, 3, 2, 1, 0]}
+                  yTicks={incidentYTicks}
                   xTicks={safetyXTicks}
                   color="#ef4444"
                 />
@@ -1872,7 +2237,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               <div className="flex-1 flex flex-col justify-end">
                 <SafetyChart
                   points={nearMissPoints}
-                  yTicks={[20, 15, 10, 5, 0]}
+                  yTicks={nearMissYTicks}
                   xTicks={safetyXTicks}
                   color="#3b82f6"
                 />
@@ -1982,28 +2347,67 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
             <div className="flex flex-col h-full justify-between border-l border-[#142337]/30 pl-3">
               <div className="flex flex-col">
-                <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
-                  ERI (%)
-                </span>
-                <span className="text-[#a855f7] text-[24px] font-black mt-1 leading-none font-mono">
-                  {customerEri}%
-                </span>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
+                    ERI (%)
+                  </span>
+                  {eriData && (
+                    <span className="text-[#526a8a] text-[9.5px] font-bold font-sans">
+                      Target {eriData.target_pct}%
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline justify-between mt-1">
+                  <span
+                    className="text-[24px] font-black leading-none font-mono"
+                    style={{
+                      color:
+                        eriData?.status === "healthy"
+                          ? "#10b981"
+                          : eriData?.status === "critical"
+                            ? "#ef4444"
+                            : "#a855f7",
+                    }}
+                  >
+                    {customerEri}%
+                  </span>
+                  {eriData && (
+                    <span className="text-[#526a8a] text-[9px] font-bold font-sans truncate max-w-[50px]" title={eriData.period}>
+                      {eriData.period_code || eriData.period}
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="flex-1 flex items-center justify-center w-full mt-2">
+              <div className="flex-1 flex items-center justify-center w-full mt-1 relative">
                 <SemiCircleGauge
                   value={customerEri}
                   min={0}
-                  max={100}
+                  max={Math.max(5, (eriData?.target_pct || 0) * 1.5)}
                   labelMin="0%"
-                  labelMax="100%"
-                  color="#a855f7"
+                  labelMax={`${Math.max(5, (eriData?.target_pct || 0) * 1.5).toFixed(0)}%`}
+                  color={
+                    eriData?.status === "healthy"
+                      ? "#10b981"
+                      : eriData?.status === "critical"
+                        ? "#ef4444"
+                        : "#a855f7"
+                  }
                   icon={CustomEriIcon}
                   showValueInCenter={false}
                 />
               </div>
+              {eriData && (
+                <div className="flex justify-between text-[9px] text-[#526a8a] font-bold mt-0.5">
+                  <span>Returns</span>
+                  <span className="text-white font-mono">
+                    {eriData.returns} / {eriData.deliveries}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
+
 
         {/* Card 4: CI */}
         <div className="bg-[#070e17] border border-[#142337] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
