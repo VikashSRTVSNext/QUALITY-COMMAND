@@ -621,7 +621,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       const targetLevel = activeYieldTab === "UNITS" ? "UNIT" : activeYieldTab;
 
       try {
-        const url = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/dashboard/product-yield?shift=${targetShift}&level=${targetLevel}`;
+        const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "https://digitwin.dyn.nesc.nokia.net/api/factory-command-center";
+        const url = `${apiBase}/dashboard/product-yield?shift=${targetShift}&level=${targetLevel}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to fetch product yield");
         const data = await res.json();
