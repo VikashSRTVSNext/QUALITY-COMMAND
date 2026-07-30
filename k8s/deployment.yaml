@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: nokia-command-center
-  namespace: nokia-digital-twin
+  name: factory-command-center
+  namespace: nokia-factory-command-center
   labels:
-    app: nokia-command-center
+    app: factory-command-center
 spec:
   selector:
-    app: nokia-command-center
+    app: factory-command-center
   ports:
     - name: http
       port: 80
@@ -16,19 +16,19 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nokia-command-center
-  namespace: nokia-digital-twin
+  name: factory-command-center
+  namespace: nokia-factory-command-center
   labels:
-    app: nokia-command-center
+    app: factory-command-center
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nokia-command-center
+      app: factory-command-center
   template:
     metadata:
       labels:
-        app: nokia-command-center
+        app: factory-command-center
     spec:
       securityContext:
         runAsNonRoot: true
@@ -36,8 +36,8 @@ spec:
       imagePullSecrets:
         - name: acr-auth
       containers:
-        - name: nokia-command-center
-          image: tvsnext.azurecr.io/nokia-command-center:latest
+        - name: factory-command-center
+          image: tvsnext.azurecr.io/factory-command-center:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -85,26 +85,24 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: nokia-command-center
-  namespace: nokia-digital-twin
+  name: factory-command-center
+  namespace: nokia-factory-command-center
   annotations:
     nginx.ingress.kubernetes.io/router.entrypoints: web,websecure
-    # Optional HTTP->HTTPS redirect (requires the Middleware in middleware.yaml):
-    # nginx.ingress.kubernetes.io/router.middlewares: nokia-digital-twin-https-redirect@kubernetescrd
 spec:
   ingressClassName: nginx
   tls:
     - hosts:
         - digitwin.dyn.nesc.nokia.net
-      secretName: nokia-command-center-tls
+      secretName: frontend-nokia-tls
   rules:
     - host: digitwin.dyn.nesc.nokia.net
       http:
         paths:
-          - path: /
+          - path: /factory-command-center
             pathType: Prefix
             backend:
               service:
-                name: nokia-command-center
+                name: factory-command-center
                 port:
                   number: 80

@@ -28,17 +28,22 @@ const dashboardRoutes = dashboardRegistry.all().map((d) => {
   return { path: d.path, element: lazy(<Page />) };
 });
 
-export const router = createBrowserRouter([
+export const router = createBrowserRouter(
+  [
+    {
+      element: <AppShell />,
+      children: [
+        { path: '/', element: <Navigate to="/quality" replace /> },
+        ...dashboardRoutes,
+        { path: '/production/line/:lineId', element: lazy(<LineDetailPage />) },
+        { path: '/quality/defect/:defectCode', element: lazy(<DefectDetailPage />) },
+        { path: '*', element: <Navigate to="/quality" replace /> },
+      ],
+    },
+  ],
   {
-    element: <AppShell />,
-    children: [
-      { path: '/', element: <Navigate to="/quality" replace /> },
-      ...dashboardRoutes,
-      { path: '/production/line/:lineId', element: lazy(<LineDetailPage />) },
-      { path: '/quality/defect/:defectCode', element: lazy(<DefectDetailPage />) },
-      { path: '*', element: <Navigate to="/quality" replace /> },
-    ],
-  },
-]);
+    basename: import.meta.env.BASE_URL,
+  }
+);
 
 export default router;
