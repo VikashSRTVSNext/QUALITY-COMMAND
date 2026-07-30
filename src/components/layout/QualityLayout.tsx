@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   ChevronDown,
   Maximize2,
-  Filter,
   CheckCircle2,
   ShieldCheck,
   ClipboardList,
