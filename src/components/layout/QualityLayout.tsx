@@ -50,7 +50,6 @@ interface EriData {
   status: string;
 }
 
-
 const ScrewIcon = ({
   size = 24,
   ...props
@@ -571,7 +570,7 @@ const processPerformanceData = [
     name: "SMT DEFECTS",
     icon: Cpu,
     section: "SMT",
-    type: "yield",
+    type: "defect",
     data: { done: "10,890", ok: "10,702", yield: "98.27%" },
     status: "Healthy",
     color: "#10b981",
@@ -604,7 +603,7 @@ const processPerformanceData = [
     color: "#10b981",
   },
   {
-    name: "THERMAL TEST",
+    name: "BURN-IN",
     icon: Thermometer,
     section: "RFM",
     type: "yield",
@@ -861,7 +860,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     return () => clearInterval(interval);
   }, []);
 
-
   // SSE stream integration
   useEffect(() => {
     // Point at the FastAPI yield feed via env; falls back to the legacy tunnel.
@@ -1019,7 +1017,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           setCustomerEri(data.eri.eri_pct);
         }
       }
-
 
       // 10. CI
       if (data.ci) {
@@ -1713,57 +1710,36 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   {/* Body */}
                   <div className="flex-1 flex flex-col justify-start gap-0.5 mt-0.5 min-h-0">
                     {item.type === "yield" && (
-                      <>
-                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
-                          <span className="text-[#8fa0b5]">Done</span>
-                          <span className="text-white font-mono">
-                            {item.data.done}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
-                          <span className="text-[#8fa0b5]">OK</span>
-                          <span className="text-white font-mono">
-                            {item.data.ok}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
-                          <span className="text-[#8fa0b5]">Yield</span>
-                          <span
-                            className="font-bold font-mono"
-                            style={{ color: item.color }}
-                          >
-                            {item.data.yield}
-                          </span>
-                        </div>
-                      </>
+                      <div className="flex-1 flex flex-col items-center justify-center">
+                        <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11.5px]">
+                          Yield %
+                        </span>
+                        <span
+                          className="text-[13px] 2xl:text-[18px] font-black mt-0.5 font-mono"
+                          style={{
+                            color: item.color,
+                            textShadow: `0 0 8px ${item.color}30`,
+                          }}
+                        >
+                          {item.data.yield}
+                        </span>
+                      </div>
                     )}
                     {item.type === "dpmo" && (
-                      <>
-                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
-                          <span className="text-[#8fa0b5]">Defects</span>
-                          <span className="text-white font-mono">
-                            {item.data.defects}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
-                          <span className="text-[#8fa0b5]">Opps</span>
-                          <span
-                            className="text-white font-mono truncate max-w-[45px]"
-                            title={item.data.opportunities}
-                          >
-                            {item.data.opportunities}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-[9px] 2xl:text-[11.5px]">
-                          <span className="text-[#8fa0b5]">Index</span>
-                          <span
-                            className="font-bold font-mono"
-                            style={{ color: item.color }}
-                          >
-                            {item.data.index}
-                          </span>
-                        </div>
-                      </>
+                      <div className="flex-1 flex flex-col items-center justify-center">
+                        <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11.5px]">
+                          Index
+                        </span>
+                        <span
+                          className="text-[13px] 2xl:text-[18px] font-black mt-0.5 font-mono"
+                          style={{
+                            color: item.color,
+                            textShadow: `0 0 8px ${item.color}30`,
+                          }}
+                        >
+                          {item.data.index}
+                        </span>
+                      </div>
                     )}
                     {item.type === "failure" && (
                       <div className="flex-1 flex flex-col items-center justify-center">
@@ -1783,7 +1759,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     )}
                   </div>
                   {/* Footer (inside card) */}
-                  <div className="flex items-center gap-1 mt-auto flex-shrink-0 pt-0.5 2xl:pt-1.5">
+                  {/* <div className="flex items-center gap-1 mt-auto flex-shrink-0 pt-0.5 2xl:pt-1.5">
                     <div
                       className="w-1.5 h-1.5 2xl:w-2 2xl:h-2 rounded-full"
                       style={{
@@ -1803,7 +1779,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     >
                       {item.status}
                     </span>
-                  </div>
+                  </div> */}
                 </div>
 
                 {/* Timeline Node */}
@@ -1838,7 +1814,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         <section className="bg-[#070e17] border border-white/20 rounded-xl p-4 flex flex-col h-[400px]">
           <div className="flex items-center justify-between border-b border-[#142337]/50 pb-2 mb-3 flex-shrink-0">
             <span className="text-[15.5px] font-black tracking-widest text-[#06b6d4]">
-              QUALITY HEATMAP
+              QUALITY HEAT MAP
             </span>
             <div className="flex gap-3 text-[12px] font-bold">
               <div className="flex items-center gap-1">
@@ -2372,7 +2348,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     {customerEri}%
                   </span>
                   {eriData && (
-                    <span className="text-[#526a8a] text-[9px] font-bold font-sans truncate max-w-[50px]" title={eriData.period}>
+                    <span
+                      className="text-[#526a8a] text-[9px] font-bold font-sans truncate max-w-[50px]"
+                      title={eriData.period}
+                    >
                       {eriData.period_code || eriData.period}
                     </span>
                   )}
@@ -2407,7 +2386,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </div>
           </div>
         </div>
-
 
         {/* Card 4: CI */}
         <div className="bg-[#070e17] border border-[#142337] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
