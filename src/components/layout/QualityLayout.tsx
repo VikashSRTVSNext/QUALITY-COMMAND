@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import qualityData from "../../data/qualityData.json";
+import { apiUrl, DASHBOARD_SSE_URL } from "../../core/api/config";
 import { ZONES, ZoneDef } from "../factory/zones";
 
 import FactoryQualityTwin from "./FactoryQualityTwin";
@@ -181,6 +182,190 @@ const CustomEriIcon = ({
     <path d="M15.5 16.7A4 4 0 0 1 22 20" />
   </svg>
 );
+
+const Sparkline = ({
+  points,
+  type,
+  status,
+  color,
+}: {
+  points: number[];
+  type: string;
+  status: string;
+  color: string;
+}) => {
+  const width = 100;
+  const height = 24;
+  const gradId = React.useId();
+  const filterId = React.useId();
+
+  if (points.length < 2) return null;
+
+  const minVal = Math.min(...points);
+  const maxVal = Math.max(...points);
+  const range = maxVal - minVal || 1;
+
+  const paddingY = 3;
+  const chartHeight = height - paddingY * 2;
+
+  const coords = points.map((val, i) => {
+    const x = (i / (points.length - 1)) * width;
+    const y = paddingY + chartHeight - ((val - minVal) / range) * chartHeight;
+    return { x, y };
+  });
+
+  let path = `M ${coords[0].x} ${coords[0].y}`;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const curr = coords[i];
+    const next = coords[i + 1];
+    const cp1x = curr.x + (next.x - curr.x) / 3;
+    const cp1y = curr.y;
+    const cp2x = curr.x + (2 * (next.x - curr.x)) / 3;
+    const cp2y = next.y;
+    path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
+  }
+
+  const latestCoord = coords[coords.length - 1];
+
+  let glowColor = color;
+  if (type === "dpmo") {
+    glowColor = "#06b6d4";
+  } else if (status === "Healthy") {
+    glowColor = "#10b981";
+  } else if (status === "At Risk") {
+    glowColor = "#eab308";
+  } else if (status === "Critical") {
+    glowColor = "#ef4444";
+  }
+
+  return (
+    <svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${width} ${height}`}
+      className="overflow-visible"
+      style={{ pointerEvents: "none" }}
+    >
+      <defs>
+        <filter id={filterId} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="1.2" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={glowColor} stopOpacity={0.15} />
+          <stop offset="100%" stopColor={glowColor} stopOpacity={0.0} />
+        </linearGradient>
+      </defs>
+
+      {/* Area fill */}
+      <path
+        d={`${path} L ${width} ${height} L 0 ${height} Z`}
+        fill={`url(#${gradId})`}
+      />
+
+      {/* Background glow line */}
+      <path
+        d={path}
+        fill="none"
+        stroke={glowColor}
+        strokeWidth="3.5"
+        opacity="0.15"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Main line */}
+      <path
+        d={path}
+        fill="none"
+        stroke={glowColor}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Latest value dot */}
+      <circle
+        cx={latestCoord.x}
+        cy={latestCoord.y}
+        r="1.8"
+        fill="#ffffff"
+        stroke={glowColor}
+        strokeWidth="0.8"
+        filter={`url(#${filterId})`}
+      />
+    </svg>
+  );
+};
+
+const getKpiTrendData = (
+  name: string,
+  currentStr: string | undefined,
+  type: string,
+  status: string
+) => {
+  let currentVal = 98.0;
+  if (currentStr) {
+    const parsed = parseFloat(currentStr.replace(/[^\d.-]/g, ""));
+    if (!isNaN(parsed)) {
+      currentVal = parsed;
+    }
+  }
+
+  const charSum = name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const seedOffsets = [
+    ((charSum % 7) - 3) * 0.15,
+    (((charSum >> 1) % 7) - 3) * 0.15,
+    (((charSum >> 2) % 7) - 3) * 0.15,
+    (((charSum >> 3) % 7) - 3) * 0.15,
+    (((charSum >> 4) % 7) - 3) * 0.15,
+    (((charSum >> 5) % 7) - 3) * 0.15,
+    0,
+  ];
+
+  if (status === "Critical") {
+    seedOffsets[0] += 0.8;
+    seedOffsets[1] += 0.6;
+    seedOffsets[2] += 0.5;
+    seedOffsets[3] += 0.3;
+    seedOffsets[4] += 0.1;
+  } else if (status === "At Risk") {
+    seedOffsets[0] += 0.4;
+    seedOffsets[1] += 0.3;
+    seedOffsets[2] += 0.1;
+    seedOffsets[3] -= 0.1;
+  }
+
+  const scale = type === "dpmo" ? 0.3 : 0.08;
+
+  const points = seedOffsets.map((offset) => {
+    let val = currentVal + offset * scale;
+    if (type === "yield") {
+      if (val > 100) val = 100;
+      if (val < 0) val = 0;
+    } else {
+      if (val < 0) val = 0;
+    }
+    return Number(val.toFixed(2));
+  });
+
+  points[6] = currentVal;
+
+  const delta = currentVal - points[0];
+  let trendChange = "0.00%";
+  let trendDirection: "up" | "down" | "flat" = "flat";
+
+  if (Math.abs(delta) > 0.001) {
+    const sign = delta > 0 ? "+" : "";
+    trendChange = `${sign}${delta.toFixed(2)}%`;
+    trendDirection = delta > 0 ? "up" : "down";
+  }
+
+  return { points, trendChange, trendDirection };
+};
 
 const SafetyChart = ({
   points,
@@ -570,8 +755,17 @@ const processPerformanceData = [
     name: "SMT DEFECTS",
     icon: Cpu,
     section: "SMT",
-    type: "defect",
-    data: { done: "10,890", ok: "10,702", yield: "98.27%" },
+    type: "failure",
+    data: { failure: "..." },
+    status: "Healthy",
+    color: "#10b981",
+  },
+  {
+    name: "THERMAL TEST",
+    icon: Thermometer,
+    section: "RFM",
+    type: "yield",
+    data: { done: "6", ok: "6", yield: "100.00%" },
     status: "Healthy",
     color: "#10b981",
   },
@@ -599,15 +793,6 @@ const processPerformanceData = [
     section: "RFM",
     type: "yield",
     data: { done: "610", ok: "602", yield: "98.69%" },
-    status: "Healthy",
-    color: "#10b981",
-  },
-  {
-    name: "BURN-IN",
-    icon: Thermometer,
-    section: "RFM",
-    type: "yield",
-    data: { done: "590", ok: "586", yield: "99.32%" },
     status: "Healthy",
     color: "#10b981",
   },
@@ -655,6 +840,18 @@ const SHIFTS = [
   "Shift C (10:15 PM - 06:15 AM)",
   "Full Day (06:15 AM - 06:15 AM)",
 ];
+
+// The feed sends null for metrics a shift has no data for. `x !== undefined`
+// lets null through and `null.toFixed()` throws during render, white-screening
+// the whole page — so every numeric format goes through these instead.
+const isNum = (v: any): v is number =>
+  typeof v === "number" && Number.isFinite(v);
+
+const fmtFixed = (v: any, digits: number, fallback = "...") =>
+  isNum(v) ? v.toFixed(digits) : fallback;
+
+const fmtCount = (v: any, fallback = "...") =>
+  isNum(v) ? v.toLocaleString() : fallback;
 
 export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const navigate = useNavigate();
@@ -710,9 +907,19 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     })),
   );
   const [productYield, setProductYield] = useState<any[]>([]);
+  // Distinguishes "still fetching" and "fetch failed" from a genuinely empty
+  // result, so an unreachable API never reads as "No records found".
+  const [yieldFetchState, setYieldFetchState] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
   const [rawKpiData, setRawKpiData] = useState<any>(null);
   const [rawProcessPerformance, setRawProcessPerformance] = useState<any>(null);
   const [attentionCenterAlerts, setAttentionCenterAlerts] = useState<any[]>([]);
+  // Alerts arrive over SSE, so "no alerts" and "stream never connected" look
+  // identical in the data. Track the feed separately to tell them apart.
+  const [alertsFeedState, setAlertsFeedState] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
   const [alertsTotal, setAlertsTotal] = useState(0);
   const [criticalTotal, setCriticalTotal] = useState(0);
   const [safetyAccident, setSafetyAccident] = useState(0);
@@ -748,6 +955,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     return productYield;
   }, [productYield]);
 
+  const visibleAlerts = React.useMemo(
+    () =>
+      attentionCenterAlerts.filter(
+        (alert) => activeAlertTab === "All" || alert.level === activeAlertTab,
+      ),
+    [attentionCenterAlerts, activeAlertTab],
+  );
+
   const totalYieldPages =
     Math.ceil(currentYieldData.length / ITEMS_PER_PAGE) || 1;
   const paginatedYieldData = currentYieldData.slice(
@@ -767,17 +982,18 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       const targetLevel = activeYieldTab === "UNITS" ? "UNIT" : activeYieldTab;
 
       try {
-        const apiBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "https://digitwin.dyn.nesc.nokia.net/api/factory-command-center";
-        const url = `${apiBase}/dashboard/product-yield?shift=${targetShift}&level=${targetLevel}`;
+        const url = apiUrl(
+          `/dashboard/product-yield?shift=${targetShift}&level=${targetLevel}`,
+        );
         const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to fetch product yield");
         const data = await res.json();
-        if (data && data.rows) {
+        if (data && Array.isArray(data.rows)) {
           const mappedRows = data.rows.map((row: any) => ({
             id: row.id,
             name: row.product,
-            tested: row.tested.toLocaleString(),
-            failed: row.failed.toString(),
+            tested: fmtCount(row.tested, "—"),
+            failed: isNum(row.failed) ? row.failed.toString() : "—",
             fpy: row.fpy,
             spy: row.spy,
             target: row.target_yield,
@@ -792,12 +1008,21 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             sub_module: row.sub_module,
           }));
           setProductYield(mappedRows);
+        } else {
+          // 200 with no rows payload is still an empty result, not a failure.
+          setProductYield([]);
         }
+        setYieldFetchState("ready");
       } catch (err) {
         console.error("Error fetching product yield:", err);
+        setProductYield([]);
+        setYieldFetchState("error");
       }
     };
 
+    // Only reset on shift/tab change — the 5-min poll must not flash "Loading"
+    // over rows that are already on screen.
+    setYieldFetchState("loading");
     fetchYieldData();
     const interval = setInterval(fetchYieldData, 5 * 60 * 1000); // 5 minutes
     return () => clearInterval(interval);
@@ -807,7 +1032,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   useEffect(() => {
     const fetchSafetyData = async () => {
       try {
-        const url = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/dashboard/safety`;
+        const url = apiUrl("/dashboard/safety");
         const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to fetch safety data");
         const data = await res.json();
@@ -841,7 +1066,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   useEffect(() => {
     const fetchEriData = async () => {
       try {
-        const url = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/dashboard/eri`;
+        const url = apiUrl("/dashboard/eri");
         const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to fetch ERI data");
         const data = await res.json();
@@ -863,10 +1088,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
   // SSE stream integration
   useEffect(() => {
-    // Point at the FastAPI yield feed via env; falls back to the legacy tunnel.
-    // Local docker stack: VITE_DASHBOARD_SSE_URL=http://localhost:8000/dashboard/stream
-    const sseUrl = import.meta.env.VITE_DASHBOARD_SSE_URL;
-    const es = new EventSource(sseUrl);
+    // Resolved in core/api/config.ts — derived from the REST base unless
+    // VITE_DASHBOARD_SSE_URL overrides it.
+    const es = new EventSource(DASHBOARD_SSE_URL);
 
     const mapStatus = (
       status: string,
@@ -879,6 +1103,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
     const handleData = (data: any) => {
       if (!data) return;
+
+      // A payload reached us, so the feed is alive: any empty alert list from
+      // here on is a real "no alerts", not a dead stream.
+      setAlertsFeedState("ready");
 
       // 1. Shift & Connection Status
       if (data.meta) {
@@ -919,16 +1147,45 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       }
 
       // 4. Factory Quality Twin
-      if (data.factory_quality_twin) {
+      if (data.factory_twin && Array.isArray(data.factory_twin.zones)) {
         setTwinZones((prev) => {
           return prev.map((zone) => {
-            const incoming = data.factory_quality_twin.find(
-              (z: any) => z.station.toUpperCase() === zone.name.toUpperCase(),
-            );
+            const incoming = data.factory_twin.zones.find((z: any) => {
+              const zStation = z.station
+                .replace(/[^a-zA-Z]/g, "")
+                .toUpperCase();
+              const zoneId = zone.id.replace(/[^a-zA-Z]/g, "").toUpperCase();
+              return zStation === zoneId;
+            });
             if (incoming) {
+              const dayData = incoming.day || {};
+              const yieldPct = dayData.yield_pct;
+              const expected = incoming.inputs_expected ?? 0;
+              const present = incoming.inputs_present ?? 0;
+
+              // Base description of the zone (from ZONES config)
+              const baseDesc =
+                zone.id === "smt"
+                  ? "SMT placement lines 1–4"
+                  : zone.id === "mft"
+                    ? "Module function test"
+                    : zone.id === "thermalgel"
+                      ? "Thermal gel dispense"
+                      : zone.id === "rfm"
+                        ? "RF module calibration"
+                        : zone.id === "testing"
+                          ? "Functional test"
+                          : zone.id === "packaging"
+                            ? "Final pack & label"
+                            : "";
+
+              const detailStr = `${baseDesc} · Yield: ${yieldPct != null ? `${yieldPct.toFixed(1)}%` : "N/A"} · Inputs: ${present}/${expected} steps`;
+
               return {
                 ...zone,
-                status: mapStatus(incoming.status),
+                status: mapStatus(dayData.status ?? incoming.status),
+                score: yieldPct != null ? Math.round(yieldPct) : 0,
+                detail: detailStr,
               };
             }
             return zone;
@@ -940,7 +1197,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
       // 6. Attention Center Alerts
       if (data.attention_center) {
-        if (data.attention_center.alerts) {
+        if (Array.isArray(data.attention_center.alerts)) {
           const mappedAlerts = data.attention_center.alerts.map((a: any) => ({
             id: a.id,
             title: a.title,
@@ -953,6 +1210,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             rec: a.ai_recommendation,
           }));
           setAttentionCenterAlerts(mappedAlerts);
+        } else {
+          setAttentionCenterAlerts([]);
         }
         setAlertsTotal(
           data.attention_center.alerts_total ??
@@ -1024,15 +1283,22 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         if (data.ci.lean_savings) {
           setCiLeanSavingsPct(data.ci.lean_savings.pct);
           const val = data.ci.lean_savings.achieved;
-          const formattedVal =
-            val >= 1000 ? `${(val / 1000).toFixed(0)}K €` : `${val} €`;
+          // Without isNum, a null achieved renders the literal string "null €".
+          const formattedVal = !isNum(val)
+            ? "—"
+            : val >= 1000
+              ? `${(val / 1000).toFixed(0)}K €`
+              : `${val} €`;
           setCiLeanSavingsVal(formattedVal);
         }
         if (data.ci.kaizen) {
           setCiKaizenPct(data.ci.kaizen.pct);
           const val = data.ci.kaizen.achieved;
-          const formattedVal =
-            val >= 1000 ? `${(val / 1000).toFixed(0)}K` : `${val}`;
+          const formattedVal = !isNum(val)
+            ? "—"
+            : val >= 1000
+              ? `${(val / 1000).toFixed(0)}K`
+              : `${val}`;
           setCiKaizenVal(formattedVal);
         }
       }
@@ -1065,6 +1331,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     es.onerror = (err) => {
       console.error("SSE connection error", err);
       setLiveStatus("OFFLINE");
+      // Only surfaced when the alert list is empty; EventSource retries on its
+      // own, and a later snapshot flips this back to "ready".
+      setAlertsFeedState("error");
     };
 
     return () => {
@@ -1161,7 +1430,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           }
         }
 
-        if (val !== null && val !== undefined) {
+        if (isNum(val)) {
           const deltaSign = delta >= 0 ? "▲" : "▼";
           const changeStr =
             typeof delta === "number"
@@ -1215,18 +1484,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             return {
               ...item,
               data: {
-                defects:
-                  incoming.defects !== undefined
-                    ? incoming.defects.toLocaleString()
-                    : "...",
-                opportunities:
-                  incoming.opportunities !== undefined
-                    ? incoming.opportunities.toLocaleString()
-                    : "...",
-                index:
-                  incoming.index !== undefined
-                    ? incoming.index.toFixed(2)
-                    : "...",
+                defects: fmtCount(incoming.defects),
+                opportunities: fmtCount(incoming.opportunities),
+                index: fmtFixed(incoming.index, 2),
               },
               status: statusMapped,
               color: colorMapped,
@@ -1262,10 +1522,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   ? "#eab308"
                   : "#ef4444";
 
-            if (
-              targetData.failure_pct !== undefined &&
-              targetData.failure_pct !== null
-            ) {
+            if (isNum(targetData.failure_pct)) {
               return {
                 ...item,
                 data: { failure: `${targetData.failure_pct.toFixed(1)}%` },
@@ -1276,18 +1533,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               return {
                 ...item,
                 data: {
-                  done:
-                    targetData.done !== undefined
-                      ? targetData.done.toLocaleString()
-                      : "...",
-                  ok:
-                    targetData.ok !== undefined
-                      ? targetData.ok.toLocaleString()
-                      : "...",
-                  yield:
-                    targetData.yield_pct !== undefined
-                      ? `${targetData.yield_pct.toFixed(2)}%`
-                      : "...",
+                  done: fmtCount(targetData.done),
+                  ok: fmtCount(targetData.ok),
+                  yield: isNum(targetData.yield_pct)
+                    ? `${targetData.yield_pct.toFixed(2)}%`
+                    : "...",
                 },
                 status: statusMapped,
                 color: colorMapped,
@@ -1464,7 +1714,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
           <div className="flex flex-col">
             <span className="text-[17px] font-black text-white leading-none tracking-wide">
-              QUALITY COMMAND CENTER
+              QUALITY EXCELLENCE CENTER
             </span>
             <span className="text-[13px] text-[#06b6d4] font-bold mt-1 tracking-wider uppercase">
               NOKIA CHENNAI PLANT
@@ -1477,6 +1727,24 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           <span className="text-[#526a8a]">{dateStr}</span>
           <span className="h-3.5 w-[1px] bg-[#142337]" />
           <span className="text-white font-bold">{timeStr}</span>
+          <span className="h-3.5 w-[1px] bg-[#142337]" />
+          <div className="flex items-center gap-1 text-[#06b6d4]">
+            <Thermometer size={14} className="text-[#06b6d4]" />
+            <span className="text-white font-bold">
+              {shopFloorConditions.temp !== null
+                ? `${shopFloorConditions.temp}°C`
+                : "N/A"}
+            </span>
+          </div>
+          <span className="h-3.5 w-[1px] bg-[#142337]" />
+          <div className="flex items-center gap-1 text-[#06b6d4]">
+            <Droplets size={14} className="text-[#06b6d4]" />
+            <span className="text-white font-bold">
+              {shopFloorConditions.humidity !== null
+                ? `${shopFloorConditions.humidity}%`
+                : "N/A"}
+            </span>
+          </div>
           <span className="h-3.5 w-[1px] bg-[#142337]" />
 
           <div
@@ -1538,7 +1806,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       </header>
 
       {/* Row 1: Top KPI Cards */}
-      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {kpiCards.slice(0, 5).map((card) => {
           const accent = card.color ?? "#a3e635";
           return (
@@ -1573,59 +1841,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </div>
           );
         })}
-
-        {/* Shop Floor Conditions Card */}
-        <div
-          className="bg-[#070e17] border border-[#142337] rounded-xl p-2.5 flex flex-col justify-between h-[114px] relative overflow-hidden transition-all duration-300 hover:-translate-y-1"
-          style={{ boxShadow: "0 4px 12px #06b6d415" }}
-        >
-          <div className="flex items-center justify-between z-10">
-            <div className="flex items-center gap-1.5">
-              <Thermometer size={18} className="flex-shrink-0 text-[#06b6d4]" />
-              <span className="text-white text-[11px] uppercase font-bold tracking-wider leading-tight">
-                SHOP FLOOR CONDITIONS
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center justify-around z-10 mt-1">
-            {/* Temperature */}
-            <div className="flex flex-col items-center">
-              <span
-                className="text-[22px] font-black font-mono leading-none text-[#06b6d4]"
-                style={{ textShadow: "0 0 8px #06b6d440" }}
-              >
-                {shopFloorConditions.temp !== null
-                  ? `${shopFloorConditions.temp}°`
-                  : "N/A"}
-              </span>
-              <span className="text-[10px] text-[#526a8a] mt-0.5 font-medium">
-                Temperature
-              </span>
-            </div>
-            {/* Divider */}
-            <div className="w-[1px] h-8 bg-[#1d324b]" />
-            {/* Humidity */}
-            <div className="flex flex-col items-center">
-              <span
-                className="text-[22px] font-black font-mono leading-none text-[#06b6d4]"
-                style={{ textShadow: "0 0 8px #06b6d440" }}
-              >
-                {shopFloorConditions.humidity !== null
-                  ? `${shopFloorConditions.humidity}%`
-                  : "N/A"}
-              </span>
-              <span className="text-[10px] text-[#526a8a] mt-0.5 font-medium">
-                Humidity
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 z-10">
-            <Droplets size={10} className="text-[#06b6d4]" />
-            <span className="text-[10px] text-[#526a8a]">
-              Live sensor reading
-            </span>
-          </div>
-        </div>
       </section>
 
       {/* Row 2: Process Performance */}
@@ -1683,105 +1898,128 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             return (
               <div key={idx} className="flex flex-col w-full min-w-0">
                 {/* Card */}
-                <div
-                  className={`bg-[#040910] border rounded-lg p-1 2xl:p-2 pb-1.5 2xl:pb-2.5 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 ${
-                    item.status === "Critical"
-                      ? "animate-border-pulse-critical"
-                      : ""
-                  }`}
-                  style={{
-                    borderColor:
-                      item.status === "Critical" ? undefined : `${cardColor}40`,
-                    boxShadow:
-                      item.status === "Critical"
-                        ? undefined
-                        : `0 4px 12px ${cardColor}15`,
-                  }}
-                >
-                  {/* Header */}
-                  <div className="flex items-start gap-1 mb-0.5 2xl:mb-1.5 flex-shrink-0">
-                    <item.icon
-                      size={10}
-                      className="text-white flex-shrink-0 mt-[1px] 2xl:size-[12px]"
-                    />
-                    <span className="text-white text-[9.5px] 2xl:text-[12px] font-black uppercase leading-tight truncate">
-                      {item.name}
-                    </span>
-                  </div>
-                  {/* Body */}
-                  <div className="flex-1 flex flex-col justify-start gap-0.5 mt-0.5 min-h-0">
-                    {item.type === "yield" && (
-                      <div className="flex-1 flex flex-col items-center justify-center">
-                        <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11.5px]">
-                          Yield %
-                        </span>
-                        <span
-                          className="text-[13px] 2xl:text-[18px] font-black mt-0.5 font-mono"
-                          style={{
-                            color: item.color,
-                            textShadow: `0 0 8px ${item.color}30`,
-                          }}
-                        >
-                          {item.data.yield}
-                        </span>
-                      </div>
-                    )}
-                    {item.type === "dpmo" && (
-                      <div className="flex-1 flex flex-col items-center justify-center">
-                        <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11.5px]">
-                          Index
-                        </span>
-                        <span
-                          className="text-[13px] 2xl:text-[18px] font-black mt-0.5 font-mono"
-                          style={{
-                            color: item.color,
-                            textShadow: `0 0 8px ${item.color}30`,
-                          }}
-                        >
-                          {item.data.index}
-                        </span>
-                      </div>
-                    )}
-                    {item.type === "failure" && (
-                      <div className="flex-1 flex flex-col items-center justify-center">
-                        <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11.5px]">
-                          Failure %
-                        </span>
-                        <span
-                          className="text-[13px] 2xl:text-[18px] font-black mt-0.5 font-mono"
-                          style={{
-                            color: item.color,
-                            textShadow: `0 0 8px ${item.color}30`,
-                          }}
-                        >
-                          {item.data.failure}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  {/* Footer (inside card) */}
-                  {/* <div className="flex items-center gap-1 mt-auto flex-shrink-0 pt-0.5 2xl:pt-1.5">
+                {/* Card */}
+                {(() => {
+                  const currentStr =
+                    item.type === "yield"
+                      ? item.data.yield
+                      : item.type === "dpmo"
+                        ? item.data.index
+                        : item.data.failure;
+
+                  const { points, trendChange, trendDirection } = getKpiTrendData(
+                    item.name,
+                    currentStr,
+                    item.type,
+                    item.status
+                  );
+
+                  return (
                     <div
-                      className="w-1.5 h-1.5 2xl:w-2 2xl:h-2 rounded-full"
+                      className={`bg-[#040910] border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 ${
+                        item.status === "Critical"
+                          ? "animate-border-pulse-critical"
+                          : ""
+                      }`}
                       style={{
-                        backgroundColor: item.color,
-                        boxShadow: `0 0 8px ${item.color}`,
-                      }}
-                    />
-                    <span
-                      className="text-[8.5px] 2xl:text-[10px]"
-                      style={{
-                        color: item.color,
-                        textShadow:
+                        borderColor:
+                          item.status === "Critical" ? undefined : `${cardColor}40`,
+                        boxShadow:
                           item.status === "Critical"
-                            ? `0 0 8px ${item.color}80`
-                            : "none",
+                            ? undefined
+                            : `0 4px 12px ${cardColor}15`,
                       }}
                     >
-                      {item.status}
-                    </span>
-                  </div> */}
-                </div>
+                      {/* Header */}
+                      <div className="flex items-start gap-1 mb-0.5 2xl:mb-1.5 flex-shrink-0">
+                        <item.icon
+                          size={10}
+                          className="text-white flex-shrink-0 mt-[1px] 2xl:size-[12px]"
+                        />
+                        <span className="text-white text-[9.5px] 2xl:text-[12px] font-black uppercase leading-tight truncate">
+                          {item.name}
+                        </span>
+                      </div>
+                      {/* Body */}
+                      <div className="flex-1 flex flex-col justify-center items-center min-h-0">
+                        {item.type === "yield" && (
+                          <div className="flex flex-col items-center justify-center">
+                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
+                              Yield %
+                            </span>
+                            <span
+                              className="text-[13px] 2xl:text-[16px] font-black mt-0.5 font-mono leading-none"
+                              style={{
+                                color: item.color,
+                                textShadow: `0 0 8px ${item.color}30`,
+                              }}
+                            >
+                              {item.data.yield}
+                            </span>
+                          </div>
+                        )}
+                        {item.type === "dpmo" && (
+                          <div className="flex flex-col items-center justify-center">
+                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
+                              Index
+                            </span>
+                            <span
+                              className="text-[13px] 2xl:text-[16px] font-black mt-0.5 font-mono leading-none"
+                              style={{
+                                color: item.color,
+                                textShadow: `0 0 8px ${item.color}30`,
+                              }}
+                            >
+                              {item.data.index}
+                            </span>
+                          </div>
+                        )}
+                        {item.type === "failure" && (
+                          <div className="flex flex-col items-center justify-center">
+                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
+                              Failure %
+                            </span>
+                            <span
+                              className="text-[13px] 2xl:text-[16px] font-black mt-0.5 font-mono leading-none"
+                              style={{
+                                color: item.color,
+                                textShadow: `0 0 8px ${item.color}30`,
+                              }}
+                            >
+                              {item.data.failure}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Trend Indicator */}
+                        <span
+                          className="text-[7.5px] 2xl:text-[9.5px] font-bold mt-1 leading-none flex items-center gap-0.5"
+                          style={{
+                            color:
+                              trendDirection === "up"
+                                ? "#10b981"
+                                : trendDirection === "down"
+                                  ? "#ef4444"
+                                  : "#64748b",
+                          }}
+                        >
+                          <span>{trendDirection === "up" ? "▲" : trendDirection === "down" ? "▼" : "→"}</span>
+                          <span>{trendChange}</span>
+                        </span>
+                      </div>
+
+                      {/* Sparkline (bottom 18-22%) */}
+                      <div className="h-[18px] 2xl:h-[22px] w-full flex-shrink-0 mt-auto overflow-hidden">
+                        <Sparkline
+                          points={points}
+                          type={item.type}
+                          status={item.status}
+                          color={item.color}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Timeline Node */}
                 <div className="relative h-6 flex justify-center items-center w-full mt-2">
@@ -1889,6 +2127,24 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#142337]/45 font-mono text-[11px]">
+                {paginatedYieldData.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="py-10 text-center font-sans text-[12px] font-bold tracking-wide"
+                    >
+                      {yieldFetchState === "loading" ? (
+                        <span className="text-[#526a8a]">Loading…</span>
+                      ) : yieldFetchState === "error" ? (
+                        <span className="text-[#eab308]">
+                          Product yield unavailable — API unreachable
+                        </span>
+                      ) : (
+                        <span className="text-[#526a8a]">No records found</span>
+                      )}
+                    </td>
+                  </tr>
+                )}
                 {paginatedYieldData.map((row) => (
                   <tr key={row.id} className="hover:bg-[#0a1523]/40">
                     <td className="py-[4px] text-[#8fa0b5] pl-2">{row.id}</td>
@@ -1930,7 +2186,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       </span>
                     </td>
                     <td className="py-[4px] text-center text-white font-bold">
-                      {row.spy.toFixed(1)}%
+                      {isNum(row.spy) ? `${row.spy.toFixed(1)}%` : "—"}
                     </td>
                     <td className="py-[4px] text-center text-white">
                       {row.target}%
@@ -2055,105 +2311,111 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-2">
-            {attentionCenterAlerts
-              .filter(
-                (alert) =>
-                  activeAlertTab === "All" || alert.level === activeAlertTab,
-              )
-              .map((alert) => (
-                <div
-                  key={alert.id}
-                  className={`bg-[#050b11] border ${alert.level === "Critical" ? "animate-border-pulse-critical" : "border-[#eab308]/40"} rounded-lg p-2.5 relative flex flex-col transition-all duration-300`}
-                  style={{
-                    boxShadow:
-                      alert.level === "Critical"
-                        ? undefined
-                        : "0 0 15px rgba(234, 179, 8, 0.05)",
-                  }}
-                >
-                  <div className="flex justify-between items-start mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <Bell
-                        size={13}
-                        className={
+            {visibleAlerts.length === 0 && (
+              <div className="flex-1 flex items-center justify-center py-10 text-center text-[12px] font-bold tracking-wide">
+                {alertsFeedState === "loading" ? (
+                  <span className="text-[#526a8a]">Loading…</span>
+                ) : alertsFeedState === "error" ? (
+                  <span className="text-[#eab308]">
+                    Alerts unavailable — live feed disconnected
+                  </span>
+                ) : (
+                  <span className="text-[#526a8a]">No records found</span>
+                )}
+              </div>
+            )}
+            {visibleAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className={`bg-[#050b11] border ${alert.level === "Critical" ? "animate-border-pulse-critical" : "border-[#eab308]/40"} rounded-lg p-2.5 relative flex flex-col transition-all duration-300`}
+                style={{
+                  boxShadow:
+                    alert.level === "Critical"
+                      ? undefined
+                      : "0 0 15px rgba(234, 179, 8, 0.05)",
+                }}
+              >
+                <div className="flex justify-between items-start mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <Bell
+                      size={13}
+                      className={
+                        alert.level === "Critical"
+                          ? "text-[#ef4444]"
+                          : "text-[#eab308]"
+                      }
+                      fill={alert.level === "Critical" ? "#ef4444" : "#eab308"}
+                      style={{
+                        filter:
                           alert.level === "Critical"
-                            ? "text-[#ef4444]"
-                            : "text-[#eab308]"
-                        }
-                        fill={
-                          alert.level === "Critical" ? "#ef4444" : "#eab308"
-                        }
-                        style={{
-                          filter:
-                            alert.level === "Critical"
-                              ? "drop-shadow(0 0 8px #ef4444)"
-                              : "drop-shadow(0 0 8px #eab308)",
-                        }}
-                      />
-                      <span
-                        className={`text-[12.5px] font-bold ${alert.level === "Critical" ? "text-[#ef4444]" : "text-[#eab308]"}`}
-                      >
-                        {alert.title}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 text-[10.5px] text-[#8fa0b5] font-bold">
-                      {alert.time}{" "}
-                      <ChevronRight size={11} className="text-[#526a8a]" />
-                    </div>
+                            ? "drop-shadow(0 0 8px #ef4444)"
+                            : "drop-shadow(0 0 8px #eab308)",
+                      }}
+                    />
+                    <span
+                      className={`text-[12.5px] font-bold ${alert.level === "Critical" ? "text-[#ef4444]" : "text-[#eab308]"}`}
+                    >
+                      {alert.title}
+                    </span>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-2 mb-1.5">
-                    <div className="flex flex-col">
-                      <span className="text-[#526a8a] text-[10px] uppercase font-bold">
-                        {alert.failed ? "Failed Count" : "Current"}
-                      </span>
-                      <span className="text-white text-[15px] font-black font-mono leading-tight">
-                        {alert.failed || alert.current}
-                      </span>
-                      <span className="text-[#526a8a] text-[9.5px] font-bold mt-0.5">
-                        Impact: {alert.impact}
-                      </span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[#526a8a] text-[10px] uppercase font-bold">
-                        Target
-                      </span>
-                      <span className="text-white text-[15px] font-black font-mono leading-tight">
-                        {alert.target}
-                      </span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[#526a8a] text-[10px] uppercase font-bold">
-                        Deviation
-                      </span>
-                      <span
-                        className={`text-[15px] font-black font-mono leading-tight ${alert.level === "Critical" ? "text-[#ef4444]" : "text-[#ef4444]"}`}
-                      >
-                        {alert.dev}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div
-                    className={`mt-auto bg-[#1e1b4b]/30 border ${alert.level === "Critical" ? "border-[#4338ca]/30" : "border-[#4338ca]/30"} rounded p-1.5 flex items-start gap-2`}
-                  >
-                    <div className="bg-[#4338ca] w-4.5 h-4.5 rounded flex items-center justify-center flex-shrink-0 text-white shadow-[0_0_12px_rgba(67,56,202,0.6)]">
-                      <Wrench size={10} />
-                    </div>
-                    <div className="flex flex-col flex-1 min-w-0">
-                      <span
-                        className="text-[#4338ca] text-[9px] font-black uppercase tracking-wider"
-                        style={{ textShadow: "0 0 10px rgba(67,56,202,0.4)" }}
-                      >
-                        AI Recommendation
-                      </span>
-                      <span className="text-white text-[10.5px] font-bold leading-none mt-1 truncate">
-                        {alert.rec}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-1 text-[10.5px] text-[#8fa0b5] font-bold">
+                    {alert.time}{" "}
+                    <ChevronRight size={11} className="text-[#526a8a]" />
                   </div>
                 </div>
-              ))}
+
+                <div className="grid grid-cols-3 gap-2 mb-1.5">
+                  <div className="flex flex-col">
+                    <span className="text-[#526a8a] text-[10px] uppercase font-bold">
+                      {alert.failed ? "Failed Count" : "Current"}
+                    </span>
+                    <span className="text-white text-[15px] font-black font-mono leading-tight">
+                      {alert.failed || alert.current}
+                    </span>
+                    <span className="text-[#526a8a] text-[9.5px] font-bold mt-0.5">
+                      Impact: {alert.impact}
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[#526a8a] text-[10px] uppercase font-bold">
+                      Target
+                    </span>
+                    <span className="text-white text-[15px] font-black font-mono leading-tight">
+                      {alert.target}
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[#526a8a] text-[10px] uppercase font-bold">
+                      Deviation
+                    </span>
+                    <span
+                      className={`text-[15px] font-black font-mono leading-tight ${alert.level === "Critical" ? "text-[#ef4444]" : "text-[#ef4444]"}`}
+                    >
+                      {alert.dev}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  className={`mt-auto bg-[#1e1b4b]/30 border ${alert.level === "Critical" ? "border-[#4338ca]/30" : "border-[#4338ca]/30"} rounded p-1.5 flex items-start gap-2`}
+                >
+                  <div className="bg-[#4338ca] w-4.5 h-4.5 rounded flex items-center justify-center flex-shrink-0 text-white shadow-[0_0_12px_rgba(67,56,202,0.6)]">
+                    <Wrench size={10} />
+                  </div>
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span
+                      className="text-[#4338ca] text-[9px] font-black uppercase tracking-wider"
+                      style={{ textShadow: "0 0 10px rgba(67,56,202,0.4)" }}
+                    >
+                      AI Recommendation
+                    </span>
+                    <span className="text-white text-[10.5px] font-bold leading-none mt-1 truncate">
+                      {alert.rec}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="flex justify-end pt-3 text-[10px] font-bold text-[#3b82f6] cursor-pointer hover:text-white mt-1">

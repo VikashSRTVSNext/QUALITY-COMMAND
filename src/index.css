@@ -123,3 +123,13 @@
 }
 
 /* Normal document flow handles styling without sizing locks */
+
+/* Custom grid layout for 13 process performance cards */
+@media (min-width: 1024px) {
+  .lg\:grid-cols-13 {
+    grid-template-columns: repeat(13, minmax(0, 1fr)) !important;
+  }
+  .grid-cols-13 {
+    grid-template-columns: repeat(13, minmax(0, 1fr)) !important;
+  }
+}

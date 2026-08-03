@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import { LEGACY_REST_BASE_URL } from './config';
 
 // Extend Axios request configurations to support retry mechanisms
 interface CustomRequestConfig extends InternalAxiosRequestConfig {
@@ -8,7 +9,7 @@ interface CustomRequestConfig extends InternalAxiosRequestConfig {
 }
 
 export const httpClient: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+  baseURL: LEGACY_REST_BASE_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
