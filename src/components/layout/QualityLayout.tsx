@@ -51,6 +51,26 @@ interface EriData {
   status: string;
 }
 
+// One CI gauge, fully described by the API. `max` is the arc's upper bound: the
+// site's best month over the trailing year, because no target is agreed for
+// either metric. `targetLabel` is empty until one is, and the card says so
+// rather than showing an invented figure.
+interface CiMetricView {
+  value: number;
+  max: number;
+  centerLabel: string;
+  achievedLabel: string;
+  targetLabel: string;
+}
+
+const EMPTY_CI_METRIC: CiMetricView = {
+  value: 0,
+  max: 0,
+  centerLabel: "...",
+  achievedLabel: "...",
+  targetLabel: "",
+};
+
 const ScrewIcon = ({
   size = 24,
   ...props
@@ -189,43 +209,49 @@ const Sparkline = ({
   status,
   color,
 }: {
-  points: number[];
+  // Nulls are hours the line has no value for — an hour in which nothing ran, or
+  // one the day has not reached yet. They keep their slot on the x-axis so the
+  // axis stays a fixed 24 (day) or 8 (shift) wide and points never shift left as
+  // the day fills in.
+  points: (number | null)[];
   type: string;
   status: string;
   color: string;
 }) => {
   const width = 100;
   const height = 24;
-  const gradId = React.useId();
-  const filterId = React.useId();
 
-  if (points.length < 2) return null;
+  const values = points.filter(
+    (v): v is number => typeof v === "number" && Number.isFinite(v),
+  );
+  // Fewer than two real values cannot describe a trend; draw nothing rather than
+  // a flat line that implies a measurement.
+  if (values.length < 2) return null;
 
-  const minVal = Math.min(...points);
-  const maxVal = Math.max(...points);
+  const minVal = Math.min(...values);
+  const maxVal = Math.max(...values);
   const range = maxVal - minVal || 1;
 
   const paddingY = 3;
   const chartHeight = height - paddingY * 2;
+  // x is indexed against the FULL array, not the non-null subset, so a gap leaves
+  // a gap rather than compressing the remaining points together.
+  const denom = points.length > 1 ? points.length - 1 : 1;
 
-  const coords = points.map((val, i) => {
-    const x = (i / (points.length - 1)) * width;
+  // Break the stroke across missing hours instead of drawing through them: an
+  // idle hour is an absence of data, and joining across it would invent a slope.
+  let path = "";
+  let penDown = false;
+  points.forEach((val, i) => {
+    if (typeof val !== "number" || !Number.isFinite(val)) {
+      penDown = false;
+      return;
+    }
+    const x = (i / denom) * width;
     const y = paddingY + chartHeight - ((val - minVal) / range) * chartHeight;
-    return { x, y };
+    path += `${penDown ? " L" : " M"} ${x} ${y}`;
+    penDown = true;
   });
-
-  let path = `M ${coords[0].x} ${coords[0].y}`;
-  for (let i = 0; i < coords.length - 1; i++) {
-    const curr = coords[i];
-    const next = coords[i + 1];
-    const cp1x = curr.x + (next.x - curr.x) / 3;
-    const cp1y = curr.y;
-    const cp2x = curr.x + (2 * (next.x - curr.x)) / 3;
-    const cp2y = next.y;
-    path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
-  }
-
-  const latestCoord = coords[coords.length - 1];
 
   let glowColor = color;
   if (type === "dpmo") {
@@ -246,37 +272,17 @@ const Sparkline = ({
       className="overflow-visible"
       style={{ pointerEvents: "none" }}
     >
-      <defs>
-        <filter id={filterId} x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="1.2" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={glowColor} stopOpacity={0.15} />
-          <stop offset="100%" stopColor={glowColor} stopOpacity={0.0} />
-        </linearGradient>
-      </defs>
-
-      {/* Area fill */}
-      <path
-        d={`${path} L ${width} ${height} L 0 ${height} Z`}
-        fill={`url(#${gradId})`}
+      {/* Bottom dashed baseline */}
+      <line
+        x1="0"
+        y1={height - paddingY}
+        x2={width}
+        y2={height - paddingY}
+        stroke="#ffffff"
+        strokeWidth="0.8"
+        strokeDasharray="2 2"
+        opacity="0.55"
       />
-
-      {/* Background glow line */}
-      <path
-        d={path}
-        fill="none"
-        stroke={glowColor}
-        strokeWidth="3.5"
-        opacity="0.15"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
       {/* Main line */}
       <path
         d={path}
@@ -286,82 +292,44 @@ const Sparkline = ({
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-
-      {/* Latest value dot */}
-      <circle
-        cx={latestCoord.x}
-        cy={latestCoord.y}
-        r="1.8"
-        fill="#ffffff"
-        stroke={glowColor}
-        strokeWidth="0.8"
-        filter={`url(#${filterId})`}
-      />
     </svg>
   );
 };
 
-const getKpiTrendData = (
-  name: string,
-  currentStr: string | undefined,
-  type: string,
-  status: string
-) => {
-  let currentVal = 98.0;
-  if (currentStr) {
-    const parsed = parseFloat(currentStr.replace(/[^\d.-]/g, ""));
-    if (!isNaN(parsed)) {
-      currentVal = parsed;
-    }
-  }
+// Hourly trend for one Process Performance card, straight from the API's
+// `trend.buckets` — 24 buckets of one hour, anchored to the 06:15 factory day.
+//
+// Full day  -> all 24 buckets.
+// Shift A/B/C -> the 8 buckets belonging to that shift. The backend tags each
+// bucket with its shift (buckets are 1h and anchored to the day start, so each
+// nests inside exactly one shift), which is why this is a filter and not index
+// arithmetic that would have to know where shifts begin.
+//
+// Nulls are passed through rather than dropped or zero-filled: the axis has to
+// stay a fixed 24 or 8 wide, and an hour that ran nothing has no yield to plot.
+const getProcessTrendData = (trend: any, activeShift: string) => {
+  const buckets: any[] = Array.isArray(trend?.buckets) ? trend.buckets : [];
+  const shiftMatch = activeShift.match(/Shift\s+([A-C])/i);
+  const shift = shiftMatch ? shiftMatch[1].toUpperCase() : null;
 
-  const charSum = name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const seedOffsets = [
-    ((charSum % 7) - 3) * 0.15,
-    (((charSum >> 1) % 7) - 3) * 0.15,
-    (((charSum >> 2) % 7) - 3) * 0.15,
-    (((charSum >> 3) % 7) - 3) * 0.15,
-    (((charSum >> 4) % 7) - 3) * 0.15,
-    (((charSum >> 5) % 7) - 3) * 0.15,
-    0,
-  ];
+  const selected = shift
+    ? buckets.filter((b) => (b.shift || "").toUpperCase() === shift)
+    : buckets;
 
-  if (status === "Critical") {
-    seedOffsets[0] += 0.8;
-    seedOffsets[1] += 0.6;
-    seedOffsets[2] += 0.5;
-    seedOffsets[3] += 0.3;
-    seedOffsets[4] += 0.1;
-  } else if (status === "At Risk") {
-    seedOffsets[0] += 0.4;
-    seedOffsets[1] += 0.3;
-    seedOffsets[2] += 0.1;
-    seedOffsets[3] -= 0.1;
-  }
+  const points: (number | null)[] = selected.map((b) =>
+    isNum(b?.value) ? b.value : null,
+  );
 
-  const scale = type === "dpmo" ? 0.3 : 0.08;
-
-  const points = seedOffsets.map((offset) => {
-    let val = currentVal + offset * scale;
-    if (type === "yield") {
-      if (val > 100) val = 100;
-      if (val < 0) val = 0;
-    } else {
-      if (val < 0) val = 0;
-    }
-    return Number(val.toFixed(2));
-  });
-
-  points[6] = currentVal;
-
-  const delta = currentVal - points[0];
+  // Direction over the plotted window: first real value to last real value.
+  const real = points.filter((v): v is number => v !== null);
   let trendChange = "0.00%";
   let trendDirection: "up" | "down" | "flat" = "flat";
-
-  if (Math.abs(delta) > 0.001) {
-    const sign = delta > 0 ? "+" : "";
-    trendChange = `${sign}${delta.toFixed(2)}%`;
-    trendDirection = delta > 0 ? "up" : "down";
+  if (real.length >= 2) {
+    const delta = real[real.length - 1] - real[0];
+    if (Math.abs(delta) > 0.001) {
+      trendChange = `${delta > 0 ? "+" : ""}${delta.toFixed(2)}%`;
+      trendDirection = delta > 0 ? "up" : "down";
+    }
   }
 
   return { points, trendChange, trendDirection };
@@ -630,6 +598,10 @@ const SemiCircleGauge = ({
   color = "#3b82f6",
   icon: Icon,
   showValueInCenter = false,
+  // Absolute-value gauges (CI) pass a pre-formatted centre label such as
+  // "654K €". Omitted everywhere else, where the arc is a percentage and the
+  // centre reads "<value>%".
+  centerLabel,
 }: any) => {
   const radius = 32;
   const strokeWidth = 6;
@@ -637,7 +609,11 @@ const SemiCircleGauge = ({
   const cy = 38;
 
   const circumference = Math.PI * radius;
-  const percentage = (value - min) / (max - min);
+  // Guard the degenerate range: an absolute gauge whose max is still 0 (no data
+  // yet) would divide by zero and render NaN into the SVG path.
+  const span = max - min;
+  const raw = span > 0 ? (value - min) / span : 0;
+  const percentage = Math.min(Math.max(raw, 0), 1);
   const strokeDashoffset = circumference - percentage * circumference;
 
   const iconY = 25;
@@ -705,7 +681,7 @@ const SemiCircleGauge = ({
             fontFamily="monospace"
             textAnchor="middle"
           >
-            {value}%
+            {centerLabel ?? `${value}%`}
           </text>
         )}
 
@@ -721,6 +697,20 @@ const SemiCircleGauge = ({
       </svg>
     </div>
   );
+};
+
+// Tile label -> `process_performance` key in the API payload.
+//
+// Explicit rather than derived from the label, because two of them cannot be
+// guessed by any transform: the mart calls burn-in THERMAL_TEST (same test, two
+// names), and "SMT DEFECTS @ MFT" is stored as SMT_DEFECTS. Mangling the label
+// instead produced "SMT_DEFECTS_@_MFT" and "BURN-IN", neither of which exists in
+// the payload — so both tiles silently rendered "..." forever. Any tile added
+// here whose label differs from its mart step needs an entry.
+const API_KEY_BY_TILE: Record<string, string> = {
+  "SMT DEFECTS @ MFT": "SMT_DEFECTS",
+  "BURN-IN": "THERMAL_TEST",
+  OTA: "OTA_TEST",
 };
 
 const processPerformanceData = [
@@ -752,7 +742,7 @@ const processPerformanceData = [
     color: "#10b981",
   },
   {
-    name: "SMT DEFECTS",
+    name: "SMT DEFECTS @ MFT",
     icon: Cpu,
     section: "SMT",
     type: "failure",
@@ -761,7 +751,7 @@ const processPerformanceData = [
     color: "#10b981",
   },
   {
-    name: "THERMAL TEST",
+    name: "BURN-IN",
     icon: Thermometer,
     section: "RFM",
     type: "yield",
@@ -850,6 +840,34 @@ const isNum = (v: any): v is number =>
 const fmtFixed = (v: any, digits: number, fallback = "...") =>
   isNum(v) ? v.toFixed(digits) : fallback;
 
+// Compact money/count for the CI gauges: 653520 -> "654K", 2360000 -> "2.4M".
+// The API sends savings in euros (the sheet holds thousands and the backend
+// scales them), so this is the only place the magnitude is shortened.
+const fmtCompact = (v: any, fallback = "...") => {
+  if (!isNum(v)) return fallback;
+  const abs = Math.abs(v);
+  if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
+  return `${Math.round(v * 100) / 100}`;
+};
+
+// Build a CI gauge's view model from one metrics entry of the `ci` payload.
+const toCiMetric = (m: any, unit: string): CiMetricView => {
+  const value = isNum(m?.achieved) ? m.achieved : 0;
+  const suffix = unit ? ` ${unit}` : "";
+  return {
+    value,
+    // Fall back to the value itself so a lone data point still fills the arc
+    // instead of dividing by a zero range.
+    max: isNum(m?.scale_max) && m.scale_max > 0 ? m.scale_max : value,
+    centerLabel: `${fmtCompact(value)}${suffix}`,
+    achievedLabel: isNum(m?.achieved)
+      ? `${fmtCompact(value)}${suffix}`
+      : "—",
+    targetLabel: isNum(m?.target) ? `Target ${fmtCompact(m.target)}${suffix}` : "",
+  };
+};
+
 const fmtCount = (v: any, fallback = "...") =>
   isNum(v) ? v.toLocaleString() : fallback;
 
@@ -871,14 +889,19 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [kpiCards, setKpiCards] = useState(
     qualityData.kpiCards.map((card) => {
       const isPercent = [1, 2, 3, 4, 5, 7].includes(card.id);
+      const delta = card.delta_vs_yesterday ?? 0;
+      const deltaSign = delta >= 0 ? "▲" : "▼";
       return {
         ...card,
         title: card.label,
         value: isPercent ? `${card.value.toFixed(1)}%` : `${card.value}`,
         change: isPercent
-          ? `▲ ${card.delta_vs_yesterday.toFixed(1)}% vs Yesterday`
-          : `▲ ${card.delta_vs_yesterday} vs yesterday`,
-        points: card.trend,
+          ? `${deltaSign} ${Math.abs(delta).toFixed(1)}% vs Yesterday`
+          : `${deltaSign} ${Math.abs(delta)} vs yesterday`,
+        points: card.trend as (number | null)[],
+        yesterdayPoints: (card as any).yesterdayTrend as
+          | (number | null)[]
+          | undefined,
       };
     }),
   );
@@ -941,10 +964,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [customerIncidents, setCustomerIncidents] = useState(0);
   const [customerEri, setCustomerEri] = useState(0);
   const [eriData, setEriData] = useState<EriData | null>(null);
-  const [ciLeanSavingsPct, setCiLeanSavingsPct] = useState(0);
-  const [ciLeanSavingsVal, setCiLeanSavingsVal] = useState("...");
-  const [ciKaizenPct, setCiKaizenPct] = useState(0);
-  const [ciKaizenVal, setCiKaizenVal] = useState("...");
+  // CI card. Every figure here comes from the GimtoolExport sheet via the API —
+  // nothing about this card is a literal in the markup, including the targets and
+  // the gauge range, which is why they are state and not JSX text.
+  const [ciMonthLabel, setCiMonthLabel] = useState("");
+  const [ciLeanSavings, setCiLeanSavings] = useState<CiMetricView>(EMPTY_CI_METRIC);
+  const [ciKaizen, setCiKaizen] = useState<CiMetricView>(EMPTY_CI_METRIC);
   const [twinZones, setTwinZones] = useState<ZoneDef[]>(ZONES);
   const [shopFloorConditions, setShopFloorConditions] = useState<{
     temp: number | null;
@@ -1278,28 +1303,22 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         }
       }
 
-      // 10. CI
+      // 10. CI — Lean Savings + No. of Kaizen for the last completed month.
+      // Both gauges plot the absolute figure on a 0..best-month arc rather than a
+      // percentage: no target for either metric exists in any Nokia workbook, so
+      // there is nothing to take a percentage of. The moment targets are agreed
+      // and set in the backend env, `target` arrives non-null and targetLabel
+      // starts rendering — no change needed here.
       if (data.ci) {
-        if (data.ci.lean_savings) {
-          setCiLeanSavingsPct(data.ci.lean_savings.pct);
-          const val = data.ci.lean_savings.achieved;
-          // Without isNum, a null achieved renders the literal string "null €".
-          const formattedVal = !isNum(val)
-            ? "—"
-            : val >= 1000
-              ? `${(val / 1000).toFixed(0)}K €`
-              : `${val} €`;
-          setCiLeanSavingsVal(formattedVal);
+        const metrics = data.ci.metrics || data.ci;
+        if (data.ci.month_label) setCiMonthLabel(data.ci.month_label);
+        if (metrics.lean_savings) {
+          setCiLeanSavings(
+            toCiMetric(metrics.lean_savings, metrics.lean_savings.currency === "EUR" ? "€" : ""),
+          );
         }
-        if (data.ci.kaizen) {
-          setCiKaizenPct(data.ci.kaizen.pct);
-          const val = data.ci.kaizen.achieved;
-          const formattedVal = !isNum(val)
-            ? "—"
-            : val >= 1000
-              ? `${(val / 1000).toFixed(0)}K`
-              : `${val}`;
-          setCiKaizenVal(formattedVal);
+        if (metrics.kaizen) {
+          setCiKaizen(toCiMetric(metrics.kaizen, ""));
         }
       }
     };
@@ -1359,7 +1378,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
         let val: number | null = null;
         let delta: number = 0;
-        let trend: any = null;
+        let trend: (number | null)[] | null = null;
+        let yesterdayPoints: (number | null)[] | null = null;
 
         // Parse active shift name (e.g., "Shift A (06:15 AM - 02:15 PM)" -> "A")
         const shiftMatch = activeShift.match(/Shift\s+([A-C])/i);
@@ -1372,6 +1392,23 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           "spy_module",
         ].includes(sseKey);
 
+        // Resolve delta and trend from parent if available
+        if (
+          rawKpiData.delta_vs_yesterday &&
+          rawKpiData.delta_vs_yesterday[sseKey] !== undefined
+        ) {
+          delta = rawKpiData.delta_vs_yesterday[sseKey] ?? 0;
+        }
+
+        if (rawKpiData.trend && Array.isArray(rawKpiData.trend.buckets)) {
+          trend = rawKpiData.trend.buckets.map(
+            (b: any) => b.today?.[sseKey] ?? null,
+          );
+          yesterdayPoints = rawKpiData.trend.buckets.map(
+            (b: any) => b.yesterday?.[sseKey] ?? null,
+          );
+        }
+
         if (isShiftSpecificKpi && rawKpiData.by_shift && shiftLetter) {
           // New format with by_shift array
           const shiftData = rawKpiData.by_shift.find(
@@ -1383,19 +1420,18 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             shiftData[sseKey] !== null
           ) {
             val = shiftData[sseKey];
-            // Get delta/trend from day summary if available, since shift entries don't have delta
-            if (rawKpiData.day) {
-              const dayItem = rawKpiData.day[sseKey];
-              if (dayItem && typeof dayItem === "object") {
-                delta = dayItem.delta_vs_yesterday ?? 0;
-                trend = dayItem.trend;
-              }
+            if (
+              shiftData.delta_vs_yesterday !== undefined &&
+              shiftData.delta_vs_yesterday !== null
+            ) {
+              delta = shiftData.delta_vs_yesterday;
             }
           } else {
             // Shift C or missing shift has no data -> set to 0
             val = 0;
             delta = 0;
             trend = null;
+            yesterdayPoints = null;
           }
         }
 
@@ -1405,9 +1441,18 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             const dayItem = rawKpiData.day[sseKey];
             if (dayItem !== undefined && dayItem !== null) {
               val = typeof dayItem === "object" ? dayItem.value : dayItem;
-              delta =
-                typeof dayItem === "object" ? dayItem.delta_vs_yesterday : 0;
-              trend = typeof dayItem === "object" ? dayItem.trend : null;
+              if (
+                rawKpiData.delta_vs_yesterday &&
+                rawKpiData.delta_vs_yesterday[sseKey] !== undefined
+              ) {
+                delta = rawKpiData.delta_vs_yesterday[sseKey] ?? 0;
+              } else {
+                delta =
+                  typeof dayItem === "object" ? dayItem.delta_vs_yesterday : 0;
+              }
+              if (typeof dayItem === "object" && dayItem.trend) {
+                trend = dayItem.trend;
+              }
             }
           } else if (Array.isArray(rawKpiData)) {
             // Support legacy array format
@@ -1442,6 +1487,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             value: `${val.toFixed(1)}%`,
             change: changeStr,
             points: trend || card.points,
+            yesterdayPoints: yesterdayPoints || card.yesterdayPoints,
+            delta_vs_yesterday: delta,
           };
         }
 
@@ -1459,28 +1506,78 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     const shiftLetter = shiftMatch ? shiftMatch[1].toUpperCase() : null;
 
     setProcessPerformance((prev) => {
-      return prev.map((item) => {
-        const getApiKey = (name: string) => {
-          if (name === "OTA") return "OTA_TEST";
-          return name.replace(/\s+/g, "_");
-        };
-
-        const apiKey = getApiKey(item.name);
+      return prev.map((prevItem) => {
+        const apiKey =
+          API_KEY_BY_TILE[prevItem.name] ?? prevItem.name.replace(/\s+/g, "_");
         const incoming = rawProcessPerformance[apiKey];
+        // Attach the hourly series once, here, so every branch below inherits it
+        // through its `...item` spread. Set to null when the API sends no trend
+        // (DPMOI and SPI have no hourly source) so the sparkline draws nothing
+        // rather than falling back to the seeded placeholder points.
+        const item = { ...prevItem, trend: incoming?.trend ?? null };
         if (incoming) {
+          const target = incoming.target !== undefined ? incoming.target : null;
+          const targetUnit = incoming.target_unit || null;
+          const targetDirection = incoming.target_direction || null;
+
+          // The step is configured but produced nothing for this business day —
+          // burn-in is a sample test that only runs in bursts, so an empty day is
+          // normal. Show a dash, NOT "0.00%": nothing was tested, so a zero would
+          // read as total failure and colour the tile red for no reason.
+          if (incoming.no_data) {
+            return {
+              ...item,
+              data:
+                item.type === "yield"
+                  ? { done: "0", ok: "0", yield: "—" }
+                  : item.type === "dpmo"
+                    ? { defects: "0", opportunities: "0", index: "—" }
+                    : { failure: "—" },
+              status: "Not Run",
+              color: "#0091ff",
+              target,
+              targetUnit,
+              targetDirection,
+            };
+          }
+
           if (item.name === "DPMOI") {
-            const statusMapped =
-              incoming.index <= 10
-                ? "Healthy"
-                : incoming.index <= 50
-                  ? "At Risk"
-                  : "Critical";
-            const colorMapped =
-              statusMapped === "Healthy"
-                ? "#10b981"
-                : statusMapped === "At Risk"
-                  ? "#eab308"
-                  : "#ef4444";
+            const actual = incoming.index;
+            let meets = null;
+            if (target !== null && targetDirection && isNum(actual)) {
+              meets =
+                targetDirection === "lower"
+                  ? actual <= target
+                  : actual >= target;
+            }
+
+            let statusMapped = "Healthy";
+            let colorMapped = "#10b981";
+
+            if (meets !== null) {
+              if (meets) {
+                statusMapped = "Healthy";
+                colorMapped = "#10b981";
+              } else {
+                statusMapped = actual <= 10 ? "At Risk" : "Critical";
+                colorMapped =
+                  statusMapped === "At Risk" ? "#eab308" : "#ef4444";
+              }
+            } else {
+              statusMapped =
+                incoming.index <= 10
+                  ? "Healthy"
+                  : incoming.index <= 50
+                    ? "At Risk"
+                    : "Critical";
+              colorMapped =
+                statusMapped === "Healthy"
+                  ? "#10b981"
+                  : statusMapped === "At Risk"
+                    ? "#eab308"
+                    : "#ef4444";
+            }
+
             return {
               ...item,
               data: {
@@ -1490,6 +1587,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               },
               status: statusMapped,
               color: colorMapped,
+              target,
+              targetUnit,
+              targetDirection,
             };
           }
 
@@ -1507,20 +1607,54 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           }
 
           if (targetData) {
-            const statusMapped =
-              targetData.status === "healthy"
-                ? "Healthy"
-                : targetData.status === "at_risk" ||
-                    targetData.status === "warning"
-                  ? "At Risk"
-                  : "Critical";
-            const colorMapped =
-              targetData.status === "healthy"
-                ? "#10b981"
-                : targetData.status === "at_risk" ||
-                    targetData.status === "warning"
-                  ? "#eab308"
-                  : "#ef4444";
+            const actual = isNum(targetData.yield_pct)
+              ? targetData.yield_pct
+              : isNum(targetData.failure_pct)
+                ? targetData.failure_pct
+                : null;
+
+            let meets = null;
+            if (target !== null && targetDirection && isNum(actual)) {
+              if (targetDirection === "higher") {
+                meets = actual >= target;
+              } else if (targetDirection === "lower") {
+                meets = actual <= target;
+              }
+            }
+
+            let statusMapped = "Healthy";
+            let colorMapped = "#10b981";
+
+            if (meets !== null) {
+              if (meets) {
+                statusMapped = "Healthy";
+                colorMapped = "#10b981";
+              } else {
+                const apiStatus = targetData.status;
+                if (apiStatus === "at_risk" || apiStatus === "warning") {
+                  statusMapped = "At Risk";
+                  colorMapped = "#eab308";
+                } else {
+                  statusMapped = "Critical";
+                  colorMapped = "#ef4444";
+                }
+              }
+            } else {
+              statusMapped =
+                targetData.status === "healthy"
+                  ? "Healthy"
+                  : targetData.status === "at_risk" ||
+                      targetData.status === "warning"
+                    ? "At Risk"
+                    : "Critical";
+              colorMapped =
+                targetData.status === "healthy"
+                  ? "#10b981"
+                  : targetData.status === "at_risk" ||
+                      targetData.status === "warning"
+                    ? "#eab308"
+                    : "#ef4444";
+            }
 
             if (isNum(targetData.failure_pct)) {
               return {
@@ -1528,6 +1662,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 data: { failure: `${targetData.failure_pct.toFixed(1)}%` },
                 status: statusMapped,
                 color: colorMapped,
+                target,
+                targetUnit,
+                targetDirection,
               };
             } else {
               return {
@@ -1541,6 +1678,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 },
                 status: statusMapped,
                 color: colorMapped,
+                target,
+                targetUnit,
+                targetDirection,
               };
             }
           } else {
@@ -1552,9 +1692,25 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   ? { done: "0", ok: "0", yield: "0.00%" }
                   : { failure: "0.0%" },
               status: "N/A",
-              color: "#3b82f6",
+              color: "#0091ff",
+              target,
+              targetUnit,
+              targetDirection,
             };
           }
+        } else {
+          // Default empty state when key is completely missing from API
+          return {
+            ...item,
+            data:
+              item.type === "yield"
+                ? { done: "...", ok: "...", yield: "..." }
+                : item.type === "dpmo"
+                  ? { defects: "...", opportunities: "...", index: "..." }
+                  : { failure: "..." },
+            status: "N/A",
+            color: "#0091ff",
+          };
         }
         return item;
       });
@@ -1591,33 +1747,73 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   };
 
   const getTimelineNodeColor = (card: (typeof processPerformanceData)[0]) => {
-    if (card.section === "SMT") return "#0091ff";
     if (card.status === "Critical") return "#ef4444";
     if (card.status === "At Risk") return "#eab308";
+    if (card.status === "N/A" || card.status === "...") return "#0091ff";
     return "#10b981";
   };
 
   const getCardBorderColor = (card: (typeof processPerformanceData)[0]) => {
     if (card.status === "Critical") return "#ef4444";
     if (card.status === "At Risk") return "#eab308";
-    return card.section === "SMT" ? "#0091ff" : "#10b981";
+    if (card.status === "N/A" || card.status === "...") return "#0091ff";
+    return "#10b981";
   };
 
-  const renderFullSparkline = (points: number[], strokeColor: string) => {
+  const renderFullSparkline = (
+    points: (number | null)[],
+    yesterdayPoints: (number | null)[] | undefined,
+    strokeColor: string,
+  ) => {
     const width = 160;
-    const height = 24;
-    const padding = 6;
+    const height = 16;
+    const padding = 2;
     const chartHeight = height - padding * 2;
-    const max = Math.max(...points);
-    const min = Math.min(...points);
+
+    const allValids = [...points, ...(yesterdayPoints || [])].filter(
+      (v): v is number => typeof v === "number",
+    );
+    if (allValids.length === 0) return null;
+
+    const max = Math.max(...allValids);
+    const min = Math.min(...allValids);
     const range = max - min || 1;
-    const svgPoints = points
-      .map((p, i) => {
-        const x = (i / (points.length - 1)) * width;
-        const y = padding + chartHeight - ((p - min) / range) * chartHeight;
-        return `${x},${y}`;
-      })
-      .join(" ");
+
+    const getSvgPoints = (arr: (number | null)[]) => {
+      return arr
+        .map((p, i) => {
+          if (p === null || p === undefined) return null;
+          const x = (i / (arr.length - 1)) * width;
+          // Scale to 95% of the sparkline height to make changes sharp and clear
+          const y =
+            height - padding - ((p - min) / range) * (chartHeight * 0.95);
+          return `${x},${y}`;
+        })
+        .filter((val) => val !== null)
+        .join(" ");
+    };
+
+    const todayPointsStr = getSvgPoints(points);
+    const yesterdayPointsStr = yesterdayPoints
+      ? getSvgPoints(yesterdayPoints)
+      : "";
+
+    // Find the last valid point to place the blinking/glowing indicator
+    let lastIdx = -1;
+    for (let i = points.length - 1; i >= 0; i--) {
+      if (points[i] !== null && points[i] !== undefined) {
+        lastIdx = i;
+        break;
+      }
+    }
+    const lastVal = lastIdx !== -1 ? points[lastIdx] : null;
+    let lastPointCoord = null;
+    if (lastIdx !== -1 && lastVal !== null) {
+      const x = (lastIdx / (points.length - 1)) * width;
+      const y =
+        height - padding - ((lastVal - min) / range) * (chartHeight * 0.95);
+      lastPointCoord = { x, y };
+    }
 
     return (
       <svg
@@ -1625,7 +1821,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         height={height}
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="none"
-        className="overflow-visible opacity-40"
+        className="overflow-visible"
       >
         <style>
           {`
@@ -1637,15 +1833,86 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             .animate-sparkline {
               animation: drawSparkline 1.5s ease-out forwards;
             }
+            @keyframes pulseGlow {
+              0% {
+                transform: scale(0.9);
+                opacity: 0.45;
+              }
+              50% {
+                transform: scale(1.25);
+                opacity: 0.9;
+              }
+              100% {
+                transform: scale(0.9);
+                opacity: 0.45;
+              }
+            }
+            .animate-pulse-glow {
+              animation: pulseGlow 1.5s infinite ease-in-out;
+            }
           `}
         </style>
-        <polyline
-          fill="none"
-          stroke={strokeColor}
-          strokeWidth="1.5"
-          points={svgPoints}
-          className="animate-sparkline"
-        />
+
+        {/* Yesterday's trend (dashed, low-contrast slate) */}
+        {yesterdayPointsStr && (
+          <polyline
+            fill="none"
+            stroke="#475569"
+            strokeWidth="0.4"
+            strokeDasharray="2 2"
+            points={yesterdayPointsStr}
+            className="opacity-45 animate-sparkline"
+          />
+        )}
+        {/* Today's trend background glow line */}
+        {todayPointsStr && (
+          <polyline
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth="1.0"
+            points={todayPointsStr}
+            className="opacity-15 animate-sparkline"
+            style={{
+              filter: `drop-shadow(0 0 1.5px ${strokeColor})`,
+            }}
+          />
+        )}
+        {/* Today's trend (solid, colored) */}
+        {todayPointsStr && (
+          <polyline
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth="0.5"
+            points={todayPointsStr}
+            className="opacity-95 animate-sparkline"
+          />
+        )}
+        {/* Blinking glowing dot at the end of today's trend */}
+        {lastPointCoord && (
+          <>
+            {/* Outer glowing pulsing circle */}
+            <circle
+              cx={lastPointCoord.x}
+              cy={lastPointCoord.y}
+              r="1.2"
+              fill={strokeColor}
+              className="animate-pulse-glow"
+              style={{
+                transformOrigin: `${lastPointCoord.x}px ${lastPointCoord.y}px`,
+                filter: `drop-shadow(0 0 0.8px ${strokeColor})`,
+              }}
+            />
+            {/* Inner solid core dot */}
+            <circle
+              cx={lastPointCoord.x}
+              cy={lastPointCoord.y}
+              r="0.6"
+              fill="#ffffff"
+              stroke={strokeColor}
+              strokeWidth="0.4"
+            />
+          </>
+        )}
       </svg>
     );
   };
@@ -1808,7 +2075,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       {/* Row 1: Top KPI Cards */}
       <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {kpiCards.slice(0, 5).map((card) => {
+          const delta = card.delta_vs_yesterday ?? 0;
           const accent = card.color ?? "#a3e635";
+          const trendColor =
+            delta > 0 ? "#10b981" : delta < 0 ? "#ef4444" : "#94a3b8";
           return (
             <div
               key={card.id}
@@ -1821,7 +2091,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   {card.title}
                 </span>
               </div>
-              <div className="flex flex-col mt-0.5 z-10 mb-0.5">
+              <div className="flex flex-col mt-0.5 z-10 mb-3">
                 <span
                   className="text-[26px] font-black font-mono leading-none"
                   style={{ color: accent, textShadow: `0 0 8px ${accent}40` }}
@@ -1830,13 +2100,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 </span>
                 <span
                   className="text-[11.5px] font-bold mt-0.5"
-                  style={{ color: accent }}
+                  style={{ color: trendColor }}
                 >
                   {card.change}
                 </span>
               </div>
-              <div className="absolute bottom-[8px] left-0 right-0 h-[24px] pointer-events-none">
-                {renderFullSparkline(card.points, accent)}
+              <div className="absolute bottom-[4px] left-0 right-0 h-[16px] pointer-events-none">
+                {renderFullSparkline(
+                  card.points,
+                  card.yesterdayPoints,
+                  trendColor,
+                )}
               </div>
             </div>
           );
@@ -1900,18 +2174,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 {/* Card */}
                 {/* Card */}
                 {(() => {
-                  const currentStr =
-                    item.type === "yield"
-                      ? item.data.yield
-                      : item.type === "dpmo"
-                        ? item.data.index
-                        : item.data.failure;
-
-                  const { points, trendChange, trendDirection } = getKpiTrendData(
-                    item.name,
-                    currentStr,
-                    item.type,
-                    item.status
+                  // Real hourly series from the API: 24 points for the full day,
+                  // 8 for a selected shift. Replaces the seeded random walk that
+                  // used to fill this in — it produced a plausible-looking line
+                  // from the current value and a hash of the card's name, which
+                  // meant every sparkline on this strip was decorative.
+                  const { points, trendDirection } = getProcessTrendData(
+                    item.trend,
+                    activeShift,
                   );
 
                   return (
@@ -1923,7 +2193,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       }`}
                       style={{
                         borderColor:
-                          item.status === "Critical" ? undefined : `${cardColor}40`,
+                          item.status === "Critical"
+                            ? undefined
+                            : `${cardColor}40`,
                         boxShadow:
                           item.status === "Critical"
                             ? undefined
@@ -1936,7 +2208,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                           size={10}
                           className="text-white flex-shrink-0 mt-[1px] 2xl:size-[12px]"
                         />
-                        <span className="text-white text-[9.5px] 2xl:text-[12px] font-black uppercase leading-tight truncate">
+                        <span className="text-white text-[9.5px] 2xl:text-[12px] font-black uppercase leading-tight whitespace-normal break-words">
                           {item.name}
                         </span>
                       </div>
@@ -1991,6 +2263,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                           </div>
                         )}
 
+                        {/* Target display */}
+                        {item.target !== undefined && item.target !== null && (
+                          <span className="text-[#526a8a] text-[8.5px] 2xl:text-[10px] mt-1 font-bold tracking-wider leading-none">
+                            Tgt: {item.target}
+                            {item.targetUnit === "percent" ? "%" : ""}
+                          </span>
+                        )}
+
                         {/* Trend Indicator */}
                         <span
                           className="text-[7.5px] 2xl:text-[9.5px] font-bold mt-1 leading-none flex items-center gap-0.5"
@@ -2002,10 +2282,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                                   ? "#ef4444"
                                   : "#64748b",
                           }}
-                        >
-                          <span>{trendDirection === "up" ? "▲" : trendDirection === "down" ? "▼" : "→"}</span>
-                          <span>{trendChange}</span>
-                        </span>
+                        ></span>
                       </div>
 
                       {/* Sparkline (bottom 18-22%) */}
@@ -2657,6 +2934,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             <span className="text-[#8fa0b5] text-[12px] font-black uppercase tracking-wider">
               CI
             </span>
+            {/* Which month the two figures describe — the card reports the last
+                completed month, so leaving it unlabelled reads as "today". */}
+            {ciMonthLabel && (
+              <span className="text-[#526a8a] text-[10px] font-bold ml-auto">
+                {ciMonthLabel}
+              </span>
+            )}
           </div>
           <div className="flex-1 grid grid-cols-2 gap-3 items-center min-h-0 pt-2">
             <div className="flex flex-col h-full justify-between">
@@ -2665,23 +2949,26 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   LEAN SAVINGS
                 </span>
                 <span className="text-[#526a8a] text-[10px] font-bold font-sans">
-                  Target 500K €
+                  {ciLeanSavings.targetLabel || "No target set"}
                 </span>
               </div>
               <div className="flex-1 flex items-center justify-center w-full mt-2">
                 <SemiCircleGauge
-                  value={ciLeanSavingsPct}
+                  value={ciLeanSavings.value}
                   min={0}
-                  max={100}
-                  labelMin="0%"
-                  labelMax="100%"
+                  max={ciLeanSavings.max}
+                  labelMin="0"
+                  labelMax={fmtCompact(ciLeanSavings.max, "—")}
                   color="#a855f7"
                   showValueInCenter={true}
+                  centerLabel={ciLeanSavings.centerLabel}
                 />
               </div>
               <div className="flex justify-between text-[10px] text-[#526a8a] font-bold">
                 <span>Achieved</span>
-                <span className="text-white font-mono">{ciLeanSavingsVal}</span>
+                <span className="text-white font-mono">
+                  {ciLeanSavings.achievedLabel}
+                </span>
               </div>
             </div>
 
@@ -2691,23 +2978,26 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   NO. OF KAIZEN
                 </span>
                 <span className="text-[#526a8a] text-[10px] font-bold">
-                  Target 200K
+                  {ciKaizen.targetLabel || "No target set"}
                 </span>
               </div>
               <div className="flex-1 flex items-center justify-center w-full mt-2">
                 <SemiCircleGauge
-                  value={ciKaizenPct}
+                  value={ciKaizen.value}
                   min={0}
-                  max={100}
-                  labelMin="0%"
-                  labelMax="100%"
+                  max={ciKaizen.max}
+                  labelMin="0"
+                  labelMax={fmtCompact(ciKaizen.max, "—")}
                   color="#0ea5e9"
                   showValueInCenter={true}
+                  centerLabel={ciKaizen.centerLabel}
                 />
               </div>
               <div className="flex justify-between text-[10px] text-[#526a8a] font-bold">
                 <span>Achieved</span>
-                <span className="text-white font-mono">{ciKaizenVal}</span>
+                <span className="text-white font-mono">
+                  {ciKaizen.achievedLabel}
+                </span>
               </div>
             </div>
           </div>
