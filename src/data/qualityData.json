@@ -56,6 +56,18 @@
       "color": "#8b5cf6"
     },
     {
+      "id": 9,
+      "key": "hftpy",
+      "label": "HFTPY (%)",
+      "value": 92.4,
+      "projected": 94.5,
+      "delta_vs_yesterday": 0.3,
+      "trend": [91.8, 92.0, 92.1, 92.4, null, null],
+      "yesterdayTrend": [91.5, 91.8, 92.0, 92.1, 92.2, 92.4],
+      "status": "success",
+      "color": "#f43f5e"
+    },
+    {
       "id": 6,
       "key": "open_capa",
       "label": "Open CAPA",

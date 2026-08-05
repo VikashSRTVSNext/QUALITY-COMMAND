@@ -98,51 +98,7 @@ const ScrewIcon = ({
   </svg>
 );
 
-const CustomDocumentWarningIcon = ({
-  size = 24,
-  className = "",
-}: {
-  size?: number;
-  className?: string;
-}) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-  >
-    {/* Document outline with folded corner */}
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10" />
-    <polyline points="14 2 14 8 20 8" />
-    <path d="M20 8v6" />
-    {/* Horizontal text lines */}
-    <line x1="7" y1="12" x2="17" y2="12" />
-    <line x1="7" y1="16" x2="12" y2="16" />
-    {/* circular exclamation mark on the bottom right */}
-    <circle
-      cx="17.5"
-      cy="17.5"
-      r="4.5"
-      fill="#070e17"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    />
-    <line
-      x1="17.5"
-      y1="15.5"
-      x2="17.5"
-      y2="18"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    />
-    <circle cx="17.5" cy="19.5" r="0.5" fill="currentColor" />
-  </svg>
-);
+
 
 const CustomSymmetricalLeafIcon = ({
   size = 16,
@@ -208,6 +164,8 @@ const Sparkline = ({
   type,
   status,
   color,
+  target,
+  targetDirection,
 }: {
   // Nulls are hours the line has no value for — an hour in which nothing ran, or
   // one the day has not reached yet. They keep their slot on the x-axis so the
@@ -217,6 +175,8 @@ const Sparkline = ({
   type: string;
   status: string;
   color: string;
+  target?: number | null;
+  targetDirection?: string | null;
 }) => {
   const width = 100;
   const height = 24;
@@ -228,12 +188,36 @@ const Sparkline = ({
   // a flat line that implies a measurement.
   if (values.length < 2) return null;
 
-  const minVal = Math.min(...values);
-  const maxVal = Math.max(...values);
-  const range = maxVal - minVal || 1;
+  // Determine direction: higher-is-better or lower-is-better
+  let direction = targetDirection;
+  if (!direction) {
+    if (type === "failure" || type === "dpmo") {
+      direction = "lower";
+    } else if (type === "yield") {
+      direction = "higher";
+    }
+  }
+
+  // Stock market scaling: top line is target, bottom-to-top layout
+  let minVal = Math.min(...values);
+  let maxVal = Math.max(...values);
+
+  if (target !== null && target !== undefined) {
+    if (direction === "higher") {
+      // For higher-is-better (e.g. Yield), target is the upper limit
+      maxVal = Math.max(target, maxVal);
+    } else if (direction === "lower") {
+      // For lower-is-better (e.g. Failure rate), target is the lower limit
+      minVal = Math.min(target, minVal);
+    } else {
+      minVal = Math.min(target, minVal);
+      maxVal = Math.max(target, maxVal);
+    }
+  }
 
   const paddingY = 3;
   const chartHeight = height - paddingY * 2;
+  const range = maxVal - minVal || 1;
   // x is indexed against the FULL array, not the non-null subset, so a gap leaves
   // a gap rather than compressing the remaining points together.
   const denom = points.length > 1 ? points.length - 1 : 1;
@@ -264,6 +248,11 @@ const Sparkline = ({
     glowColor = "#ef4444";
   }
 
+  const targetY =
+    target !== null && target !== undefined
+      ? paddingY + chartHeight - ((target - minVal) / range) * chartHeight
+      : null;
+
   return (
     <svg
       width="100%"
@@ -272,17 +261,32 @@ const Sparkline = ({
       className="overflow-visible"
       style={{ pointerEvents: "none" }}
     >
-      {/* Bottom dashed baseline */}
-      <line
-        x1="0"
-        y1={height - paddingY}
-        x2={width}
-        y2={height - paddingY}
-        stroke="#ffffff"
-        strokeWidth="0.8"
-        strokeDasharray="2 2"
-        opacity="0.55"
-      />
+      {/* Target dashed line */}
+      {targetY !== null && Number.isFinite(targetY) ? (
+        <line
+          x1="0"
+          y1={targetY}
+          x2={width}
+          y2={targetY}
+          stroke="#ffffff"
+          strokeWidth="0.8"
+          strokeDasharray="2 2"
+          opacity="0.35"
+        />
+      ) : (
+        /* Fallback top baseline if no target exists */
+        <line
+          x1="0"
+          y1={paddingY}
+          x2={width}
+          y2={paddingY}
+          stroke="#ffffff"
+          strokeWidth="0.8"
+          strokeDasharray="2 2"
+          opacity="0.2"
+        />
+      )}
+
       {/* Main line */}
       <path
         d={path}
@@ -316,9 +320,15 @@ const getProcessTrendData = (trend: any, activeShift: string) => {
     ? buckets.filter((b) => (b.shift || "").toUpperCase() === shift)
     : buckets;
 
-  const points: (number | null)[] = selected.map((b) =>
-    isNum(b?.value) ? b.value : null,
-  );
+  const metricKey = trend?.metric || "value";
+  const points: (number | null)[] = selected.map((b) => {
+    if (!b) return null;
+    if (isNum(b[metricKey])) return b[metricKey];
+    if (isNum(b.value)) return b.value;
+    if (isNum(b.yield_pct)) return b.yield_pct;
+    if (isNum(b.failure_pct)) return b.failure_pct;
+    return null;
+  });
 
   // Direction over the plotted window: first real value to last real value.
   const real = points.filter((v): v is number => v !== null);
@@ -709,7 +719,10 @@ const SemiCircleGauge = ({
 // here whose label differs from its mart step needs an entry.
 const API_KEY_BY_TILE: Record<string, string> = {
   "SMT DEFECTS @ MFT": "SMT_DEFECTS",
-  "BURN-IN": "THERMAL_TEST",
+  "BURN-IN": "BURN_IN",
+  "BURN-IN - S": "BURN_IN",
+  "AXI - S": "AXI",
+  "LBTS - S": "LBTS",
   OTA: "OTA_TEST",
 };
 
@@ -733,7 +746,7 @@ const processPerformanceData = [
     color: "#1e293b",
   },
   {
-    name: "AXI",
+    name: "AXI - S",
     icon: Scan,
     section: "SMT",
     type: "yield",
@@ -747,15 +760,6 @@ const processPerformanceData = [
     section: "SMT",
     type: "failure",
     data: { failure: "..." },
-    status: "Healthy",
-    color: "#10b981",
-  },
-  {
-    name: "BURN-IN",
-    icon: Thermometer,
-    section: "RFM",
-    type: "yield",
-    data: { done: "6", ok: "6", yield: "100.00%" },
     status: "Healthy",
     color: "#10b981",
   },
@@ -778,15 +782,6 @@ const processPerformanceData = [
     color: "#ef4444",
   },
   {
-    name: "LBTS",
-    icon: Zap,
-    section: "RFM",
-    type: "yield",
-    data: { done: "610", ok: "602", yield: "98.69%" },
-    status: "Healthy",
-    color: "#10b981",
-  },
-  {
     name: "OTA",
     icon: Cpu,
     section: "RFM",
@@ -801,6 +796,24 @@ const processPerformanceData = [
     section: "RFM",
     type: "yield",
     data: { done: "520", ok: "512", yield: "98.46%" },
+    status: "Healthy",
+    color: "#10b981",
+  },
+  {
+    name: "BURN-IN - S",
+    icon: Thermometer,
+    section: "RFM",
+    type: "yield",
+    data: { done: "6", ok: "6", yield: "100.00%" },
+    status: "Healthy",
+    color: "#10b981",
+  },
+  {
+    name: "LBTS - S",
+    icon: Zap,
+    section: "RFM",
+    type: "yield",
+    data: { done: "610", ok: "602", yield: "98.69%" },
     status: "Healthy",
     color: "#10b981",
   },
@@ -888,20 +901,21 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [isTwinModalOpen, setIsTwinModalOpen] = useState(false);
   const [kpiCards, setKpiCards] = useState(
     qualityData.kpiCards.map((card) => {
-      const isPercent = [1, 2, 3, 4, 5, 7].includes(card.id);
-      const delta = card.delta_vs_yesterday ?? 0;
-      const deltaSign = delta >= 0 ? "▲" : "▼";
+      const isPercent = [1, 2, 3, 4, 5, 7, 9].includes(card.id);
+      const delta = 0;
+      const deltaSign = "▲";
       return {
         ...card,
         title: card.label,
-        value: isPercent ? `${card.value.toFixed(1)}%` : `${card.value}`,
+        value: isPercent ? "0.0%" : "0",
+        projectedValue: (card as any).projected !== undefined ? "0.0%" : undefined,
         change: isPercent
           ? `${deltaSign} ${Math.abs(delta).toFixed(1)}% vs Yesterday`
           : `${deltaSign} ${Math.abs(delta)} vs yesterday`,
-        points: card.trend as (number | null)[],
-        yesterdayPoints: (card as any).yesterdayTrend as
-          | (number | null)[]
-          | undefined,
+        points: (card.trend as (number | null)[]).map(() => null) as (number | null)[],
+        yesterdayPoints: (card as any).yesterdayTrend
+          ? ((card as any).yesterdayTrend as (number | null)[]).map(() => null) as (number | null)[]
+          : undefined as (number | null)[] | undefined,
       };
     }),
   );
@@ -961,7 +975,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [co2Points, setCo2Points] = useState<number[]>([]);
   const [greenEnergyPct, setGreenEnergyPct] = useState(0);
   const [co2Emission, setCo2Emission] = useState(0);
-  const [customerIncidents, setCustomerIncidents] = useState(0);
+  const [customerComplaintsCount, setCustomerComplaintsCount] = useState(0);
+  const [customerComplaintsPoints, setCustomerComplaintsPoints] = useState<number[]>([]);
+  const [complaintsXTicks, setComplaintsXTicks] = useState<string[]>([]);
   const [customerEri, setCustomerEri] = useState(0);
   const [eriData, setEriData] = useState<EriData | null>(null);
   // CI card. Every figure here comes from the GimtoolExport sheet via the API —
@@ -1022,12 +1038,21 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             fpy: row.fpy,
             spy: row.spy,
             target: row.target_yield,
+            // The mart emits healthy | warning | critical | no_target. Both
+            // 'warning' and 'no_target' used to fall through to "Critical": the
+            // first made every product within 5 points of target show red, the
+            // second made a product with no target filed look like a yield
+            // breach. Neither is a breach.
             status:
               row.status === "healthy"
                 ? "Healthy"
-                : row.status === "risk" || row.status === "at_risk"
+                : row.status === "warning" ||
+                    row.status === "risk" ||
+                    row.status === "at_risk"
                   ? "At Risk"
-                  : "Critical",
+                  : row.status === "no_target"
+                    ? "No Target"
+                    : "Critical",
             rec: row.ai_recommendation,
             shift: row.shift,
             sub_module: row.sub_module,
@@ -1095,10 +1120,21 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to fetch ERI data");
         const data = await res.json();
-        if (data && data.eri) {
-          setEriData(data.eri);
-          if (data.eri.eri_pct !== undefined && data.eri.eri_pct !== null) {
-            setCustomerEri(data.eri.eri_pct);
+        if (data) {
+          if (data.eri) {
+            setEriData(data.eri);
+            if (data.eri.eri_pct !== undefined && data.eri.eri_pct !== null) {
+              setCustomerEri(data.eri.eri_pct);
+            }
+          }
+          // Parse customer complaints if available from the API response
+          if (data.customer_complaints) {
+            const cc = data.customer_complaints;
+            setCustomerComplaintsCount(cc.total ?? cc.latest?.count ?? 0);
+            if (Array.isArray(cc.months)) {
+              setCustomerComplaintsPoints(cc.months.map((m: any) => m.count ?? 0));
+              setComplaintsXTicks(cc.months.map((m: any) => m.label ?? ""));
+            }
           }
         }
       } catch (err) {
@@ -1289,10 +1325,29 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         }
       }
 
-      // 9. Customer Reflection
-      if (data.customer_reflection) {
-        if (data.customer_reflection.incidents !== undefined)
-          setCustomerIncidents(data.customer_reflection.incidents.value);
+      // 9. Customer Reflection / Complaints
+      if (data.customer_complaints) {
+        const cc = data.customer_complaints;
+        setCustomerComplaintsCount(cc.total ?? cc.latest?.count ?? 0);
+        if (Array.isArray(cc.months)) {
+          setCustomerComplaintsPoints(cc.months.map((m: any) => m.count ?? 0));
+          setComplaintsXTicks(cc.months.map((m: any) => m.label ?? ""));
+        }
+      } else if (data.customer_reflection) {
+        if (data.customer_reflection.incidents !== undefined) {
+          setCustomerComplaintsCount(data.customer_reflection.incidents.value);
+          if (Array.isArray(data.customer_reflection.incidents.trend)) {
+            setCustomerComplaintsPoints(data.customer_reflection.incidents.trend);
+          } else {
+            setCustomerComplaintsPoints((prev) => {
+              const val = data.customer_reflection.incidents.value;
+              if (prev.length === 0) return [val, val, val];
+              const next = [...prev];
+              next[next.length - 1] = val;
+              return next;
+            });
+          }
+        }
         if (data.customer_reflection.eri_pct !== undefined)
           setCustomerEri(data.customer_reflection.eri_pct.value);
       }
@@ -1372,6 +1427,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           3: "fpy_module",
           4: "spy_module",
           5: "customer_audit",
+          9: "hftpy",
         };
         const sseKey = keyMap[card.id];
         if (!sseKey) return card;
@@ -1936,6 +1992,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         return <RotateCcw {...props} />;
       case 8:
         return <Brain {...props} />;
+      case 9: // HFTPY
+        return <Target {...props} />;
       default:
         return null;
     }
@@ -1955,6 +2013,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   };
   const incidentYTicks = getYTicks(accidentPoints, 4);
   const nearMissYTicks = getYTicks(nearMissPoints, 5);
+  const customerComplaintsYTicks = getYTicks(customerComplaintsPoints, 4);
 
   return (
     <div className="w-full min-h-screen bg-[#02070e] text-[#f8fafc] flex flex-col p-4 box-border gap-4 font-sans select-none">
@@ -2073,8 +2132,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       </header>
 
       {/* Row 1: Top KPI Cards */}
-      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        {kpiCards.slice(0, 5).map((card) => {
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {kpiCards.slice(0, 6).map((card) => {
           const delta = card.delta_vs_yesterday ?? 0;
           const accent = card.color ?? "#a3e635";
           const trendColor =
@@ -2092,12 +2151,32 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 </span>
               </div>
               <div className="flex flex-col mt-0.5 z-10 mb-3">
-                <span
-                  className="text-[26px] font-black font-mono leading-none"
-                  style={{ color: accent, textShadow: `0 0 8px ${accent}40` }}
-                >
-                  {card.value}
-                </span>
+                {card.id === 9 ? (
+                  <div className="flex items-baseline gap-1.5 justify-between">
+                    <span
+                      className="text-[23px] font-black font-mono leading-none"
+                      style={{ color: accent, textShadow: `0 0 8px ${accent}40` }}
+                    >
+                      {card.value}
+                    </span>
+                    <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
+                      Cur
+                    </span>
+                    <span className="text-[#3fd3c6] text-[15px] font-black font-mono ml-auto leading-none" style={{ textShadow: `0 0 6px rgba(63,211,198,0.3)` }}>
+                      {card.projectedValue || "94.5%"}
+                    </span>
+                    <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
+                      Proj
+                    </span>
+                  </div>
+                ) : (
+                  <span
+                    className="text-[26px] font-black font-mono leading-none"
+                    style={{ color: accent, textShadow: `0 0 8px ${accent}40` }}
+                  >
+                    {card.value}
+                  </span>
+                )}
                 <span
                   className="text-[11.5px] font-bold mt-0.5"
                   style={{ color: trendColor }}
@@ -2106,7 +2185,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 </span>
               </div>
               <div className="absolute bottom-[4px] left-0 right-0 h-[16px] pointer-events-none">
-                {renderFullSparkline(
+                {card.id !== 9 && renderFullSparkline(
                   card.points,
                   card.yesterdayPoints,
                   trendColor,
@@ -2292,6 +2371,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                           type={item.type}
                           status={item.status}
                           color={item.color}
+                          target={item.target}
+                          targetDirection={item.targetDirection}
                         />
                       </div>
                     </div>
@@ -2437,9 +2518,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     <td className="py-[4px] text-center font-bold">
                       <span
                         className={
-                          row.fpy >= row.target
-                            ? "text-[#10b981]"
-                            : "text-[#eab308]"
+                          // No target filed: neutral. Colouring it against a
+                          // null target read as "below target" for every product
+                          // whose target had not loaded.
+                          !isNum(row.target)
+                            ? "text-[#8fa0b5]"
+                            : row.fpy >= row.target
+                              ? "text-[#10b981]"
+                              : "text-[#eab308]"
                         }
                       >
                         {row.fpy}%
@@ -2450,13 +2536,22 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                           <polyline
                             fill="none"
                             stroke={
-                              row.fpy >= row.target ? "#10b981" : "#eab308"
+                              !isNum(row.target)
+                                ? "#8fa0b5"
+                                : row.fpy >= row.target
+                                  ? "#10b981"
+                                  : "#eab308"
                             }
                             strokeWidth="1.5"
                             points={
-                              row.fpy >= row.target
-                                ? "0,10 5,5 10,8 15,2 20,4"
-                                : "0,2 5,8 10,4 15,10 20,6"
+                              // Flat when there is no target to compare against,
+                              // rather than the falling shape a null comparison
+                              // would otherwise select.
+                              !isNum(row.target)
+                                ? "0,6 5,6 10,6 15,6 20,6"
+                                : row.fpy >= row.target
+                                  ? "0,10 5,5 10,8 15,2 20,4"
+                                  : "0,2 5,8 10,4 15,10 20,6"
                             }
                           />
                         </svg>
@@ -2466,7 +2561,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       {isNum(row.spy) ? `${row.spy.toFixed(1)}%` : "—"}
                     </td>
                     <td className="py-[4px] text-center text-white">
-                      {row.target}%
+                      {isNum(row.target) ? `${row.target}%` : "—"}
                     </td>
                     <td className="py-[4px] text-center">
                       <span
@@ -2475,7 +2570,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                             ? "bg-[#10b981]/10 text-[#10b981]"
                             : row.status === "At Risk"
                               ? "bg-[#eab308]/10 text-[#eab308]"
-                              : "bg-[#ef4444]/10 text-[#ef4444]"
+                              : row.status === "No Target"
+                                ? "bg-[#8fa0b5]/10 text-[#8fa0b5]"
+                                : "bg-[#ef4444]/10 text-[#ef4444]"
                         }`}
                       >
                         {row.status}
@@ -2831,7 +2928,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
 
         {/* Card 3: Customer Reflection */}
-        <div className="bg-[#070e17] border border-[#142337] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
+        <div className="bg-[#070e17] border border-[#142337] rounded-xl pt-3 px-3 pb-[17px] flex flex-col h-[195px] 2xl:h-[172px] justify-between">
           <div className="flex items-center gap-1.5 border-b border-[#142337]/50 pb-1.5 flex-shrink-0">
             <Target size={15} className="text-[#a855f7]" />
             <span className="text-[#8fa0b5] text-[12px] font-black uppercase tracking-wider">
@@ -2842,21 +2939,23 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             <div className="flex flex-col h-full justify-between">
               <div className="flex flex-col">
                 <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
-                  INCIDENTS
+                  COMPLAINTS
                 </span>
                 <div className="flex items-baseline gap-1.5 mt-1">
                   <span className="text-[#a855f7] text-[24px] font-black leading-none font-mono">
-                    {customerIncidents}
+                    {customerComplaintsCount}
                   </span>
                   <span className="text-[#526a8a] text-[10px] font-bold font-sans">
                     This Month
                   </span>
                 </div>
               </div>
-              <div className="flex-1 flex items-center justify-center">
-                <CustomDocumentWarningIcon
-                  size={36}
-                  className="text-[#a855f7] opacity-90"
+              <div className="flex-1 flex flex-col justify-end pb-1.5">
+                <SafetyChart
+                  points={customerComplaintsPoints}
+                  yTicks={customerComplaintsYTicks}
+                  xTicks={complaintsXTicks.length > 0 ? complaintsXTicks : safetyXTicks}
+                  color="#a855f7"
                 />
               </div>
             </div>
@@ -2916,7 +3015,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 />
               </div>
               {eriData && (
-                <div className="flex justify-between text-[9px] text-[#526a8a] font-bold mt-0.5">
+                <div className="flex justify-between text-[9px] text-[#526a8a] font-bold mt-0.5 pb-1.5">
                   <span>Returns</span>
                   <span className="text-white font-mono">
                     {eriData.returns} / {eriData.deliveries}
