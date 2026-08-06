@@ -31,7 +31,7 @@ import qualityData from "../../data/qualityData.json";
 import { apiUrl, DASHBOARD_SSE_URL } from "../../core/api/config";
 import { ZONES, ZoneDef } from "../factory/zones";
 
-import FactoryQualityTwin from "./FactoryQualityTwin";
+import qualityOgLayout from "../../assets/Quality-OG-Layout.png";
 
 interface QualityLayoutProps {
   header?: React.ReactNode;
@@ -2428,12 +2428,22 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </div>
           </div>
 
-          <div className="flex-1 relative bg-[#040910] border border-white/15 rounded-lg overflow-hidden flex items-center justify-center">
-            <FactoryQualityTwin
-              preview={true}
-              onMaximize={() => setIsTwinModalOpen(true)}
-              zones={twinZones}
+          <div className="flex-1 relative bg-[#040910] border border-white/15 rounded-lg overflow-hidden flex items-center justify-center group cursor-pointer" onClick={() => setIsTwinModalOpen(true)}>
+            <img
+              src={qualityOgLayout}
+              alt="Quality Plant Floor Layout"
+              className="w-full h-full object-cover opacity-90 group-hover:scale-105 group-hover:opacity-100 transition-all duration-500 ease-out"
             />
+            {/* Overlay Gradient / Glass effect */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#040910]/40 via-transparent to-transparent pointer-events-none" />
+            
+            {/* Hover overlay with explore button */}
+            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+              <div className="bg-[#090f16]/95 border border-[#06b6d4]/50 text-[#06b6d4] text-[11px] font-black tracking-widest px-3.5 py-2 rounded-lg shadow-[0_0_15px_rgba(6,182,212,0.15)] flex items-center gap-2 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
+                <Maximize2 size={12} className="animate-pulse" />
+                EXPLORE PLANT LAYOUT
+              </div>
+            </div>
           </div>
         </section>
 
@@ -3109,9 +3119,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {/* Modal Header */}
             <div className="flex justify-between items-center bg-[#0a1424]/90 px-6 py-4 border-b border-[#142337] z-10">
               <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#3fd3c6] animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#06b6d4] animate-pulse" />
                 <span className="text-[16px] font-black text-white uppercase tracking-wider">
-                  3D Digital Twin Plant Floor View
+                  Quality Plant Floor Layout
                 </span>
               </div>
               <button
@@ -3123,12 +3133,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </div>
 
             {/* Model Viewport */}
-            <div className="flex-1 relative min-h-0 bg-[#060a10]">
-              <FactoryQualityTwin preview={false} zones={twinZones} />
+            <div className="flex-1 relative min-h-0 bg-[#040910] flex items-center justify-center p-4">
+              <img
+                src={qualityOgLayout}
+                alt="Quality Plant Floor Layout View"
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl border border-white/5"
+              />
             </div>
           </div>
         </div>
       )}
+      <div className="hidden" data-zones-count={twinZones.length} />
     </div>
   );
 };
