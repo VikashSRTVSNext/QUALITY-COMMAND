@@ -2135,17 +2135,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {kpiCards.slice(0, 6).map((card) => {
           const delta = card.delta_vs_yesterday ?? 0;
-          const accent = card.color ?? "#a3e635";
           const trendColor =
             delta > 0 ? "#10b981" : delta < 0 ? "#ef4444" : "#94a3b8";
           return (
             <div
               key={card.id}
               className="bg-[#070e17] border border-[#142337] rounded-xl p-2.5 flex flex-col justify-between h-[114px] relative overflow-hidden transition-all duration-300 hover:-translate-y-1"
-              style={{ boxShadow: `0 4px 12px ${accent}15` }}
+              style={{ boxShadow: `0 4px 12px ${trendColor}15` }}
             >
               <div className="flex items-center gap-1.5 z-10">
-                {getKpiIcon(card.id, accent)}
+                {getKpiIcon(card.id, trendColor)}
                 <span className="text-white text-[12px] uppercase font-bold tracking-wider leading-tight">
                   {card.title}
                 </span>
@@ -2155,7 +2154,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   <div className="flex items-baseline gap-1.5 justify-between">
                     <span
                       className="text-[23px] font-black font-mono leading-none"
-                      style={{ color: accent, textShadow: `0 0 8px ${accent}40` }}
+                      style={{ color: trendColor, textShadow: `0 0 8px ${trendColor}40` }}
                     >
                       {card.value}
                     </span>
@@ -2172,7 +2171,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 ) : (
                   <span
                     className="text-[26px] font-black font-mono leading-none"
-                    style={{ color: accent, textShadow: `0 0 8px ${accent}40` }}
+                    style={{ color: trendColor, textShadow: `0 0 8px ${trendColor}40` }}
                   >
                     {card.value}
                   </span>
@@ -2224,17 +2223,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           {/* RFM Section Bracket */}
           <div className="col-span-8 flex items-center">
             {/* Downward tick */}
-            <div className="h-[7px] w-[1.5px] bg-[#10b981] self-end" />
+            <div className="h-[7px] w-[1.5px] bg-[#0091ff] self-end" />
             <div className="flex-1 flex items-center">
-              <div className="flex-1 h-[1.5px] bg-[#10b981]" />
-              <span className="px-2.5 text-[#10b981] text-[12.5px] font-black tracking-widest">
+              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
+              <span className="px-2.5 text-[#0091ff] text-[12.5px] font-black tracking-widest">
                 RFM
               </span>
-              <div className="flex-1 h-[1.5px] bg-[#10b981]" />
+              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
               {/* Arrowhead */}
-              <div className="w-1.5 h-1.5 border-t-[1.5px] border-r-[1.5px] border-[#10b981] rotate-45 -mr-[3px] -mt-[0.5px]" />
+              <div className="w-1.5 h-1.5 border-t-[1.5px] border-r-[1.5px] border-[#0091ff] rotate-45 -mr-[3px] -mt-[0.5px]" />
               {/* Downward tick */}
-              <div className="h-[7px] w-[1.5px] bg-[#10b981] self-end" />
+              <div className="h-[7px] w-[1.5px] bg-[#0091ff] self-end" />
             </div>
           </div>
         </div>
