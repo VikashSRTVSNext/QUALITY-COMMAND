@@ -3,6 +3,7 @@
     {
       "id": 1,
       "key": "fpy_unit",
+      "target": 92,
       "label": "FPY - UNIT (%)",
       "value": 94.09,
       "delta_vs_yesterday": -0.33,
@@ -14,6 +15,7 @@
     {
       "id": 2,
       "key": "spy_unit",
+      "target": 98,
       "label": "SPY - UNIT (%)",
       "value": 97.27,
       "delta_vs_yesterday": -1.76,
@@ -25,6 +27,7 @@
     {
       "id": 3,
       "key": "fpy_module",
+      "target": 90,
       "label": "FPY - MODULE (%)",
       "value": 92.43,
       "delta_vs_yesterday": 2.17,
@@ -36,6 +39,7 @@
     {
       "id": 4,
       "key": "spy_module",
+      "target": 96,
       "label": "SPY - MODULE (%)",
       "value": 96.97,
       "delta_vs_yesterday": 1.13,
@@ -47,18 +51,20 @@
     {
       "id": 5,
       "key": "customer_audit",
+      "target": 100,
       "label": "CUSTOMER QUALITY AUDIT (%)",
       "value": 0.0,
       "delta_vs_yesterday": 0.0,
       "trend": [0, 0, 0, 0, 0, 0],
       "yesterdayTrend": [0, 0, 0, 0, 0, 0],
       "status": "success",
-      "color": "#8b5cf6"
+      "color": "#10b981"
     },
     {
       "id": 9,
       "key": "hftpy",
-      "label": "HFTPY (%)",
+      "target": 71,
+      "label": "UNIT-HFTPY (%)",
       "value": 92.4,
       "projected": 94.5,
       "delta_vs_yesterday": 0.3,

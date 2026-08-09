@@ -29,9 +29,8 @@ import {
 import { useNavigate } from "react-router-dom";
 import qualityData from "../../data/qualityData.json";
 import { apiUrl, DASHBOARD_SSE_URL } from "../../core/api/config";
-import { ZONES, ZoneDef } from "../factory/zones";
-
-import qualityOgLayout from "../../assets/Quality-OG-Layout.png";
+import { ZONES, ZoneDef, STATUS_CSS, STATUS_LABEL } from "../factory/zones";
+import FactoryLayoutOverlay from "../factory/FactoryLayoutOverlay";
 
 interface QualityLayoutProps {
   header?: React.ReactNode;
@@ -181,6 +180,10 @@ const Sparkline = ({
   const width = 100;
   const height = 24;
 
+  // Declared before the early return below: hooks cannot sit after a conditional
+  // exit, and this component bails out when there is nothing to plot.
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
   const values = points.filter(
     (v): v is number => typeof v === "number" && Number.isFinite(v),
   );
@@ -198,21 +201,40 @@ const Sparkline = ({
     }
   }
 
-  // Stock market scaling: top line is target, bottom-to-top layout
-  let minVal = Math.min(...values);
-  let maxVal = Math.max(...values);
+  // Y-scale. With a target, the axis is a FIXED BAND CENTRED ON THE TARGET, not a
+  // fit to the data — so the distance from the dashed target line is proportional
+  // to the size of the miss, and comparable between cards.
+  //
+  // Auto-fitting to min/max was the bug: it stretched whatever spread existed to
+  // the full height, so IP missing its target by 0.61 points looked exactly as
+  // bad as LBTS missing by 7.7. A near-target value now sits near the line, which
+  // is what the chart is supposed to say.
+  //
+  // The band is a tenth of the target, so a 1-point miss on a target of 100 draws
+  // a tenth of the way down — visibly below the line but clearly close to it. It
+  // widens to hold any outlier (plus 15% headroom) so a bad hour is never clipped
+  // flat against the edge, and it never collapses to zero, which would make a
+  // perfectly on-target series divide by nothing.
+  let minVal: number;
+  let maxVal: number;
 
   if (target !== null && target !== undefined) {
-    if (direction === "higher") {
-      // For higher-is-better (e.g. Yield), target is the upper limit
-      maxVal = Math.max(target, maxVal);
-    } else if (direction === "lower") {
-      // For lower-is-better (e.g. Failure rate), target is the lower limit
-      minVal = Math.min(target, minVal);
-    } else {
-      minVal = Math.min(target, minVal);
-      maxVal = Math.max(target, maxVal);
-    }
+    const worstMiss = Math.max(...values.map((v) => Math.abs(v - target)));
+    const band = Math.max(
+      Math.abs(target) * 0.1,
+      worstMiss * 1.15,
+      Math.abs(target) * 0.01 || 0.01,
+    );
+    minVal = target - band;
+    maxVal = target + band;
+  } else {
+    // No target to anchor to: fall back to fitting the data, with a floor so a
+    // flat series still draws a line rather than dividing by a zero range.
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+    const pad = Math.max((hi - lo) * 0.15, Math.abs(hi) * 0.01, 0.01);
+    minVal = lo - pad;
+    maxVal = hi + pad;
   }
 
   const paddingY = 3;
@@ -237,14 +259,14 @@ const Sparkline = ({
     penDown = true;
   });
 
+  // Binary against the target: met or missed. No amber — a card either holds its
+  // target or it does not, and a third "nearly" state only made a miss look
+  // survivable. "At Risk" should no longer reach here (the mapping below is now
+  // binary at source) but is treated as a miss if it ever does.
   let glowColor = color;
-  if (type === "dpmo") {
-    glowColor = "#06b6d4";
-  } else if (status === "Healthy") {
+  if (status === "Healthy") {
     glowColor = "#10b981";
-  } else if (status === "At Risk") {
-    glowColor = "#eab308";
-  } else if (status === "Critical") {
+  } else if (status === "Critical" || status === "At Risk") {
     glowColor = "#ef4444";
   }
 
@@ -253,50 +275,134 @@ const Sparkline = ({
       ? paddingY + chartHeight - ((target - minVal) / range) * chartHeight
       : null;
 
-  return (
-    <svg
-      width="100%"
-      height="100%"
-      viewBox={`0 0 ${width} ${height}`}
-      className="overflow-visible"
-      style={{ pointerEvents: "none" }}
-    >
-      {/* Target dashed line */}
-      {targetY !== null && Number.isFinite(targetY) ? (
-        <line
-          x1="0"
-          y1={targetY}
-          x2={width}
-          y2={targetY}
-          stroke="#ffffff"
-          strokeWidth="0.8"
-          strokeDasharray="2 2"
-          opacity="0.35"
-        />
-      ) : (
-        /* Fallback top baseline if no target exists */
-        <line
-          x1="0"
-          y1={paddingY}
-          x2={width}
-          y2={paddingY}
-          stroke="#ffffff"
-          strokeWidth="0.8"
-          strokeDasharray="2 2"
-          opacity="0.2"
-        />
-      )}
+  const hovered =
+    hoverIdx !== null && typeof points[hoverIdx] === "number"
+      ? (points[hoverIdx] as number)
+      : null;
 
-      {/* Main line */}
-      <path
-        d={path}
-        fill="none"
-        stroke={glowColor}
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+  // Nearest bucket under the cursor. The SVG is stretched to the card's width, so
+  // the ratio across the element maps onto the point index rather than pixels.
+  const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    if (box.width <= 0) return;
+    const ratio = (e.clientX - box.left) / box.width;
+    const idx = Math.round(ratio * denom);
+    setHoverIdx(Math.min(Math.max(idx, 0), points.length - 1));
+  };
+
+  const hoverX = hoverIdx !== null ? (hoverIdx / denom) * width : 0;
+  const hoverY =
+    hovered !== null
+      ? paddingY + chartHeight - ((hovered - minVal) / range) * chartHeight
+      : 0;
+
+  // Deviation from target, in points — what the tooltip reports. Signed against
+  // the direction of goodness, so a positive number always reads as "better than
+  // target" whether the card wants a high yield or a low defect rate.
+  const deviation =
+    hovered !== null && target !== null && target !== undefined
+      ? direction === "lower"
+        ? target - hovered
+        : hovered - target
+      : null;
+
+  return (
+    <div className="relative w-full h-full">
+      <svg
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${width} ${height}`}
+        className="overflow-visible"
+        onMouseMove={handleMove}
+        onMouseLeave={() => setHoverIdx(null)}
+      >
+        {/* Target dashed line, full width. The target VALUE is not labelled here —
+            it sits at the card's bottom-right instead, which leaves the plot area
+            clean and keeps the dashes running the whole span. */}
+        {targetY !== null && Number.isFinite(targetY) ? (
+          <line
+            x1="0"
+            y1={targetY}
+            x2={width}
+            y2={targetY}
+            stroke="#ffffff"
+            strokeWidth="0.8"
+            strokeDasharray="2 2"
+            opacity="0.35"
+          />
+        ) : (
+          /* Fallback top baseline if no target exists */
+          <line
+            x1="0"
+            y1={paddingY}
+            x2={width}
+            y2={paddingY}
+            stroke="#ffffff"
+            strokeWidth="0.8"
+            strokeDasharray="2 2"
+            opacity="0.2"
+          />
+        )}
+
+        {/* Main line */}
+        <path
+          d={path}
+          fill="none"
+          stroke={glowColor}
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {/* Hovered point */}
+        {hovered !== null && (
+          <>
+            <line
+              x1={hoverX}
+              y1={paddingY}
+              x2={hoverX}
+              y2={height - paddingY}
+              stroke="#ffffff"
+              strokeWidth="0.5"
+              opacity="0.35"
+            />
+            <circle cx={hoverX} cy={hoverY} r="1.8" fill={glowColor} />
+          </>
+        )}
+      </svg>
+
+      {/* Hovered-hour readout. Both numbers are labelled on purpose: this is ONE
+          HOUR, not the figure on the card above it, and two bare numbers next to
+          a different headline read as a contradiction. A low-volume hour (4 units,
+          1 fail = 75%) barely moves a shift that tested 27 — the card recomputes
+          from summed counts rather than averaging the hourly percentages. */}
+      {hovered !== null && (
+        <div
+          className="absolute -top-7 z-20 px-1.5 py-0.5 rounded bg-[#0a1424] border border-[#1d324b] whitespace-nowrap pointer-events-none"
+          style={{
+            left: `${Math.min(Math.max(hoverX, 16), width - 16)}%`,
+            transform: "translateX(-50%)",
+          }}
+        >
+          <span className="text-[#8fa0b5] text-[8.5px] font-bold uppercase mr-1">
+            hr
+          </span>
+          <span className="text-white text-[9.5px] font-mono font-bold">
+            {hovered.toFixed(2)}
+            {type === "dpmo" ? "" : "%"}
+          </span>
+          {deviation !== null && (
+            <span
+              className="text-[9.5px] font-mono font-bold ml-1"
+              style={{ color: deviation >= 0 ? "#10b981" : "#ef4444" }}
+            >
+              {deviation >= 0 ? "+" : ""}
+              {deviation.toFixed(2)}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -375,6 +481,40 @@ const SafetyChart = ({
   const range = maxVal - minVal || 1;
 
   const hasPoints = points && points.length >= 2;
+
+  // Which x-axis labels to draw. Decided from real positions and real label
+  // widths, walking right-to-left, rather than from a modulo step.
+  //
+  // A step-based rule kept the last label unconditionally and could land it
+  // immediately beside a stepped one — which is how "Jul'26" and "Aug'26" ended up
+  // printed on top of each other. Walking backwards from the newest label instead
+  // means the current period is always shown and every earlier label is only kept
+  // if it clears the one to its right.
+  const visibleTicks = (() => {
+    const keep = new Set<number>();
+    if (xTicks.length === 0) return keep;
+    if (xTicks.length === 1) return new Set([0]);
+
+    // Widest label, in viewBox units, plus a gap so neighbours never touch.
+    // 4.3 per character is measured against this axis's bold 7.5px text — a
+    // smaller estimate let eight "Jan'26"-style labels claim to fit in a span
+    // that only holds four, which is how Jul'26 and Aug'26 came out overlapping.
+    const charWidth = 4.3;
+    const minGap =
+      Math.max(...xTicks.map((t) => String(t).length)) * charWidth + 3;
+    const xOf = (i: number) =>
+      paddingLeft + (i / (xTicks.length - 1)) * chartWidth;
+
+    let lastKept = xTicks.length - 1;
+    keep.add(lastKept);
+    for (let i = xTicks.length - 2; i >= 0; i--) {
+      if (xOf(lastKept) - xOf(i) >= minGap) {
+        keep.add(i);
+        lastKept = i;
+      }
+    }
+    return keep;
+  })();
 
   const svgPoints = hasPoints
     ? points
@@ -573,9 +713,8 @@ const SafetyChart = ({
         {xTicks.map((tick, i) => {
           const isFirst = i === 0;
           const isLast = i === xTicks.length - 1;
-          const isMiddle = i === Math.floor(xTicks.length / 2);
-          const shouldRender = isFirst || isLast || isMiddle;
-          if (!shouldRender) return null;
+
+          if (!visibleTicks.has(i)) return null;
 
           const x = paddingLeft + (i / (xTicks.length - 1)) * chartWidth;
           const anchor = isFirst ? "start" : isLast ? "end" : "middle";
@@ -963,6 +1102,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [safetyNearMiss, setSafetyNearMiss] = useState(0);
   const [accidentPoints, setAccidentPoints] = useState<number[]>([]);
   const [nearMissPoints, setNearMissPoints] = useState<number[]>([]);
+  const [yieldRecommendations, setYieldRecommendations] = useState<
+    Record<string, any>
+  >({});
   const [safetyXTicks, setSafetyXTicks] = useState<string[]>(() =>
     Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
@@ -983,7 +1125,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   // CI card. Every figure here comes from the GimtoolExport sheet via the API —
   // nothing about this card is a literal in the markup, including the targets and
   // the gauge range, which is why they are state and not JSX text.
-  const [ciMonthLabel, setCiMonthLabel] = useState("");
+  const [ciMonthLabel] = useState("");
   const [ciLeanSavings, setCiLeanSavings] = useState<CiMetricView>(EMPTY_CI_METRIC);
   const [ciKaizen, setCiKaizen] = useState<CiMetricView>(EMPTY_CI_METRIC);
   const [twinZones, setTwinZones] = useState<ZoneDef[]>(ZONES);
@@ -1015,6 +1157,31 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     setYieldPage(1);
   }, [activeYieldTab]);
 
+  // Yield-target recommendation, keyed by product name. Shown raw in the AI
+  // RECOMMENDATION column while the Azure OpenAI layer is unbuilt: the numbers
+  // are real and the prose is not, so the JSON stands in for the sentence the
+  // model will eventually produce from exactly these fields.
+  useEffect(() => {
+    const fetchYieldRecommendation = async () => {
+      try {
+        const res = await fetch(apiUrl("/yield-recommendation/current-day"));
+        if (!res.ok) throw new Error("yield recommendation unavailable");
+        const data = await res.json();
+        const byProduct: Record<string, any> = {};
+        for (const p of data.products ?? []) byProduct[p.product] = p;
+        setYieldRecommendations(byProduct);
+      } catch (err) {
+        // Advisory panel: a failure here must not disturb the yield table.
+        console.error("Error fetching yield recommendation:", err);
+        setYieldRecommendations({});
+      }
+    };
+
+    fetchYieldRecommendation();
+    const id = setInterval(fetchYieldRecommendation, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
   // Fetch product yield from REST API every 5 minutes and when shift or tab changes
   useEffect(() => {
     const fetchYieldData = async () => {
@@ -1038,21 +1205,23 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             fpy: row.fpy,
             spy: row.spy,
             target: row.target_yield,
-            // The mart emits healthy | warning | critical | no_target. Both
-            // 'warning' and 'no_target' used to fall through to "Critical": the
-            // first made every product within 5 points of target show red, the
-            // second made a product with no target filed look like a yield
-            // breach. Neither is a breach.
+            // The mart emits healthy | warning | critical | no_target, and the
+            // table shows only two verdicts: on target or not.
+            //
+            // 'warning' (the mart's "within 5 points below target") is folded into
+            // Critical — being under the agreed yield is a miss whether it is by
+            // half a point or five, and the amber middle state made a genuine
+            // shortfall read as acceptable.
+            //
+            // 'no_target' stays its own neutral state. It is not a breach: no
+            // target has been filed for that product, which is a data gap to fix
+            // in the target sheet rather than a yield problem on the line.
             status:
               row.status === "healthy"
                 ? "Healthy"
-                : row.status === "warning" ||
-                    row.status === "risk" ||
-                    row.status === "at_risk"
-                  ? "At Risk"
-                  : row.status === "no_target"
-                    ? "No Target"
-                    : "Critical",
+                : row.status === "no_target"
+                  ? "No Target"
+                  : "Critical",
             rec: row.ai_recommendation,
             shift: row.shift,
             sub_module: row.sub_module,
@@ -1130,7 +1299,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           // Parse customer complaints if available from the API response
           if (data.customer_complaints) {
             const cc = data.customer_complaints;
-            setCustomerComplaintsCount(cc.total ?? cc.latest?.count ?? 0);
+            // latest.count, NOT total: the label above this figure says "This
+            // Month". `total` is the year-to-date sum, which read as 12 complaints
+            // in August when the month had 1.
+            setCustomerComplaintsCount(cc.latest?.count ?? 0);
             if (Array.isArray(cc.months)) {
               setCustomerComplaintsPoints(cc.months.map((m: any) => m.count ?? 0));
               setComplaintsXTicks(cc.months.map((m: any) => m.label ?? ""));
@@ -1366,7 +1538,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       // starts rendering — no change needed here.
       if (data.ci) {
         const metrics = data.ci.metrics || data.ci;
-        if (data.ci.month_label) setCiMonthLabel(data.ci.month_label);
+        // if (data.ci.month_label) setCiMonthLabel(data.ci.month_label);
         if (metrics.lean_savings) {
           setCiLeanSavings(
             toCiMetric(metrics.lean_savings, metrics.lean_savings.currency === "EUR" ? "€" : ""),
@@ -1607,32 +1779,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   : actual >= target;
             }
 
-            let statusMapped = "Healthy";
-            let colorMapped = "#10b981";
-
-            if (meets !== null) {
-              if (meets) {
-                statusMapped = "Healthy";
-                colorMapped = "#10b981";
-              } else {
-                statusMapped = actual <= 10 ? "At Risk" : "Critical";
-                colorMapped =
-                  statusMapped === "At Risk" ? "#eab308" : "#ef4444";
-              }
-            } else {
-              statusMapped =
-                incoming.index <= 10
-                  ? "Healthy"
-                  : incoming.index <= 50
-                    ? "At Risk"
-                    : "Critical";
-              colorMapped =
-                statusMapped === "Healthy"
-                  ? "#10b981"
-                  : statusMapped === "At Risk"
-                    ? "#eab308"
-                    : "#ef4444";
-            }
+            // Binary, as on every other Process Performance card: DPMOI either
+            // sits at or under its target index or it does not. The old amber
+            // band (missed the target but still under 10) is what made 2.04
+            // against a target of 2 look like a warning instead of a miss.
+            const passing =
+              meets !== null ? meets : isNum(actual) && actual <= 10;
+            const statusMapped = passing ? "Healthy" : "Critical";
+            const colorMapped = passing ? "#10b981" : "#ef4444";
 
             return {
               ...item,
@@ -1678,39 +1832,19 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               }
             }
 
-            let statusMapped = "Healthy";
-            let colorMapped = "#10b981";
-
-            if (meets !== null) {
-              if (meets) {
-                statusMapped = "Healthy";
-                colorMapped = "#10b981";
-              } else {
-                const apiStatus = targetData.status;
-                if (apiStatus === "at_risk" || apiStatus === "warning") {
-                  statusMapped = "At Risk";
-                  colorMapped = "#eab308";
-                } else {
-                  statusMapped = "Critical";
-                  colorMapped = "#ef4444";
-                }
-              }
-            } else {
-              statusMapped =
-                targetData.status === "healthy"
-                  ? "Healthy"
-                  : targetData.status === "at_risk" ||
-                      targetData.status === "warning"
-                    ? "At Risk"
-                    : "Critical";
-              colorMapped =
-                targetData.status === "healthy"
-                  ? "#10b981"
-                  : targetData.status === "at_risk" ||
-                      targetData.status === "warning"
-                    ? "#eab308"
-                    : "#ef4444";
-            }
+            // Binary: the target is either held or missed. The amber "At Risk"
+            // middle state is gone — it was applied when a card missed its target
+            // but the gold thresholds happened to call it at_risk, which made a
+            // genuine miss (DPMOI 2.04 against a target of 2, AUTO OGI 96.86
+            // against 100) read as a warning rather than a failure.
+            //
+            // Cards with no agreed target (SPI, AXI, Manual OGI) have nothing to
+            // breach, so they fall back to the gold status — and that too is
+            // collapsed to pass/fail rather than carrying its own amber.
+            const passing =
+              meets !== null ? meets : targetData.status === "healthy";
+            const statusMapped = passing ? "Healthy" : "Critical";
+            const colorMapped = passing ? "#10b981" : "#ef4444";
 
             if (isNum(targetData.failure_pct)) {
               return {
@@ -1803,16 +1937,20 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   };
 
   const getTimelineNodeColor = (card: (typeof processPerformanceData)[0]) => {
-    if (card.status === "Critical") return "#ef4444";
-    if (card.status === "At Risk") return "#eab308";
-    if (card.status === "N/A" || card.status === "...") return "#0091ff";
+    // Green or red only. "At Risk" is no longer produced for these cards, but is
+    // treated as a miss rather than reintroducing amber if it ever appears.
+    if (card.status === "Critical" || card.status === "At Risk") return "#ef4444";
+    if (card.status === "N/A" || card.status === "..." ||
+        card.status === "Not Run") return "#0091ff";
     return "#10b981";
   };
 
   const getCardBorderColor = (card: (typeof processPerformanceData)[0]) => {
-    if (card.status === "Critical") return "#ef4444";
-    if (card.status === "At Risk") return "#eab308";
-    if (card.status === "N/A" || card.status === "...") return "#0091ff";
+    // Green or red only. "At Risk" is no longer produced for these cards, but is
+    // treated as a miss rather than reintroducing amber if it ever appears.
+    if (card.status === "Critical" || card.status === "At Risk") return "#ef4444";
+    if (card.status === "N/A" || card.status === "..." ||
+        card.status === "Not Run") return "#0091ff";
     return "#10b981";
   };
 
@@ -1820,6 +1958,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     points: (number | null)[],
     yesterdayPoints: (number | null)[] | undefined,
     strokeColor: string,
+    target?: number | null,
   ) => {
     const width = 160;
     const height = 16;
@@ -1831,9 +1970,33 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     );
     if (allValids.length === 0) return null;
 
-    const max = Math.max(...allValids);
-    const min = Math.min(...allValids);
+    // With a target, the axis is a FIXED BAND CENTRED ON THE TARGET rather than a
+    // fit to the data, so the gap between the line and the dashed target line is
+    // proportional to the size of the miss — and comparable between cards. Fitting
+    // to min/max stretched whatever spread existed to the full height, which made
+    // a 0.1-point miss look identical to a 5-point one.
+    //
+    // The band is a tenth of the target, widened to hold any outlier (plus 15%
+    // headroom) so a bad hour is never clipped flat against the edge.
+    let min: number;
+    let max: number;
+    if (isNum(target)) {
+      const worstMiss = Math.max(...allValids.map((v) => Math.abs(v - target)));
+      const band = Math.max(
+        Math.abs(target) * 0.1,
+        worstMiss * 1.15,
+        Math.abs(target) * 0.01 || 0.01,
+      );
+      min = target - band;
+      max = target + band;
+    } else {
+      max = Math.max(...allValids);
+      min = Math.min(...allValids);
+    }
     const range = max - min || 1;
+
+    const yFor = (p: number) =>
+      height - padding - ((p - min) / range) * (chartHeight * 0.95);
 
     const getSvgPoints = (arr: (number | null)[]) => {
       return arr
@@ -1841,13 +2004,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           if (p === null || p === undefined) return null;
           const x = (i / (arr.length - 1)) * width;
           // Scale to 95% of the sparkline height to make changes sharp and clear
-          const y =
-            height - padding - ((p - min) / range) * (chartHeight * 0.95);
-          return `${x},${y}`;
+          return `${x},${yFor(p)}`;
         })
         .filter((val) => val !== null)
         .join(" ");
     };
+
+    const targetY = isNum(target) ? yFor(target) : null;
 
     const todayPointsStr = getSvgPoints(points);
     const yesterdayPointsStr = yesterdayPoints
@@ -1866,9 +2029,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     let lastPointCoord = null;
     if (lastIdx !== -1 && lastVal !== null) {
       const x = (lastIdx / (points.length - 1)) * width;
-      const y =
-        height - padding - ((lastVal - min) / range) * (chartHeight * 0.95);
-      lastPointCoord = { x, y };
+      lastPointCoord = { x, y: yFor(lastVal) };
     }
 
     return (
@@ -1909,8 +2070,26 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           `}
         </style>
 
-        {/* Yesterday's trend (dashed, low-contrast slate) */}
-        {yesterdayPointsStr && (
+        {/* Target line — the grey dashed horizontal reference. This REPLACES the
+            old dashed yesterday-trend line, which was the same grey and was being
+            read as the target. Nothing is lost: the vs-Yesterday comparison is
+            already stated in words under the value, and in a 16px-tall chart three
+            overlaid lines were unreadable anyway. */}
+        {targetY !== null && Number.isFinite(targetY) && (
+          <line
+            x1="0"
+            y1={targetY}
+            x2={width}
+            y2={targetY}
+            stroke="#94a3b8"
+            strokeWidth="0.4"
+            strokeDasharray="3 2"
+            className="opacity-70"
+          />
+        )}
+        {/* Yesterday's trend, only when there is no target to anchor to — so a
+            targetless card still has something to compare against. */}
+        {targetY === null && yesterdayPointsStr && (
           <polyline
             fill="none"
             stroke="#475569"
@@ -2135,8 +2314,33 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {kpiCards.slice(0, 6).map((card) => {
           const delta = card.delta_vs_yesterday ?? 0;
-          const trendColor =
-            delta > 0 ? "#10b981" : delta < 0 ? "#ef4444" : "#94a3b8";
+          const target = (card as any).target as number | null | undefined;
+          // Numeric value behind the formatted string ("93.1%" -> 93.1), so the
+          // card can be judged against its target.
+          const actual = Number.parseFloat(String(card.value).replace(/[^\d.-]/g, ""));
+          const meetsTarget =
+            isNum(target) && Number.isFinite(actual) ? actual >= target : null;
+
+          // The headline colour now answers "are we on target", not "did we move
+          // since yesterday" — a card can slip a little and still be fine, which
+          // is why every card was red while four of them were above target.
+          // Cards with no agreed target keep the vs-yesterday behaviour.
+          let trendColor: string;
+          if (meetsTarget !== null) {
+            trendColor = meetsTarget ? "#10b981" : "#ef4444";
+          } else if (delta > 0) {
+            trendColor = "#10b981";
+          } else if (delta < 0) {
+            trendColor = "#ef4444";
+          } else {
+            trendColor = card.color || "#94a3b8";
+          }
+
+          // The vs-Yesterday line keeps its own direction colour: it is a
+          // statement about movement, and tinting it by target compliance would
+          // show a fall in green.
+          const deltaColor =
+            delta > 0 ? "#10b981" : delta < 0 ? "#ef4444" : "#8fa0b5";
           return (
             <div
               key={card.id}
@@ -2176,18 +2380,26 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     {card.value}
                   </span>
                 )}
-                <span
-                  className="text-[11.5px] font-bold mt-0.5"
-                  style={{ color: trendColor }}
-                >
-                  {card.change}
-                </span>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span
+                    className="text-[11.5px] font-bold"
+                    style={{ color: deltaColor }}
+                  >
+                    {card.change}
+                  </span>
+                  {isNum(target) && (
+                    <span className="text-[#526a8a] text-[9.5px] font-bold ml-auto whitespace-nowrap">
+                      tgt {target}%
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="absolute bottom-[4px] left-0 right-0 h-[16px] pointer-events-none">
                 {card.id !== 9 && renderFullSparkline(
                   card.points,
                   card.yesterdayPoints,
                   trendColor,
+                  target,
                 )}
               </div>
             </div>
@@ -2264,7 +2476,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
                   return (
                     <div
-                      className={`bg-[#040910] border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 ${
+                      className={`relative bg-[#040910] border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 ${
                         item.status === "Critical"
                           ? "animate-border-pulse-critical"
                           : ""
@@ -2291,14 +2503,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         </span>
                       </div>
                       {/* Body */}
-                      <div className="flex-1 flex flex-col justify-center items-center min-h-0">
+                      <div className="flex-1 flex flex-col justify-center items-center min-h-0 -mt-1.5 2xl:-mt-2">
                         {item.type === "yield" && (
                           <div className="flex flex-col items-center justify-center">
                             <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
                               Yield %
                             </span>
                             <span
-                              className="text-[13px] 2xl:text-[16px] font-black mt-0.5 font-mono leading-none"
+                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
                               style={{
                                 color: item.color,
                                 textShadow: `0 0 8px ${item.color}30`,
@@ -2314,7 +2526,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                               Index
                             </span>
                             <span
-                              className="text-[13px] 2xl:text-[16px] font-black mt-0.5 font-mono leading-none"
+                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
                               style={{
                                 color: item.color,
                                 textShadow: `0 0 8px ${item.color}30`,
@@ -2330,7 +2542,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                               Failure %
                             </span>
                             <span
-                              className="text-[13px] 2xl:text-[16px] font-black mt-0.5 font-mono leading-none"
+                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
                               style={{
                                 color: item.color,
                                 textShadow: `0 0 8px ${item.color}30`,
@@ -2339,14 +2551,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                               {item.data.failure}
                             </span>
                           </div>
-                        )}
-
-                        {/* Target display */}
-                        {item.target !== undefined && item.target !== null && (
-                          <span className="text-[#526a8a] text-[8.5px] 2xl:text-[10px] mt-1 font-bold tracking-wider leading-none">
-                            Tgt: {item.target}
-                            {item.targetUnit === "percent" ? "%" : ""}
-                          </span>
                         )}
 
                         {/* Trend Indicator */}
@@ -2364,7 +2568,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       </div>
 
                       {/* Sparkline (bottom 18-22%) */}
-                      <div className="h-[18px] 2xl:h-[22px] w-full flex-shrink-0 mt-auto overflow-hidden">
+                      {/* overflow-visible, not hidden: the sparkline's hover
+                          readout sits above the plot area and would otherwise be
+                          clipped away by this wrapper. */}
+                      <div className="h-[22px] 2xl:h-[28px] w-full flex-shrink-0 mt-auto mb-1 2xl:mb-1.5 overflow-visible relative">
                         <Sparkline
                           points={points}
                           type={item.type}
@@ -2374,6 +2581,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                           targetDirection={item.targetDirection}
                         />
                       </div>
+
+                      {/* Target value, bottom-right of the card. Kept out of the
+                          plot area so the dashed line runs the full width, and out
+                          of the metric subtitle so the heading stays short. */}
+                      {isNum(item.target) && (
+                        <span className="absolute bottom-1 right-1.5 2xl:right-2 text-[#526a8a] text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
+                          tgt {item.target}
+                          {item.targetUnit === "percent" ? "%" : ""}
+                        </span>
+                      )}
                     </div>
                   );
                 })()}
@@ -2412,27 +2629,29 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             <span className="text-[15.5px] font-black tracking-widest text-[#06b6d4]">
               QUALITY HEAT MAP
             </span>
+            {/* Legend colors come from STATUS_CSS so the swatches always match
+                the outlines drawn on the layout below. */}
             <div className="flex gap-3 text-[12px] font-bold">
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#10b981] shadow-[0_0_8px_#10b981]" />{" "}
-                Healthy
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#eab308] shadow-[0_0_8px_#eab308]" />{" "}
-                At Risk
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#ef4444] shadow-[0_0_8px_#ef4444]" />{" "}
-                Critical
-              </div>
+              {(["healthy", "warning", "critical"] as const).map((s) => (
+                <div key={s} className="flex items-center gap-1">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{
+                      backgroundColor: STATUS_CSS[s],
+                      boxShadow: `0 0 8px ${STATUS_CSS[s]}`,
+                    }}
+                  />{" "}
+                  {STATUS_LABEL[s]}
+                </div>
+              ))}
             </div>
           </div>
 
           <div className="flex-1 relative bg-[#040910] border border-white/15 rounded-lg overflow-hidden flex items-center justify-center group cursor-pointer" onClick={() => setIsTwinModalOpen(true)}>
-            <img
-              src={qualityOgLayout}
-              alt="Quality Plant Floor Layout"
-              className="w-full h-full object-cover opacity-90 group-hover:scale-105 group-hover:opacity-100 transition-all duration-500 ease-out"
+            <FactoryLayoutOverlay
+              zones={twinZones}
+              variant="compact"
+              className="transition-transform duration-500 ease-out group-hover:scale-105"
             />
             {/* Overlay Gradient / Glass effect */}
             <div className="absolute inset-0 bg-gradient-to-t from-[#040910]/40 via-transparent to-transparent pointer-events-none" />
@@ -2474,7 +2693,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </button>
           </div>
 
-          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+          {/* overflow-y-AUTO, not hidden. This container is flex-1 inside a fixed
+              h-[400px] section, so with overflow-y-hidden any content taller than
+              the box was silently clipped and unreachable — which is what happened
+              once the AI Recommendation column started rendering a two-line JSON
+              block and pushed the rows taller. */}
+          <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar">
             <table className="w-full min-w-[720px] text-left text-[12px] border-collapse relative">
               <thead>
                 <tr className="border-b border-[#142337] text-[#526a8a] font-bold text-[10px] uppercase">
@@ -2530,11 +2754,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                           // No target filed: neutral. Colouring it against a
                           // null target read as "below target" for every product
                           // whose target had not loaded.
+                          // Green or red only — below target is a miss, not a
+                          // warning. Amber made a product sitting under its agreed
+                          // yield look tolerable.
                           !isNum(row.target)
                             ? "text-[#8fa0b5]"
                             : row.fpy >= row.target
                               ? "text-[#10b981]"
-                              : "text-[#eab308]"
+                              : "text-[#ef4444]"
                         }
                       >
                         {row.fpy}%
@@ -2549,7 +2776,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                                 ? "#8fa0b5"
                                 : row.fpy >= row.target
                                   ? "#10b981"
-                                  : "#eab308"
+                                  : "#ef4444"
                             }
                             strokeWidth="1.5"
                             points={
@@ -2577,26 +2804,78 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         className={`text-[9.5px] font-black px-1.5 py-0.5 rounded border border-[#142337]/50 ${
                           row.status === "Healthy"
                             ? "bg-[#10b981]/10 text-[#10b981]"
-                            : row.status === "At Risk"
-                              ? "bg-[#eab308]/10 text-[#eab308]"
-                              : row.status === "No Target"
-                                ? "bg-[#8fa0b5]/10 text-[#8fa0b5]"
-                                : "bg-[#ef4444]/10 text-[#ef4444]"
+                            : row.status === "No Target"
+                              ? "bg-[#8fa0b5]/10 text-[#8fa0b5]"
+                              : "bg-[#ef4444]/10 text-[#ef4444]"
                         }`}
                       >
                         {row.status}
                       </span>
                     </td>
                     <td className="py-[4px] pl-3 text-[#cdd4de] font-sans text-[10px] leading-tight">
-                      <div className="flex items-center gap-1">
-                        <Wrench
-                          size={10}
-                          className="text-[#8fa0b5] flex-shrink-0"
-                        />
-                        <span className="truncate max-w-[120px]">
-                          {row.rec}
-                        </span>
-                      </div>
+                      {(() => {
+                        // Raw analysis JSON while the Azure OpenAI layer is
+                        // unbuilt. Deliberately the exact fields the model will
+                        // be handed, so the sentence it eventually returns can be
+                        // checked against the numbers it was derived from.
+                        //
+                        // Only the yield-relevant fields are shown; product name
+                        // and the echoed inputs are already columns in this table.
+                        const yr = yieldRecommendations[row.name];
+                        if (!yr) {
+                          return (
+                            <div className="flex items-center gap-1">
+                              <Wrench
+                                size={10}
+                                className="text-[#8fa0b5] flex-shrink-0"
+                              />
+                              <span className="truncate max-w-[120px]">
+                                {row.rec}
+                              </span>
+                            </div>
+                          );
+                        }
+                        const payload = {
+                          required_future_yield: yr.required_future_yield,
+                          maximum_possible_final_yield:
+                            yr.maximum_possible_final_yield,
+                          mathematical_status: yr.mathematical_status,
+                          predicted_remaining_yield:
+                            yr.predicted_remaining_yield,
+                          ml_confidence: yr.ml_confidence,
+                          ml_assessment: yr.ml_assessment,
+                          model_version: yr.model_version,
+                          recommendation: yr.recommendation,
+                        };
+                        // Prose when Azure OpenAI produced it, the raw JSON when
+                        // it did not. Null is a normal state, not a fault — the
+                        // provider returns it whenever the deployment is
+                        // unconfigured or unreachable, and the numbers behind it
+                        // are still correct — so falling back to the fields keeps
+                        // the column useful instead of blanking it.
+                        if (yr.recommendation) {
+                          return (
+                            // overflow-HIDDEN, never auto: a scrollable box inside
+                            // a table cell captures the wheel event, so scrolling
+                            // over this column scrolled the cell instead of the
+                            // product list. Full text is on the title tooltip.
+                            <div
+                              className="text-[9.5px] leading-[1.35] max-w-[230px] max-h-[24px] overflow-hidden text-[#c8d4e2]"
+                              title={yr.recommendation}
+                            >
+                              {yr.recommendation}
+                            </div>
+                          );
+                        }
+                        return (
+                          <pre
+                            className="text-[8.5px] font-mono leading-[1.3] whitespace-pre-wrap break-all max-w-[230px] max-h-[24px] overflow-hidden text-[#8fa0b5] bg-[#050b11] border border-[#142337]/60 rounded px-1 py-0.5"
+                            title={JSON.stringify(payload, null, 2)}
+                          >
+                            {JSON.stringify(payload)}
+                          </pre>
+                        );
+                      })()}
                     </td>
                   </tr>
                 ))}
@@ -3123,6 +3402,20 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 <span className="text-[16px] font-black text-white uppercase tracking-wider">
                   Quality Plant Floor Layout
                 </span>
+                <div className="flex gap-3 text-[12px] font-bold text-[#8fa0b5] ml-4">
+                  {(["healthy", "warning", "critical"] as const).map((s) => (
+                    <div key={s} className="flex items-center gap-1.5">
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{
+                          backgroundColor: STATUS_CSS[s],
+                          boxShadow: `0 0 8px ${STATUS_CSS[s]}`,
+                        }}
+                      />
+                      {STATUS_LABEL[s]}
+                    </div>
+                  ))}
+                </div>
               </div>
               <button
                 onClick={() => setIsTwinModalOpen(false)}
@@ -3134,16 +3427,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
             {/* Model Viewport */}
             <div className="flex-1 relative min-h-0 bg-[#040910] flex items-center justify-center p-4">
-              <img
-                src={qualityOgLayout}
-                alt="Quality Plant Floor Layout View"
-                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl border border-white/5"
-              />
+              <FactoryLayoutOverlay zones={twinZones} variant="full" />
             </div>
           </div>
         </div>
       )}
-      <div className="hidden" data-zones-count={twinZones.length} />
     </div>
   );
 };
