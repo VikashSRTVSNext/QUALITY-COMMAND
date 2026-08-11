@@ -44,11 +44,11 @@ export const DigitalTwinViewport: React.FC = () => {
 
   const getStatusClasses = (status: "healthy" | "risk" | "critical") => {
     if (status === "healthy") {
-      return { bg: "bg-[#10b981]/5 border-[#10b981]/30", text: "text-[#10b981]" };
+      return { bg: "bg-[#22c55e]/5 border-[#22c55e]/30", text: "text-[#22c55e]" };
     } else if (status === "risk") {
       return { bg: "bg-[#eab308]/5 border-[#eab308]/30", text: "text-[#eab308]" };
     } else {
-      return { bg: "bg-[#ef4444]/5 border-[#ef4444]/30", text: "text-[#ef4444]" };
+      return { bg: "bg-[#ff4c4c]/5 border-[#ff4c4c]/30", text: "text-[#ff4c4c]" };
     }
   };
 
@@ -66,13 +66,13 @@ export const DigitalTwinViewport: React.FC = () => {
         </h3>
         <div className="flex gap-3 text-[9px] uppercase font-bold">
           <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" /> Healthy
+            <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" /> Healthy
           </span>
           <span className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-[#eab308]" /> At Risk
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#ef4444]" />{" "}
+            <span className="w-1.5 h-1.5 rounded-full bg-[#ff4c4c]" />{" "}
             Bottleneck
           </span>
         </div>
@@ -84,7 +84,7 @@ export const DigitalTwinViewport: React.FC = () => {
 
       {/* Bottom telemetry overlay cards */}
       <div className="grid grid-cols-4 gap-3 border-t border-[#1a243d] pt-3.5 z-10">
-        <div className={`${assemblyStyle.bg} border ${assemblyStyle.bg.includes('border') ? '' : 'border-[#10b981]'} p-3 rounded-lg flex flex-col justify-center transition-all duration-300`}>
+        <div className={`${assemblyStyle.bg} border ${assemblyStyle.bg.includes('border') ? '' : 'border-[#22c55e]'} p-3 rounded-lg flex flex-col justify-center transition-all duration-300`}>
           <div className="text-[10px] text-[#94a3b8] font-bold">
             Final Assembly
           </div>
@@ -92,7 +92,7 @@ export const DigitalTwinViewport: React.FC = () => {
             {kpis.assembly.value}
           </div>
         </div>
-        <div className={`${smtStyle.bg} border ${smtStyle.bg.includes('border') ? '' : 'border-[#ef4444]'} p-3 rounded-lg flex flex-col justify-center transition-all duration-300`}>
+        <div className={`${smtStyle.bg} border ${smtStyle.bg.includes('border') ? '' : 'border-[#ff4c4c]'} p-3 rounded-lg flex flex-col justify-center transition-all duration-300`}>
           <div className="text-[10px] text-[#94a3b8] font-bold">
             SMT Lines
           </div>
@@ -108,7 +108,7 @@ export const DigitalTwinViewport: React.FC = () => {
             {kpis.material.value}
           </div>
         </div>
-        <div className={`${packagingStyle.bg} border ${packagingStyle.bg.includes('border') ? '' : 'border-[#10b981]'} p-3 rounded-lg flex flex-col justify-center transition-all duration-300`}>
+        <div className={`${packagingStyle.bg} border ${packagingStyle.bg.includes('border') ? '' : 'border-[#22c55e]'} p-3 rounded-lg flex flex-col justify-center transition-all duration-300`}>
           <div className="text-[10px] text-[#94a3b8] font-bold">
             Packaging
           </div>
@@ -132,7 +132,7 @@ export const DigitalTwinViewport: React.FC = () => {
               </div>
               <button 
                 onClick={() => setIsTwinModalOpen(false)}
-                className="bg-[#122339] hover:bg-[#ef4444] text-[#8fa0b5] hover:text-white border border-[#1b3252] rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
+                className="bg-[#122339] hover:bg-[#ff4c4c] text-[#8fa0b5] hover:text-white border border-[#1b3252] rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
               >
                 ✕ Close view
               </button>

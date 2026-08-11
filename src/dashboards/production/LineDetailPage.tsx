@@ -11,7 +11,7 @@ export const LineDetailPage: React.FC = () => {
   const { data, isLoading, isError } = useLineDetail(lineId);
 
   const statusColor =
-    data?.status === 'Healthy' ? '#10b981' : data?.status === 'At Risk' ? '#eab308' : '#ef4444';
+    data?.status === 'Healthy' ? '#22c55e' : data?.status === 'At Risk' ? '#eab308' : '#ff4c4c';
 
   return (
     <div className="w-full min-h-screen bg-[#08111a] text-[#f8fafc] p-6 flex flex-col gap-6">
@@ -26,7 +26,7 @@ export const LineDetailPage: React.FC = () => {
       </button>
 
       {isLoading && <div className="text-[#52607f]">Loading line detail…</div>}
-      {isError && <div className="text-[#ef4444]">Failed to load line {lineId}.</div>}
+      {isError && <div className="text-[#ff4c4c]">Failed to load line {lineId}.</div>}
 
       {data && (
         <>

@@ -94,7 +94,7 @@ export const KpiMetricsRow: React.FC = () => {
         title="Plan vs Actual (Shift)" 
         triggerUpdate={kpis.planVsActual.actual}
         headerAction={
-          <div className="bg-[#10b981]/10 border border-[#10b981]/30 p-1.5 rounded-md text-[#10b981]">
+          <div className="bg-[#22c55e]/10 border border-[#22c55e]/30 p-1.5 rounded-md text-[#22c55e]">
             <Box size={14} />
           </div>
         }
@@ -116,7 +116,7 @@ export const KpiMetricsRow: React.FC = () => {
             {/* Actual */}
             <div className="flex flex-col items-end">
               <span className="text-[15px] text-[#97a7bb] font-bold uppercase tracking-wider">Actual</span>
-              <span className="text-[36px] font-black text-[#10b981] tracking-tight mt-1.5 leading-none">
+              <span className="text-[36px] font-black text-[#22c55e] tracking-tight mt-1.5 leading-none">
                 <AnimatedNumber value={kpis.planVsActual.actual} />
               </span>
             </div>
@@ -126,13 +126,13 @@ export const KpiMetricsRow: React.FC = () => {
           <div className="mt-4">
             <div className="flex justify-between items-center text-[15px] text-[#97a7bb] mb-2 font-bold uppercase">
               <span>Achievement</span>
-              <span className="text-[#10b981] font-black text-[16px]">
+              <span className="text-[#22c55e] font-black text-[16px]">
                 {achievementRate.toFixed(1)}%
               </span>
             </div>
             <div className="w-full bg-[#1d324b] h-2.5 rounded-full overflow-hidden">
               <div 
-                className="h-full bg-[#10b981] rounded-full transition-all duration-500 status-glow-success"
+                className="h-full bg-[#22c55e] rounded-full transition-all duration-500 status-glow-success"
                 style={{ width: `${Math.min(achievementRate, 100)}%` }}
               />
             </div>
@@ -164,7 +164,7 @@ export const KpiMetricsRow: React.FC = () => {
 
             <div className="flex flex-col items-end">
               <span className="text-[15px] text-[#97a7bb] font-bold uppercase tracking-wider">Target per Hour</span>
-              <span className="text-[20px] font-bold text-[#10b981] mt-1.5 leading-none">
+              <span className="text-[20px] font-bold text-[#22c55e] mt-1.5 leading-none">
                 {kpis.hourlyAchievement.target.toLocaleString()}
               </span>
             </div>
@@ -172,7 +172,7 @@ export const KpiMetricsRow: React.FC = () => {
 
           {/* Bottom Area: Trend Indicator and Sparkline */}
           <div className="flex justify-between items-end mt-2">
-            <div className="flex items-center gap-1 text-[13px] font-black text-[#10b981]">
+            <div className="flex items-center gap-1 text-[13px] font-black text-[#22c55e]">
               <TrendingUp size={12} />
               <span>+0.5%</span>
             </div>
@@ -180,8 +180,8 @@ export const KpiMetricsRow: React.FC = () => {
             <div className="flex-shrink-0">
               <MiniSparkline 
                 data={[1120, 1140, 1130, 1160, 1175, 1205]} 
-                strokeColor="#10b981" 
-                fillColor="rgba(16, 185, 129, 0.04)" 
+                strokeColor="#22c55e" 
+                fillColor="rgba(34, 197, 94, 0.04)" 
                 width={120} 
                 height={26} 
               />
@@ -195,7 +195,7 @@ export const KpiMetricsRow: React.FC = () => {
         title="FPY (Unit/Module)"
         triggerUpdate={kpis.firstPassYield.unit}
         headerAction={
-          <div className="bg-[#10b981]/10 border border-[#10b981]/30 p-1.5 rounded-md text-[#10b981]">
+          <div className="bg-[#22c55e]/10 border border-[#22c55e]/30 p-1.5 rounded-md text-[#22c55e]">
             <Target size={14} />
           </div>
         }
@@ -208,7 +208,7 @@ export const KpiMetricsRow: React.FC = () => {
               <span className="text-[36px] font-black text-white mt-1.5 leading-none">
                 {kpis.firstPassYield.unit}%
               </span>
-              <div className="flex items-center gap-1 text-[14px] font-bold text-[#10b981] mt-2">
+              <div className="flex items-center gap-1 text-[14px] font-bold text-[#22c55e] mt-2">
                 <TrendingUp size={12} />
                 <span>+0.3%</span>
               </div>
@@ -223,7 +223,7 @@ export const KpiMetricsRow: React.FC = () => {
               <span className="text-[36px] font-black text-white mt-1.5 leading-none">
                 {kpis.firstPassYield.module}%
               </span>
-              <div className="flex items-center gap-1 text-[14px] font-bold text-[#10b981] mt-2">
+              <div className="flex items-center gap-1 text-[14px] font-bold text-[#22c55e] mt-2">
                 <TrendingUp size={12} />
                 <span>+0.1%</span>
               </div>
@@ -275,7 +275,7 @@ export const KpiMetricsRow: React.FC = () => {
             {/* Finished Goods */}
             <div className="flex flex-col">
               <span className="text-[14px] text-[#97a7bb] font-semibold">Finished Goods</span>
-              <span className="text-[18px] font-bold text-[#10b981] mt-1.5 leading-none">
+              <span className="text-[18px] font-bold text-[#22c55e] mt-1.5 leading-none">
                 {kpis.factoryWip.finished.toLocaleString()}
               </span>
             </div>
@@ -288,7 +288,7 @@ export const KpiMetricsRow: React.FC = () => {
         title="Ready to PGI" 
         triggerUpdate={kpis.readyToShip.lots}
         headerAction={
-          <div className="bg-[#10b981]/10 border border-[#10b981]/30 p-1.5 rounded-md text-[#10b981]">
+          <div className="bg-[#22c55e]/10 border border-[#22c55e]/30 p-1.5 rounded-md text-[#22c55e]">
             <Boxes size={14} />
           </div>
         }
@@ -365,7 +365,7 @@ export const KpiMetricsRow: React.FC = () => {
         title="Downtime (Shift)" 
         triggerUpdate={kpis.downtime.minutes}
         headerAction={
-          <div className="bg-[#ef4444]/10 border border-[#ef4444]/30 p-1.5 rounded-md text-[#ef4444]">
+          <div className="bg-[#ff4c4c]/10 border border-[#ff4c4c]/30 p-1.5 rounded-md text-[#ff4c4c]">
             <Clock size={14} />
           </div>
         }
@@ -373,17 +373,17 @@ export const KpiMetricsRow: React.FC = () => {
         <div className="flex flex-col justify-between h-full pt-2">
           {/* Main metric */}
           <div className="flex flex-col">
-            <span className="text-[42px] font-black text-[#ef4444] tracking-tight leading-none">
+            <span className="text-[42px] font-black text-[#ff4c4c] tracking-tight leading-none">
               <AnimatedNumber value={kpis.downtime.minutes} />
             </span>
-            <span className="text-[16px] font-bold text-[#ef4444] mt-1.5">
+            <span className="text-[16px] font-bold text-[#ff4c4c] mt-1.5">
               minutes
             </span>
           </div>
 
           {/* Bottom Area: Trend Indicator and Sparkline */}
           <div className="flex justify-between items-end mt-2">
-            <div className="flex items-center gap-1 text-[14px] font-black text-[#ef4444]">
+            <div className="flex items-center gap-1 text-[14px] font-black text-[#ff4c4c]">
               <TrendingUp size={13} />
               <span>+{kpis.downtime.diffPercentage}% vs yesterday</span>
             </div>
@@ -391,8 +391,8 @@ export const KpiMetricsRow: React.FC = () => {
             <div className="flex-shrink-0">
               <MiniSparkline 
                 data={[10, 20, 15, 30, 45, 42]} 
-                strokeColor="#ef4444" 
-                fillColor="rgba(239, 68, 68, 0.04)" 
+                strokeColor="#ff4c4c" 
+                fillColor="rgba(255, 76, 76, 0.04)" 
                 width={120} 
                 height={26} 
               />

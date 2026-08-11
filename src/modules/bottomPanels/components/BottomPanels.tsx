@@ -137,15 +137,15 @@ export const WarehousePanel: React.FC = () => {
           
           <div className="flex-grow flex flex-col justify-center gap-2">
             {/* Item 1 */}
-            <div className="bg-[#0b1220]/30 border-l-[3px] border-l-[#ef4444] border border-[#1d324b]/40 p-2 rounded flex items-center justify-between gap-2.5">
+            <div className="bg-[#0b1220]/30 border-l-[3px] border-l-[#ff4c4c] border border-[#1d324b]/40 p-2 rounded flex items-center justify-between gap-2.5">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-[26px] h-[26px] bg-[#ef4444]/10 rounded flex items-center justify-center text-[#ef4444] flex-shrink-0">
+                <div className="w-[26px] h-[26px] bg-[#ff4c4c]/10 rounded flex items-center justify-center text-[#ff4c4c] flex-shrink-0">
                   <AlertCircle size={14} />
                 </div>
                 <span className="text-[#94a3b8] text-[11px] font-bold truncate">Blocked Materials</span>
               </div>
               <div className="text-right flex-shrink-0 flex flex-col">
-                <span className="text-[#ef4444] text-[14px] font-black leading-none">7</span>
+                <span className="text-[#ff4c4c] text-[14px] font-black leading-none">7</span>
                 <span className="text-[#52607f] text-[8px] uppercase font-semibold mt-0.5">Items</span>
               </div>
             </div>
@@ -224,7 +224,7 @@ export const MaterialCommandPanel: React.FC = () => {
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                   />
                   <path
-                    className="text-[#10b981] status-glow-success"
+                    className="text-[#22c55e] status-glow-success"
                     strokeWidth="3.2"
                     strokeDasharray="94, 100"
                     strokeLinecap="round"
@@ -234,10 +234,10 @@ export const MaterialCommandPanel: React.FC = () => {
                   />
                 </svg>
                 <div className="absolute flex flex-col items-center justify-center">
-                  <span className="text-[20px] font-black text-[#10b981] leading-none">
+                  <span className="text-[20px] font-black text-[#22c55e] leading-none">
                     94%
                   </span>
-                  <span className="text-[10px] text-[#10b981] uppercase font-bold tracking-wider mt-1">
+                  <span className="text-[10px] text-[#22c55e] uppercase font-bold tracking-wider mt-1">
                     Available
                   </span>
                 </div>
@@ -259,14 +259,14 @@ export const MaterialCommandPanel: React.FC = () => {
               {/* Row 1 */}
               <div className="flex justify-between items-center text-[11px] font-bold">
                 <div className="flex items-center gap-2.5">
-                  <span className="w-3 h-3 rounded-full bg-[#ef4444] shadow-[0_0_8px_rgba(239,68,68,0.5)] flex-shrink-0" />
+                  <span className="w-3 h-3 rounded-full bg-[#ff4c4c] shadow-[0_0_8px_rgba(255, 76, 76,0.5)] flex-shrink-0" />
                   <span className="text-[#94a3b8]">Solder Paste</span>
                 </div>
                 <div className="flex gap-8 items-center text-right font-mono">
                   <span className="text-[#94a3b8] w-12">5.0 hrs</span>
                   <div className="flex items-center gap-1.5 w-10 justify-end">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#ef4444]" />
-                    <span className="text-[#10b981]">320</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#ff4c4c]" />
+                    <span className="text-[#22c55e]">320</span>
                   </div>
                 </div>
               </div>
@@ -281,7 +281,7 @@ export const MaterialCommandPanel: React.FC = () => {
                   <span className="text-[#94a3b8] w-12">1.8 hrs</span>
                   <div className="flex items-center gap-1.5 w-10 justify-end">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#f97316]" />
-                    <span className="text-[#10b981]">280</span>
+                    <span className="text-[#22c55e]">280</span>
                   </div>
                 </div>
               </div>
@@ -296,7 +296,7 @@ export const MaterialCommandPanel: React.FC = () => {
                   <span className="text-[#94a3b8] w-12">6.5 hrs</span>
                   <div className="flex items-center gap-1.5 w-10 justify-end">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#eab308]" />
-                    <span className="text-[#10b981]">415</span>
+                    <span className="text-[#22c55e]">415</span>
                   </div>
                 </div>
               </div>
@@ -304,14 +304,14 @@ export const MaterialCommandPanel: React.FC = () => {
               {/* Row 4 */}
               <div className="flex justify-between items-center text-[11px] font-bold">
                 <div className="flex items-center gap-2.5">
-                  <span className="w-3 h-3 rounded-full bg-[#10b981] shadow-[0_0_8px_rgba(16,185,129,0.5)] flex-shrink-0" />
+                  <span className="w-3 h-3 rounded-full bg-[#22c55e] shadow-[0_0_8px_rgba(34, 197, 94,0.5)] flex-shrink-0" />
                   <span className="text-[#94a3b8]">SFC Labels</span>
                 </div>
                 <div className="flex gap-8 items-center text-right font-mono">
                   <span className="text-[#94a3b8] w-12">2.2 hrs</span>
                   <div className="flex items-center gap-1.5 w-10 justify-end">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
-                    <span className="text-[#10b981]">210</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+                    <span className="text-[#22c55e]">210</span>
                   </div>
                 </div>
               </div>
@@ -323,7 +323,7 @@ export const MaterialCommandPanel: React.FC = () => {
         <div className="mt-4 flex flex-col gap-1.5 flex-shrink-0 border-t border-[#1d324b]/40 pt-3.5">
           <div className="flex justify-between items-center text-[10px] font-bold">
             <span className="text-[#52607f] uppercase tracking-wider">Material Consumption (24H)</span>
-            <span className="text-[#10b981] flex items-center gap-1">
+            <span className="text-[#22c55e] flex items-center gap-1">
               ▲ 6.8% <span className="text-[#52607f] uppercase">vs Yesterday</span>
             </span>
           </div>
@@ -332,8 +332,8 @@ export const MaterialCommandPanel: React.FC = () => {
             <svg className="w-full h-full" viewBox="0 0 500 50" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="materialChartGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.22" />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                  <stop offset="0%" stopColor="#22c55e" stopOpacity="0.22" />
+                  <stop offset="100%" stopColor="#22c55e" stopOpacity="0.0" />
                 </linearGradient>
               </defs>
               <path
@@ -343,7 +343,7 @@ export const MaterialCommandPanel: React.FC = () => {
               <path
                 d="M 0,40 Q 40,32 80,35 T 160,37 T 240,25 T 320,15 T 400,20 T 500,24"
                 fill="none"
-                stroke="#10b981"
+                stroke="#22c55e"
                 strokeWidth="2.5"
               />
             </svg>
@@ -369,19 +369,19 @@ export const QualityPanel: React.FC = () => {
           <div className="grid grid-cols-4 gap-2">
             <div className="bg-[#0b1220] border border-[#1d324b]/60 rounded-lg p-2 flex flex-col">
               <span className="text-[#52607f] text-[9px] uppercase font-bold tracking-wider leading-none">Process Audit Index</span>
-              <span className="text-[16px] font-black text-[#10b981] mt-1.5 leading-none">92.4%</span>
+              <span className="text-[16px] font-black text-[#22c55e] mt-1.5 leading-none">92.4%</span>
             </div>
             <div className="bg-[#0b1220] border border-[#1d324b]/60 rounded-lg p-2 flex flex-col">
               <span className="text-[#52607f] text-[9px] uppercase font-bold tracking-wider leading-none">OBA (Out of Box)</span>
-              <span className="text-[16px] font-black text-[#10b981] mt-1.5 leading-none">98.1%</span>
+              <span className="text-[16px] font-black text-[#22c55e] mt-1.5 leading-none">98.1%</span>
             </div>
             <div className="bg-[#0b1220] border border-[#1d324b]/60 rounded-lg p-2 flex flex-col">
               <span className="text-[#52607f] text-[9px] uppercase font-bold tracking-wider leading-none">Customer Audit</span>
-              <span className="text-[14px] font-black text-[#10b981] mt-1.5 leading-none">Scheduled</span>
+              <span className="text-[14px] font-black text-[#22c55e] mt-1.5 leading-none">Scheduled</span>
             </div>
             <div className="bg-[#0b1220] border border-[#1d324b]/60 rounded-lg p-2 flex flex-col">
               <span className="text-[#52607f] text-[9px] uppercase font-bold tracking-wider leading-none">Rework Queue</span>
-              <span className="text-[16px] font-black text-[#ef4444] mt-1.5 leading-none">27</span>
+              <span className="text-[16px] font-black text-[#ff4c4c] mt-1.5 leading-none">27</span>
             </div>
           </div>
 
@@ -393,23 +393,23 @@ export const QualityPanel: React.FC = () => {
               <div className="grid grid-cols-2 gap-2 text-left">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[#52607f] text-[8px] uppercase font-semibold">Unit</span>
-                  <span className="text-[13px] font-extrabold text-[#10b981] leading-none">92.4%</span>
+                  <span className="text-[13px] font-extrabold text-[#22c55e] leading-none">92.4%</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-[#52607f] text-[8px] uppercase font-semibold">Module</span>
-                  <span className="text-[13px] font-extrabold text-[#10b981] leading-none">95.6%</span>
+                  <span className="text-[13px] font-extrabold text-[#22c55e] leading-none">95.6%</span>
                 </div>
               </div>
             </div>
             {/* LBTS */}
             <div className="bg-[#0b1220] border border-[#1d324b]/60 rounded-lg p-2 flex flex-col">
               <span className="text-[#52607f] text-[9px] uppercase font-bold tracking-wider leading-none">LBTS</span>
-              <span className="text-[16px] font-black text-[#10b981] mt-1.5 leading-none">99.2%</span>
+              <span className="text-[16px] font-black text-[#22c55e] mt-1.5 leading-none">99.2%</span>
             </div>
             {/* Burn In */}
             <div className="bg-[#0b1220] border border-[#1d324b]/60 rounded-lg p-2 flex flex-col">
               <span className="text-[#52607f] text-[9px] uppercase font-bold tracking-wider leading-none">Burn In</span>
-              <span className="text-[16px] font-black text-[#10b981] mt-1.5 leading-none">99.2%</span>
+              <span className="text-[16px] font-black text-[#22c55e] mt-1.5 leading-none">99.2%</span>
             </div>
           </div>
         </div>
@@ -502,11 +502,11 @@ export const QualityPanel: React.FC = () => {
                           strokeDasharray="30 70" strokeDashoffset="92" />
                           
                   {/* Segment 3: Assembly Rework (22%) - Green */}
-                  <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#10b981" strokeWidth="4.5" 
+                  <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#22c55e" strokeWidth="4.5" 
                           strokeDasharray="22 78" strokeDashoffset="62" />
 
                   {/* Segment 4: Final Rework (15%) - Red */}
-                  <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#ef4444" strokeWidth="4.5" 
+                  <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#ff4c4c" strokeWidth="4.5" 
                           strokeDasharray="15 85" strokeDashoffset="40" />
                 </svg>
                 <div className="absolute flex flex-col items-center justify-center">
@@ -535,18 +535,18 @@ export const QualityPanel: React.FC = () => {
 
                 <div className="flex items-center justify-between text-[11px] font-bold">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#10b981]" />
-                    <span className="text-[#10b981]">Assembly Rework</span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" />
+                    <span className="text-[#22c55e]">Assembly Rework</span>
                   </div>
-                  <span className="text-[#10b981] font-mono">22%</span>
+                  <span className="text-[#22c55e] font-mono">22%</span>
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] font-bold">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" />
-                    <span className="text-[#ef4444] font-mono">Final Rework</span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#ff4c4c]" />
+                    <span className="text-[#ff4c4c] font-mono">Final Rework</span>
                   </div>
-                  <span className="text-[#ef4444] font-mono">15%</span>
+                  <span className="text-[#ff4c4c] font-mono">15%</span>
                 </div>
               </div>
             </div>
@@ -631,8 +631,8 @@ export const CapacityPanel: React.FC = () => {
           smooth: true,
           showSymbol: false,
           data: [72, 71, 73, 75, 74, 76, 75, 76],
-          lineStyle: { color: "#10b981", width: 2.5 },
-          itemStyle: { color: "#10b981" }
+          lineStyle: { color: "#22c55e", width: 2.5 },
+          itemStyle: { color: "#22c55e" }
         },
         {
           name: "Storage Utilization",
@@ -692,10 +692,10 @@ export const CapacityPanel: React.FC = () => {
           {/* Machines */}
           <div className="flex flex-col items-start min-w-0">
             <div className="flex items-center gap-1.5 text-[9px] text-[#52607f] font-bold uppercase tracking-wider">
-              <span className="w-2 h-2 rounded-full bg-[#10b981]" />
+              <span className="w-2 h-2 rounded-full bg-[#22c55e]" />
               <span className="truncate">Machines</span>
             </div>
-            <span className="text-[16px] font-black text-[#10b981] mt-1 leading-none">76%</span>
+            <span className="text-[16px] font-black text-[#22c55e] mt-1 leading-none">76%</span>
             <span className="text-[8px] text-[#52607f] font-bold mt-0.5">UTILIZED</span>
           </div>
 
@@ -793,8 +793,8 @@ export const EnergyPanel: React.FC = () => {
           symbol: "circle",
           symbolSize: 8,
           data: [4000, 4500, 4200, 4700, 4400, 4900, 5200, 5800, 6000],
-          lineStyle: { color: "#10b981", width: 2.5 },
-          itemStyle: { color: "#10b981", borderColor: "#0e1424", borderWidth: 1 }
+          lineStyle: { color: "#22c55e", width: 2.5 },
+          itemStyle: { color: "#22c55e", borderColor: "#0e1424", borderWidth: 1 }
         },
       ],
     });
@@ -817,7 +817,7 @@ export const EnergyPanel: React.FC = () => {
           <div className="flex flex-col border-r border-[#1d324b]/40 pr-2">
             <span className="text-[#52607f] text-[9px] uppercase font-bold tracking-wider">Today Consumption</span>
             <div className="flex items-baseline gap-1 mt-1 leading-none">
-              <span className="text-[18px] font-black text-[#10b981]">4,850</span>
+              <span className="text-[18px] font-black text-[#22c55e]">4,850</span>
               <span className="text-[10px] text-[#52607f] font-bold">kWh</span>
             </div>
           </div>
@@ -834,7 +834,7 @@ export const EnergyPanel: React.FC = () => {
           {/* vs Yesterday */}
           <div className="flex flex-col items-end">
             <span className="text-[#52607f] text-[9px] uppercase font-bold tracking-wider">vs Yesterday</span>
-            <span className="text-[#ef4444] text-[16px] font-black mt-1 leading-none flex items-center gap-1">
+            <span className="text-[#ff4c4c] text-[16px] font-black mt-1 leading-none flex items-center gap-1">
               ▼ 4.6%
             </span>
           </div>
@@ -847,7 +847,7 @@ export const EnergyPanel: React.FC = () => {
         <div className="bg-[#0b1220]/60 border border-[#1d324b]/60 rounded-lg p-2.5 flex justify-between items-center text-[11px] font-bold flex-shrink-0 mt-3">
           <span className="text-[#94a3b8] uppercase tracking-wider">CO₂ Avoided</span>
           <span className="text-white font-mono text-[12px]">
-            <strong className="text-[#10b981] text-[13px] font-black mr-1">2.34</strong> Ton
+            <strong className="text-[#22c55e] text-[13px] font-black mr-1">2.34</strong> Ton
           </span>
         </div>
 
@@ -908,8 +908,8 @@ export const ShipmentPanel: React.FC = () => {
           symbol: "circle",
           symbolSize: 8,
           data: [220, 255, 250, 235, 248, 252, 245, 260, 250],
-          lineStyle: { color: "#10b981", width: 2.5 },
-          itemStyle: { color: "#10b981", borderColor: "#0e1424", borderWidth: 1 }
+          lineStyle: { color: "#22c55e", width: 2.5 },
+          itemStyle: { color: "#22c55e", borderColor: "#0e1424", borderWidth: 1 }
         },
         {
           name: "Waiting",
@@ -930,8 +930,8 @@ export const ShipmentPanel: React.FC = () => {
           symbol: "circle",
           symbolSize: 8,
           data: [102, 80, 70, 75, 95, 125, 70, 115, 95],
-          lineStyle: { color: "#ef4444", width: 2.5 },
-          itemStyle: { color: "#ef4444", borderColor: "#0e1424", borderWidth: 1 }
+          lineStyle: { color: "#ff4c4c", width: 2.5 },
+          itemStyle: { color: "#ff4c4c", borderColor: "#0e1424", borderWidth: 1 }
         },
       ],
     });
@@ -952,7 +952,7 @@ export const ShipmentPanel: React.FC = () => {
         <div className="grid grid-cols-4 gap-2 flex-shrink-0 mb-4">
           <div className="bg-[#0b1220] border border-[#1d324b]/60 rounded-lg p-2 flex flex-col">
             <span className="text-[#52607f] text-[9px] uppercase font-bold tracking-wider leading-none">Ready to Ship</span>
-            <span className="text-[16px] font-black text-[#10b981] mt-1.5 leading-none">132</span>
+            <span className="text-[16px] font-black text-[#22c55e] mt-1.5 leading-none">132</span>
           </div>
           <div className="bg-[#0b1220] border border-[#1d324b]/60 rounded-lg p-2 flex flex-col">
             <span className="text-[#52607f] text-[9px] uppercase font-bold tracking-wider leading-none">Waiting Inspection</span>
@@ -964,7 +964,7 @@ export const ShipmentPanel: React.FC = () => {
           </div>
           <div className="bg-[#0b1220] border border-[#1d324b]/60 rounded-lg p-2 flex flex-col">
             <span className="text-[#52607f] text-[9px] uppercase font-bold tracking-wider leading-none">Blocked</span>
-            <span className="text-[16px] font-black text-[#ef4444] mt-1.5 leading-none">7</span>
+            <span className="text-[16px] font-black text-[#ff4c4c] mt-1.5 leading-none">7</span>
           </div>
         </div>
 
@@ -975,9 +975,9 @@ export const ShipmentPanel: React.FC = () => {
             <div className="flex justify-between items-center text-[10px] text-[#52607f] uppercase font-black tracking-widest mb-2">
               <span>Shipment Trend (Units)</span>
               <div className="flex gap-3 font-bold pr-1">
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />Ready to Ship</span>
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />Ready to Ship</span>
                 <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#f97316]" />Waiting</span>
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#ef4444]" />Blocked</span>
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-[#ff4c4c]" />Blocked</span>
               </div>
             </div>
             
@@ -993,10 +993,10 @@ export const ShipmentPanel: React.FC = () => {
             <div className="flex-grow flex items-center justify-center relative my-2">
               <div className="relative w-28 h-28 flex items-center justify-center">
                 <svg width="100%" height="100%" viewBox="0 0 42 42" className="transform -rotate-90">
-                  <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#10b981" strokeWidth="4.5" />
+                  <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#22c55e" strokeWidth="4.5" />
                   
                   {/* Red segment representing OTD Risk (12%) */}
-                  <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#ef4444" strokeWidth="4.5" 
+                  <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#ff4c4c" strokeWidth="4.5" 
                           strokeDasharray="12 88" strokeDashoffset="25" />
                 </svg>
                 <div className="absolute flex flex-col items-center justify-center">

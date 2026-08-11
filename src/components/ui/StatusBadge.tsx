@@ -15,13 +15,13 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
 
   if (normStatus === 'healthy' || normStatus === 'online') {
     styles = 'bg-[#064e3b]/30 text-[#34d399] border-[#059669]/30 status-glow-success';
-    indicator = 'bg-[#10b981] animate-soft-pulse';
+    indicator = 'bg-[#22c55e] animate-soft-pulse';
   } else if (normStatus === 'at risk' || normStatus === 'warning') {
     styles = 'bg-[#78350f]/30 text-[#fbbf24] border-[#d97706]/30 status-glow-warning';
     indicator = 'bg-[#eab308] animate-soft-pulse';
   } else if (normStatus === 'bottleneck' || normStatus === 'critical' || normStatus === 'danger') {
     styles = 'bg-[#7f1d1d]/30 text-[#f87171] border-[#dc2626]/30 status-glow-danger';
-    indicator = 'bg-[#ef4444] animate-soft-pulse';
+    indicator = 'bg-[#ff4c4c] animate-soft-pulse';
   }
 
   return (

@@ -58,7 +58,7 @@
       "trend": [0, 0, 0, 0, 0, 0],
       "yesterdayTrend": [0, 0, 0, 0, 0, 0],
       "status": "success",
-      "color": "#10b981"
+      "color": "#22c55e"
     },
     {
       "id": 9,
@@ -214,7 +214,7 @@
       "points": [98.1, 98.3, 98.5, 98.4, 98.5],
       "status": "HEALTHY",
       "rec": "Maintain current settings",
-      "color": "#10b981"
+      "color": "#22c55e"
     },
     {
       "name": "AOI",
@@ -258,7 +258,7 @@
       "points": [96.5, 96.1, 95.9, 95.7, 95.6],
       "status": "CRITICAL",
       "rec": "Inspect torque tools",
-      "color": "#ef4444"
+      "color": "#ff4c4c"
     },
     {
       "name": "Functional Test",
@@ -269,7 +269,7 @@
       "points": [98.5, 98.7, 98.8, 98.9, 98.9],
       "status": "HEALTHY",
       "rec": "Maintain settings",
-      "color": "#10b981"
+      "color": "#22c55e"
     },
     {
       "name": "Visual Inspect",
@@ -280,7 +280,7 @@
       "points": [98.4, 98.5, 98.5, 98.6, 98.6],
       "status": "HEALTHY",
       "rec": "Maintain sampling plan",
-      "color": "#10b981"
+      "color": "#22c55e"
     }
   ],
   "attentionCenterAlerts": [
@@ -406,7 +406,7 @@
     {
       "time": "10:18 AM",
       "title": "AOI CALIBRATION",
-      "color": "#10b981",
+      "color": "#22c55e",
       "line1": "Line: AOI Line 2",
       "line2": "Status: Completed",
       "iconType": "AOI"
@@ -414,7 +414,7 @@
     {
       "time": "10:42 AM",
       "title": "TORQUE OUTLIER",
-      "color": "#ef4444",
+      "color": "#ff4c4c",
       "line1": "Line: Screw Line 3",
       "line2": "Outliers: 7%",
       "iconType": "Screw"
@@ -446,7 +446,7 @@
     {
       "time": "12:02 PM",
       "title": "RESOLVED",
-      "color": "#10b981",
+      "color": "#22c55e",
       "line1": "CAPA-2026-071",
       "line2": "Status: Closed",
       "iconType": "Resolved"

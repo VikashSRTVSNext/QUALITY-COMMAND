@@ -112,19 +112,19 @@ export const ProcessFlowMap: React.FC = () => {
   ];
 
   const getStatusColor = (status: "Healthy" | "Risk" | "Bottleneck") => {
-    if (status === "Healthy") return "#10b981";
+    if (status === "Healthy") return "#22c55e";
     if (status === "Risk") return "#eab308";
-    return "#ef4444";
+    return "#ff4c4c";
   };
 
   const getCardClasses = (status: "Healthy" | "Risk" | "Bottleneck") => {
     if (status === "Healthy") {
-      return "border-[#10b981]/25 bg-[#10b981]/5 shadow-[inset_0_0_15px_rgba(16,185,129,0.05),_0_4px_12px_rgba(0,0,0,0.15)] hover:border-[#10b981]/60 hover:shadow-[0_0_15px_rgba(16,185,129,0.12),_inset_0_1px_1px_rgba(255,255,255,0.03)]";
+      return "border-[#22c55e]/25 bg-[#22c55e]/5 shadow-[inset_0_0_15px_rgba(34, 197, 94,0.05),_0_4px_12px_rgba(0,0,0,0.15)] hover:border-[#22c55e]/60 hover:shadow-[0_0_15px_rgba(34, 197, 94,0.12),_inset_0_1px_1px_rgba(255,255,255,0.03)]";
     }
     if (status === "Risk") {
       return "border-[#eab308]/25 bg-[#eab308]/5 shadow-[inset_0_0_15px_rgba(234,179,8,0.05),_0_4px_12px_rgba(0,0,0,0.15)] hover:border-[#eab308]/60 hover:shadow-[0_0_15px_rgba(234,179,8,0.12),_inset_0_1px_1px_rgba(255,255,255,0.03)]";
     }
-    return "border-[#ef4444]/25 bg-[#ef4444]/5 shadow-[inset_0_0_15px_rgba(239,68,68,0.05),_0_4px_12px_rgba(0,0,0,0.15)] hover:bg-[#ef4444]/10 animate-border-pulse-critical";
+    return "border-[#ff4c4c]/25 bg-[#ff4c4c]/5 shadow-[inset_0_0_15px_rgba(255, 76, 76,0.05),_0_4px_12px_rgba(0,0,0,0.15)] hover:bg-[#ff4c4c]/10 animate-border-pulse-critical";
   };
 
   const renderPlaceholderIcon = (id: number) => {
@@ -173,13 +173,13 @@ export const ProcessFlowMap: React.FC = () => {
           </h3>
           <div className="flex gap-4 text-[13px] ml-6 font-bold">
             <span className="flex items-center gap-2 text-[#97a7bb]">
-              <span className="w-2 h-2 rounded-full bg-[#10b981]" /> Healthy
+              <span className="w-2 h-2 rounded-full bg-[#22c55e]" /> Healthy
             </span>
             <span className="flex items-center gap-2 text-[#97a7bb]">
               <span className="w-2 h-2 rounded-full bg-[#eab308]" /> Risk
             </span>
             <span className="flex items-center gap-2 text-[#97a7bb]">
-              <span className="w-2 h-2 rounded-full bg-[#ef4444]" /> Bottleneck
+              <span className="w-2 h-2 rounded-full bg-[#ff4c4c]" /> Bottleneck
             </span>
           </div>
         </div>
@@ -253,7 +253,7 @@ export const ProcessFlowMap: React.FC = () => {
           <div
             className="absolute inset-x-[120px] h-[3px] rounded-full"
             style={{
-              background: `linear-gradient(to right, #10b981 0%, #10b981 38%, #eab308 42%, #ef4444 50%, #eab308 58%, #eab308 66%, #10b981 73%, #10b981 100%)`,
+              background: `linear-gradient(to right, #22c55e 0%, #22c55e 38%, #eab308 42%, #ff4c4c 50%, #eab308 58%, #eab308 66%, #22c55e 73%, #22c55e 100%)`,
             }}
           />
 

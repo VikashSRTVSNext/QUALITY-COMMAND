@@ -22,7 +22,7 @@ export const DefectDetailPage: React.FC = () => {
       </button>
 
       {isLoading && <div className="text-[#526a8a]">Loading defect analysis…</div>}
-      {isError && <div className="text-[#ef4444]">Failed to load defect {defectCode}.</div>}
+      {isError && <div className="text-[#ff4c4c]">Failed to load defect {defectCode}.</div>}
 
       {data && (
         <>

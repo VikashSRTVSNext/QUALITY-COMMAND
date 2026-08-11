@@ -35,9 +35,9 @@ export const Card: React.FC<CardProps> = ({
   }, [triggerUpdate]);
 
   const glowClasses = {
-    success: 'border-[#10b981]/25 hover:border-[#10b981]/60 hover:shadow-[0_0_20px_rgba(16,185,129,0.12),_inset_0_1px_1px_rgba(255,255,255,0.05)]',
+    success: 'border-[#22c55e]/25 hover:border-[#22c55e]/60 hover:shadow-[0_0_20px_rgba(34, 197, 94,0.12),_inset_0_1px_1px_rgba(255,255,255,0.05)]',
     warning: 'border-[#eab308]/25 hover:border-[#eab308]/60 hover:shadow-[0_0_20px_rgba(234,179,8,0.12),_inset_0_1px_1px_rgba(255,255,255,0.05)]',
-    danger: 'border-[#ef4444]/25 hover:border-[#ef4444]/60 hover:shadow-[0_0_20px_rgba(239,68,68,0.15),_inset_0_1px_1px_rgba(255,255,255,0.05)]',
+    danger: 'border-[#ff4c4c]/25 hover:border-[#ff4c4c]/60 hover:shadow-[0_0_20px_rgba(255, 76, 76,0.15),_inset_0_1px_1px_rgba(255,255,255,0.05)]',
     info: 'border-[#06b6d4]/25 hover:border-[#06b6d4]/60 hover:shadow-[0_0_20px_rgba(6,182,212,0.12),_inset_0_1px_1px_rgba(255,255,255,0.05)]',
     primary: 'border-[#005aff]/25 hover:border-[#005aff]/60 hover:shadow-[0_0_20px_rgba(0,90,255,0.12),_inset_0_1px_1px_rgba(255,255,255,0.05)]',
     none: 'border-[#1d324b] hover:border-[#2b395e]/80 hover:shadow-[0_0_20px_rgba(56,189,248,0.05),_inset_0_1px_1px_rgba(255,255,255,0.05)]',

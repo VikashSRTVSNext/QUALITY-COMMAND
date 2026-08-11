@@ -12,15 +12,15 @@ export const AttentionCenter: React.FC = () => {
       {/* Header section with counts */}
       <div className="flex flex-col gap-3">
         <div className="flex justify-between items-center">
-          <h3 className="text-sm font-bold text-white flex items-center border-l-2 border-[#ef4444] pl-2">
+          <h3 className="text-sm font-bold text-white flex items-center border-l-2 border-[#ff4c4c] pl-2">
             Attention Center
           </h3>
           <div className="flex gap-2 text-[10px] font-bold">
-            <span className="bg-[#ef4444] text-white rounded-full px-2.5 py-0.5">
+            <span className="bg-[#ff4c4c] text-white rounded-full px-2.5 py-0.5">
               {activeCount} Alerts
             </span>
             {criticalCount > 0 && (
-              <span className="border border-[#ef4444] text-[#ef4444] rounded-full px-2.5 py-0.5">
+              <span className="border border-[#ff4c4c] text-[#ff4c4c] rounded-full px-2.5 py-0.5">
                 {criticalCount} Critical
               </span>
             )}
@@ -29,7 +29,7 @@ export const AttentionCenter: React.FC = () => {
 
         {/* Tab Buttons */}
         <div className="flex gap-2 text-[10px] font-bold">
-          <button className="border border-[#ef4444] text-[#ef4444] px-3 py-1 rounded bg-[#ef4444]/5">
+          <button className="border border-[#ff4c4c] text-[#ff4c4c] px-3 py-1 rounded bg-[#ff4c4c]/5">
             Impact
           </button>
           <button className="border border-[#1d324b] text-[#52607f] hover:text-white px-3 py-1 rounded transition-colors bg-[#080c14]">
@@ -52,10 +52,10 @@ export const AttentionCenter: React.FC = () => {
           let titleColor = 'text-[#06b6d4]';
 
           if (isCritical) {
-            typeColor = 'text-[#ef4444]';
+            typeColor = 'text-[#ff4c4c]';
             typeLabel = 'CRITICAL';
-            typeIcon = <XCircle size={14} className="text-[#ef4444]" />;
-            titleColor = 'text-[#ef4444]';
+            typeIcon = <XCircle size={14} className="text-[#ff4c4c]" />;
+            titleColor = 'text-[#ff4c4c]';
           } else if (isWarning) {
             typeColor = 'text-[#eab308]';
             typeLabel = 'WARNING';
@@ -80,7 +80,7 @@ export const AttentionCenter: React.FC = () => {
           }
 
           const alertBorderClass = isCritical 
-            ? 'animate-border-pulse-critical border-[#ef4444]/35' 
+            ? 'animate-border-pulse-critical border-[#ff4c4c]/35' 
             : 'border-[#1d324b] hover:border-[#2b395e]/60';
 
           return (
@@ -101,7 +101,7 @@ export const AttentionCenter: React.FC = () => {
                 </div>
                 <button 
                   onClick={() => acknowledgeAlert(alert.id)}
-                  className="flex items-center gap-1 text-[12px] text-[#52607f] hover:text-[#10b981] transition-colors"
+                  className="flex items-center gap-1 text-[12px] text-[#52607f] hover:text-[#22c55e] transition-colors"
                 >
                   <span>{alert.timeAgo}</span>
                   <ChevronRight size={13} />

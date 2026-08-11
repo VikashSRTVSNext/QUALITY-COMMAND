@@ -13,8 +13,8 @@ export const MiniSparkline: React.FC<MiniSparklineProps> = ({
   data,
   width = 120,
   height = 36,
-  strokeColor = '#10b981', // success emerald
-  fillColor = 'rgba(16, 185, 129, 0.08)',
+  strokeColor = '#22c55e', // success emerald
+  fillColor = 'rgba(34, 197, 94, 0.08)',
   strokeWidth = 1.5,
 }) => {
   if (!data || data.length < 2) return null;

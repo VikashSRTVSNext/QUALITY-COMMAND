@@ -16,7 +16,7 @@ interface SparklineProps {
  */
 export const Sparkline: React.FC<SparklineProps> = ({
   data,
-  stroke = '#10b981',
+  stroke = '#22c55e',
   width = 80,
   height = 24,
   fluid = false,

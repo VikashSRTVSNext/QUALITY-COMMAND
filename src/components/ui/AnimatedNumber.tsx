@@ -58,9 +58,9 @@ export const AnimatedNumber: React.FC<AnimatedNumberProps> = ({
   }, [value, duration]);
 
   const trendColorClass = trend === 'up' 
-    ? 'text-[#10b981] transition-colors duration-200' 
+    ? 'text-[#22c55e] transition-colors duration-200' 
     : trend === 'down' 
-    ? 'text-[#ef4444] transition-colors duration-200' 
+    ? 'text-[#ff4c4c] transition-colors duration-200' 
     : 'transition-colors duration-1000';
 
   return <span className={`${trendColorClass} ${className}`}>{formatter(displayValue)}</span>;
