@@ -3383,7 +3383,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {/* Row 2: Process Performance */}
       <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
         {/* Title for mobile/tablet */}
-        <span className="lg:hidden text-[#f8fafc] text-[15px] uppercase font-bold tracking-widest mb-3">
+        <span className="lg:hidden text-[#8fa0b5] text-[14px] uppercase font-bold tracking-widest mb-3">
           PROCESS PERFORMANCE
         </span>
 
@@ -3391,7 +3391,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         <div className="hidden lg:grid grid-cols-12 gap-2 items-center mb-3">
           {/* SMT Section Bracket */}
           <div className="col-span-4 flex items-center gap-2">
-            <span className="text-[#f8fafc] text-[12px] font-black tracking-wider uppercase flex-shrink-0">
+            <span className="text-[#8fa0b5] text-[12px] font-black tracking-wider uppercase flex-shrink-0">
               PROCESS PERFORMANCE
             </span>
             <div className="flex-1 flex items-center">
