@@ -2851,13 +2851,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {/* Overlay Gradient / Glass effect */}
             <div className="absolute inset-0 bg-gradient-to-t from-[#030810]/40 via-transparent to-transparent pointer-events-none" />
             
-            {/* Hover overlay with explore button */}
-            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+            {/* Hover overlay with explore button — commented out on request.
+                The parent div keeps its onClick, so clicking the layout still
+                opens the twin modal; only the hover prompt is hidden. */}
+            {/* <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
               <div className="bg-[#081119]/95 border border-[#06b6d4]/50 text-[#06b6d4] text-[11px] font-black tracking-widest px-3.5 py-2 rounded-lg shadow-[0_0_15px_rgba(6,182,212,0.15)] flex items-center gap-2 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
                 <Maximize2 size={12} className="animate-pulse" />
                 EXPLORE PLANT LAYOUT
               </div>
-            </div>
+            </div> */}
           </div>
         </section>
 
@@ -3029,10 +3031,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                               </span>
                             );
                           }
-                          // No period plan published: say so rather than falling
-                          // back to the mart's stale placeholder text, which
-                          // would read as a live judgement it is not.
-                          if (!yieldPlanStatus.available) {
+                          // No period plan published. Only meaningful on the UNITS
+                          // tab: TRX and PA take their target from Target
+                          // sheet.xlsx and never needed the HFTPY plan, so telling
+                          // a module row it is "awaiting P08 plan" would point at
+                          // the wrong missing thing entirely.
+                          if (!yieldPlanStatus.available && activeYieldTab === "UNITS") {
                             return (
                               <span
                                 className="text-[#63788f] italic"
@@ -3042,31 +3046,115 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                               </span>
                             );
                           }
-                          // Plan exists but this product is not in it.
+                          // No recommendation for this product. The only remaining
+                          // cause is that it has no target on file at any level.
+                          //
+                          // It used to print `row.rec` — the mart's own
+                          // ai_recommendation column, which holds static seeded text.
+                          // That put "Performance within expectations" beside
+                          // SYS_ABIO_Mod.ASPE sitting at 0% yield. Stale placeholder
+                          // prose reads exactly like a live judgement, so it is worse
+                          // than an honest blank.
                           return (
-                            <div className="flex items-center gap-1">
-                              <Wrench
-                                size={10}
-                                className="text-[#8fa0b5] flex-shrink-0"
-                              />
-                              <span className="truncate max-w-[120px]">
-                                {row.rec}
-                              </span>
+                            <span
+                              className="text-[#63788f] italic"
+                              title={`No target on file for ${row.name}, so no recommendation can be computed. Add it to Target sheet.xlsx.`}
+                            >
+                              no target on file
+                            </span>
+                          );
+                        }
+                        // The raw-field `payload` object that used to live here is
+                        // gone: it existed only to be JSON-dumped into a tooltip,
+                        // and both tooltips now build a readable sentence from the
+                        // same fields instead.
+
+                        // TRX / PA take a different shape, because they have
+                        // different data behind them. Target sheet.xlsx gives them a
+                        // target percentage and NO planned quantity, so there is no
+                        // remainder to divide by — required_future_yield,
+                        // mathematical_status and achievability all come back null.
+                        // Rendering the unit layout here would show four labels with
+                        // three dashes.
+                        //
+                        // What they get instead needs no plan at all: how many
+                        // consecutive passes would restore target, or how many more
+                        // failures the current margin can absorb.
+                        if (yr.product_level && yr.product_level !== "UNIT") {
+                          const recover = yr.passes_to_recover;
+                          const headroom = yr.failure_headroom;
+                          const onTarget = isNum(headroom);
+                          // A recovery larger than everything already built is
+                          // arithmetically right and practically meaningless —
+                          // AHEGHAPA Z needs 803 passes on 681 tested. Shown as a
+                          // bound rather than a precise figure nobody will act on.
+                          const hopeless =
+                            isNum(recover) && recover > yr.tested_quantity;
+                          const colour = onTarget ? "#22c55e" : "#ff4c4c";
+                          return (
+                            <div
+                              className="flex flex-col gap-[1px] text-[9px] leading-[1.3] min-w-[150px]"
+                              // Deterministic, built from the same fields the cell
+                              // shows, so the two can never disagree. The generated
+                              // prose used to sit here and claimed "No target yield
+                              // available" beside a cell reading 95% — it was
+                              // reporting the absent VERDICT as an absent TARGET.
+                              title={
+                                onTarget
+                                  ? `${yr.product}: ${yr.tested_quantity.toLocaleString()} tested at ${isNum(yr.current_yield) ? (yr.current_yield * 100).toFixed(1) : "—"}%, above the ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% target. ${headroom.toLocaleString()} further failure(s) can be absorbed before it breaches.`
+                                  : hopeless
+                                    ? `${yr.product}: needs ${recover?.toLocaleString()} consecutive passes to reach the ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% target — more than the ${yr.tested_quantity.toLocaleString()} already built. Not recoverable this period.`
+                                    : `${yr.product}: ${yr.tested_quantity.toLocaleString()} tested at ${isNum(yr.current_yield) ? (yr.current_yield * 100).toFixed(1) : "—"}%, below the ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% target. ${isNum(recover) ? recover.toLocaleString() : "—"} consecutive passes would restore it. No period plan exists for module products, so no feasibility verdict is given.`
+                              }
+                            >
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[#63788f]">Yield / target</span>
+                                <span className="text-[#c8d6e4] font-bold tabular-nums">
+                                  {isNum(yr.current_yield)
+                                    ? `${(yr.current_yield * 100).toFixed(1)}%`
+                                    : "—"}
+                                  <span className="text-[#63788f]"> / </span>
+                                  {isNum(yr.target_yield)
+                                    ? `${(yr.target_yield * 100).toFixed(0)}%`
+                                    : "—"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between gap-2">
+                                <span className="text-[#63788f]">Tested</span>
+                                <span className="text-[#c8d6e4] font-bold tabular-nums">
+                                  {yr.tested_quantity.toLocaleString()}
+                                </span>
+                              </div>
+                              <div className="flex justify-between gap-2 items-center mt-[1px]">
+                                <span className="text-[#63788f]">
+                                  {onTarget ? "Failures spare" : "Passes to recover"}
+                                </span>
+                                <span
+                                  className="font-black px-1.5 py-[1px] rounded text-[8.5px] uppercase tracking-wide tabular-nums"
+                                  style={{
+                                    color: colour,
+                                    backgroundColor: `${colour}1a`,
+                                    border: `1px solid ${colour}55`,
+                                  }}
+                                  title={
+                                    hopeless
+                                      ? `Needs ${recover?.toLocaleString()} consecutive passes — more than the ${yr.tested_quantity.toLocaleString()} already built. Not recoverable this period.`
+                                      : undefined
+                                  }
+                                >
+                                  {onTarget
+                                    ? headroom.toLocaleString()
+                                    : hopeless
+                                      ? `>${yr.tested_quantity.toLocaleString()}`
+                                      : isNum(recover)
+                                        ? recover.toLocaleString()
+                                        : "n/a"}
+                                </span>
+                              </div>
                             </div>
                           );
                         }
-                        const payload = {
-                          required_future_yield: yr.required_future_yield,
-                          maximum_possible_final_yield:
-                            yr.maximum_possible_final_yield,
-                          mathematical_status: yr.mathematical_status,
-                          predicted_remaining_yield:
-                            yr.predicted_remaining_yield,
-                          ml_confidence: yr.ml_confidence,
-                          ml_assessment: yr.ml_assessment,
-                          model_version: yr.model_version,
-                          recommendation: yr.recommendation,
-                        };
+
                         // Four labelled figures, not a paragraph. This column is
                         // read at a glance by people on the floor; a 50-word
                         // sentence is slower to parse than a number with a label
@@ -3103,9 +3191,26 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         return (
                           <div
                             className="flex flex-col gap-[1px] text-[9px] leading-[1.3] min-w-[150px]"
+                            // Deterministic, so it cannot contradict the cell. The
+                            // generated prose is off (see AZURE_OPENAI_API_VERSION
+                            // in .env) and a raw JSON dump was never a tooltip
+                            // anyone could read. `recommendation` is still honoured
+                            // first, so re-enabling the AI layer needs no change
+                            // here.
                             title={
                               yr.recommendation ||
-                              JSON.stringify(payload, null, 2)
+                              [
+                                `${yr.product}: ${yr.tested_quantity.toLocaleString()} of ${isNum(yr.planned_quantity) ? yr.planned_quantity.toLocaleString() : "—"} planned units built at ${isNum(yr.current_yield) ? (yr.current_yield * 100).toFixed(1) : "—"}%, against a ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% period target.`,
+                                isNum(yr.remaining_quantity) && isNum(yr.required_future_yield)
+                                  ? `The remaining ${yr.remaining_quantity.toLocaleString()} units must average ${(yr.required_future_yield * 100).toFixed(1)}%.`
+                                  : "No remaining quantity is known, so no required yield can be computed.",
+                                unprecedented && isNum(yr.best_historical_yield)
+                                  ? `That is above the best full period on record (${(yr.best_historical_yield * 100).toFixed(1)}%) — unprecedented for this product.`
+                                  : isNum(yr.best_historical_yield)
+                                    ? `Within the best full period on record (${(yr.best_historical_yield * 100).toFixed(1)}%).`
+                                    : "No completed periods on record to compare against.",
+                                `Maths: ${yr.mathematical_status ?? "n/a"} · History: ${yr.historical_status ?? "n/a"} · Verdict: ${yr.achievability ?? "n/a"}`,
+                              ].join("\n")
                             }
                           >
                             <div className="flex justify-between gap-2">
