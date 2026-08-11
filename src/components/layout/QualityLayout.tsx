@@ -2713,7 +2713,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       {/* Row 2: Process Performance */}
       <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
         {/* Title for mobile/tablet */}
-        <span className="lg:hidden text-[#06b6d4] text-[15px] uppercase font-bold tracking-widest mb-3">
+        <span className="lg:hidden text-[#f8fafc] text-[15px] uppercase font-bold tracking-widest mb-3">
           PROCESS PERFORMANCE
         </span>
 
@@ -2946,7 +2946,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         {/* Section 1: Factory Quality Twin */}
         <section className="bg-[#101c2b] border border-white/20 rounded-xl p-4 flex flex-col h-[400px]">
           <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-3 flex-shrink-0">
-            <span className="text-[15.5px] font-black tracking-widest text-[#06b6d4]">
+            <span className="text-[15.5px] font-black tracking-widest text-[#f8fafc]">
               QUALITY HEAT MAP
             </span>
             {/* Legend colors come from STATUS_CSS so the swatches always match
@@ -2993,7 +2993,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
         {/* Section 2: Product Yield */}
         <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[400px]">
-          <span className="text-[15.5px] font-black tracking-widest text-[#06b6d4] uppercase mb-1.5">
+          <span className="text-[15.5px] font-black tracking-widest text-[#f8fafc] uppercase mb-1.5">
             PRODUCT YIELD
           </span>
           {/* Tabs */}
@@ -3460,10 +3460,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         {/* Section 3: Attention Center Alerts */}
         <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[400px]">
           <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-2 flex-shrink-0">
-            <span
-              className="text-[15.5px] font-black tracking-widest text-[#ff4c4c] uppercase"
-              style={{ textShadow: "0 0 12px rgba(255, 76, 76,0.3)" }}
-            >
+            <span className="text-[15.5px] font-black tracking-widest text-[#f8fafc] uppercase">
               ATTENTION CENTER
             </span>
             <div className="flex gap-2 text-[11px]">
@@ -3893,7 +3890,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   (K&euro;)
                 </span>
               </span>
-              <div className="flex items-baseline gap-1.5 mt-1">
+              <div className="flex items-baseline gap-1.5 mt-1 mb-3">
                 <span className="text-[#a855f7] text-[24px] font-black leading-none font-mono">
                   {fmtCompact(ciLeanSavings.value, "—")}
                 </span>
@@ -3917,7 +3914,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
                 No. of Kaizen
               </span>
-              <div className="flex items-baseline gap-1.5 mt-1">
+              <div className="flex items-baseline gap-1.5 mt-1 mb-3">
                 <span className="text-[#0ea5e9] text-[24px] font-black leading-none font-mono">
                   {ciKaizen.achievedLabel}
                 </span>
