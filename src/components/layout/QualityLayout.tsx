@@ -1091,7 +1091,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     "UNITS",
   );
   const [yieldPage, setYieldPage] = useState(1);
-  const ITEMS_PER_PAGE = 8;
+  const ITEMS_PER_PAGE = 10;
 
   const [processPerformance, setProcessPerformance] = useState<any[]>(
     processPerformanceData.map((item) => ({
@@ -2626,7 +2626,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       {/* Row 3: Middle Analysis Hub */}
       <main className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.8fr)_minmax(0,5fr)_minmax(0,2.5fr)] gap-4">
         {/* Section 1: Factory Quality Twin */}
-        <section className="bg-[#101c2b] border border-white/20 rounded-xl p-4 flex flex-col h-[400px]">
+        <section className="bg-[#101c2b] border border-white/20 rounded-xl p-4 flex flex-col h-[380px]">
           <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-3 flex-shrink-0">
             <span className="text-[14px] font-black tracking-widest text-[#8fa0b5]">
               QUALITY HEAT MAP
@@ -2674,7 +2674,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </section>
 
         {/* Section 2: Product Yield */}
-        <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[400px]">
+        <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[380px]">
           <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase mb-1.5">
             PRODUCT YIELD
           </span>
@@ -2808,7 +2808,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   {/* Header stays plain. The period this column judges against
                       is carried by the cells themselves, which name it in the
                       empty state and in the tooltip. */}
-                  <th className="pb-2 font-black pl-3 sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                  <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
                     AI RECOMMENDATION
                   </th>
                 </tr>
@@ -2834,19 +2834,19 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 )}
                 {paginatedYieldData.map((row, idx) => (
                   <tr key={row.id} className="hover:bg-[#101c2b]/40">
-                    <td className="py-[4px] text-[#8fa0b5] pl-2">
+                    <td className="py-[2.5px] text-[#8fa0b5] pl-2">
                       {(yieldPage - 1) * ITEMS_PER_PAGE + idx + 1}.
                     </td>
-                    <td className="py-[4px] text-white font-sans font-bold">
+                    <td className="py-[2.5px] text-white font-sans font-bold">
                       {row.name}
                     </td>
-                    <td className="py-[4px] text-center text-white">
+                    <td className="py-[2.5px] text-center text-white">
                       {row.tested}
                     </td>
-                    <td className="py-[4px] text-center text-white">
+                    <td className="py-[2.5px] text-center text-white">
                       {row.failed}
                     </td>
-                    <td className="py-[4px] text-center font-bold">
+                    <td className="py-[2.5px] text-center font-bold">
                       <span
                         className={
                           // No target filed: neutral. Colouring it against a
@@ -2891,13 +2891,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         </svg>
                       </span>
                     </td>
-                    <td className="py-[4px] text-center text-white font-bold">
+                    <td className="py-[2.5px] text-center text-white font-bold">
                       {isNum(row.spy) ? `${row.spy.toFixed(1)}%` : "—"}
                     </td>
-                    <td className="py-[4px] text-center text-white">
+                    <td className="py-[2.5px] text-center text-white">
                       {isNum(row.target) ? `${row.target}%` : "—"}
                     </td>
-                    <td className="py-[4px] text-center">
+                    <td className="py-[2.5px] text-center">
                       <span
                         className={`text-[9.5px] font-black px-1.5 py-0.5 rounded border border-[#1c3149]/50 ${
                           row.status === "Healthy"
@@ -2910,7 +2910,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         {row.status}
                       </span>
                     </td>
-                    <td className="py-[4px] pl-3 text-[#c8d6e4] font-sans text-[10px] leading-tight">
+                    <td className="py-[2.5px] text-center text-[#c8d6e4] font-sans text-[10px] leading-tight">
                       {(() => {
                         // Raw analysis JSON while the Azure OpenAI layer is
                         // unbuilt. Deliberately the exact fields the model will
@@ -2995,7 +2995,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                           const colour = onTarget ? "#22c55e" : "#ff4c4c";
                           return (
                             <div
-                              className="flex flex-col gap-[1px] text-[9px] leading-[1.3] min-w-[150px]"
+                              className="flex flex-col gap-[1px] text-[9px] leading-[1.3] min-w-[110px]"
                               // Deterministic, built from the same fields the cell
                               // shows, so the two can never disagree. The generated
                               // prose used to sit here and claimed "No target yield
@@ -3096,7 +3096,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
                         return (
                           <div
-                            className="flex flex-col gap-[1px] text-[9px] leading-[1.3] min-w-[150px]"
+                            className="flex flex-col gap-[1px] text-[9px] leading-[1.3] min-w-[110px]"
                             // Deterministic, so it cannot contradict the cell. The
                             // generated prose is off (see AZURE_OPENAI_API_VERSION
                             // in .env) and a raw JSON dump was never a tooltip
@@ -3120,7 +3120,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                               ].join("\n")
                             }
                           >
-                            <div className="flex justify-between gap-2">
+                            {/* <div className="flex justify-between gap-2">
                               <span className="text-[#63788f]">
                                 Total planned
                               </span>
@@ -3155,9 +3155,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                                   </span>
                                 )}
                               </span>
-                            </div>
-                            <div className="flex justify-between gap-2 items-center mt-[1px]">
-                              <span className="text-[#63788f]">Achievable</span>
+                            </div> */}
+                            <div className="flex items-center justify-center mt-[1px]">
                               <span
                                 className="font-black px-1.5 py-[1px] rounded text-[8.5px] uppercase tracking-wide"
                                 style={{
@@ -3228,7 +3227,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </section>
 
         {/* Section 3: Attention Center Alerts */}
-        <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[400px]">
+        <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[380px]">
           <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-2 flex-shrink-0">
             <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase">
               ATTENTION CENTER
