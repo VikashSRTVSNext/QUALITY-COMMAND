@@ -2139,19 +2139,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     }
   };
 
-  const getTimelineNodeColor = (card: (typeof processPerformanceData)[0]) => {
-    // Green or red only. "At Risk" is no longer produced for these cards, but is
-    // treated as a miss rather than reintroducing amber if it ever appears.
-    if (card.status === "Critical" || card.status === "At Risk")
-      return "#ff4c4c";
-    if (
-      card.status === "N/A" ||
-      card.status === "..." ||
-      card.status === "Not Run"
-    )
-      return "#0091ff";
-    return "#22c55e";
-  };
 
   const getCardBorderColor = (card: (typeof processPerformanceData)[0]) => {
     // Green or red only. "At Risk" is no longer produced for these cards, but is
@@ -2365,8 +2352,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     );
   };
 
-  const getKpiIcon = (id: number, color: string) => {
-    const props = { size: 18, className: "flex-shrink-0", style: { color } };
+  const getKpiIcon = (id: number, color: string, size = 18) => {
+    const props = { size, className: "flex-shrink-0", style: { color } };
     switch (id) {
       case 1: // FPY - UNIT
         return <CheckCircle2 {...props} />;
@@ -2389,6 +2376,310 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       default:
         return null;
     }
+  };
+
+  const ProcessArrow = () => (
+    <svg className="w-3.5 h-3.5 text-[#0091ff]/45 flex-shrink-0 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+    </svg>
+  );
+
+  const renderRedesignedCard = (metricName: string, customTitle?: string) => {
+    const procItem = processPerformance.find(
+      (p) =>
+        p.name === metricName ||
+        (metricName === "AXI" && p.name === "AXI - S") ||
+        (metricName === "THERMAL GEL AVI" && p.name === "THERMAL AVI") ||
+        (metricName === "SCREW DEFECT" && p.name === "SCREW DEFECTS") ||
+        (metricName === "BURN-IN" && p.name === "BURN-IN - S") ||
+        (metricName === "LBTS" && p.name === "LBTS - S")
+    );
+
+    if (procItem) {
+      const displayTitle = customTitle || metricName;
+      const cardColor = getCardBorderColor(procItem);
+      const { points } = getProcessTrendData(
+        procItem.trend,
+        activeShift,
+      );
+
+      return (
+        <div
+          className={`relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 flex-1 min-w-0 ${
+            procItem.status === "Critical" ? "animate-border-pulse-critical" : ""
+          }`}
+          style={{
+            background: `linear-gradient(180deg, ${cardColor}1f 0%, ${cardColor}0a 100%), #101c2b`,
+            borderColor: procItem.status === "Critical" ? undefined : `${cardColor}40`,
+            boxShadow: procItem.status === "Critical" ? undefined : `0 4px 12px ${cardColor}15`,
+          }}
+        >
+          <div className="flex items-start gap-1 mb-0.5 2xl:mb-1.5 flex-shrink-0">
+            <procItem.icon
+              size={10}
+              className="text-white flex-shrink-0 mt-[1px] 2xl:size-[12px]"
+            />
+            <span
+              className={`text-white font-bold uppercase leading-tight tracking-wider whitespace-nowrap ${
+                displayTitle.length > 15
+                  ? "text-[7.5px] 2xl:text-[10px]"
+                  : "text-[9.5px] 2xl:text-[12px]"
+              }`}
+            >
+              {displayTitle}
+            </span>
+          </div>
+
+          <div className="flex-grow flex flex-col justify-center items-center min-h-0 -mt-1.5 2xl:-mt-2">
+            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none uppercase">
+              {procItem.type === "yield" && "Yield %"}
+              {procItem.type === "dpmo" && "Index"}
+              {procItem.type === "failure" && "Failure %"}
+            </span>
+            <span
+              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
+              style={{
+                color: procItem.color,
+                textShadow: `0 0 8px ${procItem.color}30`,
+              }}
+            >
+              {procItem.type === "yield" && procItem.data.yield}
+              {procItem.type === "dpmo" && procItem.data.index}
+              {procItem.type === "failure" && procItem.data.failure}
+            </span>
+          </div>
+
+          <div className="h-[22px] 2xl:h-[28px] w-full flex-shrink-0 mt-auto mb-1 2xl:mb-1.5 overflow-visible relative">
+            <Sparkline
+              points={points}
+              type={procItem.type}
+              status={procItem.status}
+              color={procItem.color}
+              target={procItem.target}
+              targetDirection={procItem.targetDirection}
+            />
+          </div>
+
+          {isNum(procItem.target) && (
+            <span className="absolute bottom-1 right-1.5 2xl:right-2 text-[#63788f] text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
+              tgt {procItem.target}
+              {procItem.targetUnit === "percent" ? "%" : ""}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    const kpiItem = kpiCards.find(
+      (k) =>
+        k.label === metricName ||
+        (metricName === "FPY MODULE" && k.label === "FPY - MODULE (%)") ||
+        (metricName === "SPY MODULE" && k.label === "SPY - MODULE (%)") ||
+        (metricName === "FPY UNIT" && k.label === "FPY - UNIT (%)") ||
+        (metricName === "SPY UNIT" && k.label === "SPY - UNIT (%)") ||
+        (metricName === "CUSTOMER" && k.label === "CUSTOMER QUALITY AUDIT (%)") ||
+        (metricName === "UNITHFTPY" && k.label === "UNIT-HFTPY (%)")
+    );
+
+    if (kpiItem) {
+      const displayTitle = customTitle || metricName;
+      const delta = kpiItem.delta_vs_yesterday ?? 0;
+      const target = (kpiItem as any).target as number | null | undefined;
+      const actual = Number.parseFloat(
+        String(kpiItem.value).replace(/[^\d.-]/g, ""),
+      );
+      const meetsTarget =
+        isNum(target) && Number.isFinite(actual) ? actual >= target : null;
+
+      let trendColor: string;
+      if (meetsTarget !== null) {
+        trendColor = meetsTarget ? "#22c55e" : "#ff4c4c";
+      } else if (delta > 0) {
+        trendColor = "#22c55e";
+      } else if (delta < 0) {
+        trendColor = "#ff4c4c";
+      } else {
+        trendColor = kpiItem.color || "#8fa0b5";
+      }
+
+      const deltaColor = "#8fa0b5";
+
+      return (
+        <div
+          key={kpiItem.id}
+          className="relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 flex-1 min-w-0"
+          style={{
+            background: `linear-gradient(180deg, ${trendColor}1f 0%, ${trendColor}0a 100%), #101c2b`,
+            borderColor: `${trendColor}40`,
+            boxShadow: `0 4px 12px ${trendColor}15`,
+          }}
+        >
+          <div className="flex items-start gap-1 mb-0.5 2xl:mb-1.5 flex-shrink-0">
+            {getKpiIcon(kpiItem.id, trendColor, 10)}
+            <span className="text-white text-[9.5px] 2xl:text-[12px] uppercase font-bold tracking-wider leading-tight">
+              {displayTitle}
+            </span>
+          </div>
+
+          <div className="flex-grow flex flex-col justify-center items-center min-h-0 -mt-1.5 2xl:-mt-2">
+            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none uppercase">
+              Yield %
+            </span>
+            <span
+              className="text-[16px] 2xl:text-[20px] font-black mt-1 font-mono leading-none"
+              style={{
+                color: trendColor,
+                textShadow: `0 0 8px ${trendColor}40`,
+              }}
+            >
+              {kpiItem.value}
+            </span>
+            <span
+              className="text-[7.5px] 2xl:text-[9.5px] font-bold mt-1 leading-none"
+              style={{ color: deltaColor }}
+            >
+              {kpiItem.change}
+            </span>
+          </div>
+
+          <div className="h-[22px] 2xl:h-[28px] w-full flex-shrink-0 mt-auto mb-1 2xl:mb-1.5 overflow-hidden relative">
+            {kpiItem.id !== 9 &&
+              renderFullSparkline(
+                kpiItem.points,
+                kpiItem.yesterdayPoints,
+                trendColor,
+                target,
+              )}
+          </div>
+
+          {isNum(target) && (
+            <span className="absolute bottom-1 right-1.5 2xl:right-2 text-[#63788f] text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
+              tgt {target}%
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const renderLargeKpiCard = (metricName: string, customTitle?: string) => {
+    const kpiItem = kpiCards.find(
+      (k) =>
+        k.label === metricName ||
+        (metricName === "CUSTOMER" && k.label === "CUSTOMER QUALITY AUDIT (%)") ||
+        (metricName === "UNITHFTPY" && k.label === "UNIT-HFTPY (%)")
+    );
+
+    if (!kpiItem) return null;
+
+    const displayTitle = customTitle || metricName;
+    const delta = kpiItem.delta_vs_yesterday ?? 0;
+    const target = (kpiItem as any).target as number | null | undefined;
+    const actual = Number.parseFloat(
+      String(kpiItem.value).replace(/[^\d.-]/g, ""),
+    );
+    const meetsTarget =
+      isNum(target) && Number.isFinite(actual) ? actual >= target : null;
+
+    let trendColor: string;
+    if (meetsTarget !== null) {
+      trendColor = meetsTarget ? "#22c55e" : "#ff4c4c";
+    } else if (delta > 0) {
+      trendColor = "#22c55e";
+    } else if (delta < 0) {
+      trendColor = "#ff4c4c";
+    } else {
+      trendColor = kpiItem.color || "#8fa0b5";
+    }
+
+    const deltaColor = "#8fa0b5";
+
+    return (
+      <div
+        key={kpiItem.id}
+        className="flex-1 bg-[#0b131e] border rounded-xl p-3 flex flex-col justify-between relative overflow-hidden transition-all duration-300 hover:-translate-y-0.5"
+        style={{
+          boxShadow: `0 4px 12px ${trendColor}10`,
+          borderColor: `${trendColor}30`,
+        }}
+      >
+        <div className="flex items-center gap-2 z-10">
+          {getKpiIcon(kpiItem.id, trendColor, 15)}
+          <span className="text-white text-[11px] 2xl:text-[13px] uppercase font-black tracking-wider leading-tight">
+            {displayTitle}
+          </span>
+        </div>
+
+        <div className="flex-grow flex flex-col justify-center mt-2 z-10 mb-4">
+          {kpiItem.id === 9 ? (
+            <div className="flex items-baseline gap-2 justify-between">
+              <span
+                className="text-[26px] 2xl:text-[32px] font-black font-mono leading-none"
+                style={{
+                  color: trendColor,
+                  textShadow: `0 0 8px ${trendColor}40`,
+                }}
+              >
+                {kpiItem.value}
+              </span>
+              <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
+                Cur
+              </span>
+              <span
+                className="text-[#3fd3c6] text-[18px] 2xl:text-[22px] font-black font-mono ml-auto leading-none"
+                style={{ textShadow: `0 0 6px rgba(63,211,198,0.3)` }}
+                title={
+                  hftpyBlock?.projection_is_hardcoded
+                    ? "Projection is a fixed constant, not a computed forecast"
+                    : undefined
+                }
+              >
+                {kpiItem.projectedValue || "—"}
+              </span>
+              <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
+                Proj
+              </span>
+            </div>
+          ) : (
+            <span
+              className="text-[30px] 2xl:text-[36px] font-black font-mono leading-none"
+              style={{
+                color: trendColor,
+                textShadow: `0 0 8px ${trendColor}40`,
+              }}
+            >
+              {kpiItem.value}
+            </span>
+          )}
+          
+          <div className="flex items-baseline gap-1.5 mt-1.5">
+            <span
+              className="text-[11px] 2xl:text-[12.5px] font-bold"
+              style={{ color: deltaColor }}
+            >
+              {kpiItem.change}
+            </span>
+            {isNum(target) && (
+              <span className="text-[#63788f] text-[9.5px] 2xl:text-[11px] font-bold ml-auto whitespace-nowrap">
+                tgt {target}%
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="absolute bottom-[2px] left-0 right-0 h-[22px] pointer-events-none opacity-85">
+          {kpiItem.id !== 9 &&
+            renderFullSparkline(
+              kpiItem.points,
+              kpiItem.yesterdayPoints,
+              trendColor,
+              target,
+            )}
+        </div>
+      </div>
+    );
   };
 
   const isStatusLive = ["LIVE", "ONLINE", "CONNECTED", "ACTIVE"].includes(
@@ -3378,364 +3669,93 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </section>
       </main>
 
-
-            {/* Row 2: Process Performance */}
-      <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
-        {/* Title for mobile/tablet */}
-        <span className="lg:hidden text-[#8fa0b5] text-[14px] uppercase font-bold tracking-widest mb-3">
-          PROCESS PERFORMANCE
-        </span>
-
-        {/* Brackets row for desktop */}
-        <div className="hidden lg:grid grid-cols-12 gap-2 items-center mb-3">
-          {/* SMT Section Bracket */}
-          <div className="col-span-4 flex items-center gap-2">
-            <span className="text-[#8fa0b5] text-[12px] font-black tracking-wider uppercase flex-shrink-0">
-              PROCESS PERFORMANCE
-            </span>
-            <div className="flex-1 flex items-center">
-              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
-              <span className="px-2.5 text-[#0091ff] text-[12.5px] font-black tracking-widest">
-                SMT
-              </span>
-              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
-              {/* Downward tick */}
-              <div className="h-[7px] w-[1.5px] bg-[#0091ff] self-end" />
+      {/* Redesigned Process Performance & Overall Quality Row */}
+      <section className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-3">
+        {/* Left Section: 8x8 Box layout */}
+        <div className="lg:col-span-3 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
+          <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
+            PROCESS PERFORMANCE
+          </span>
+          <div className="flex flex-col gap-4 flex-grow justify-between relative">
+            {/* First 8 Items (Group 1) */}
+            <div className="flex items-center gap-1.5 w-full z-10">
+              {renderRedesignedCard("SPI")}
+              <ProcessArrow />
+              {renderRedesignedCard("DPMOI")}
+              <ProcessArrow />
+              {renderRedesignedCard("AXI", "AXI")}
+              <ProcessArrow />
+              {renderRedesignedCard("SMT DEFECTS @ MFT")}
+              <ProcessArrow />
+              {renderRedesignedCard("FPY MODULE", "FPY MODULE")}
+              <ProcessArrow />
+              {renderRedesignedCard("SPY MODULE", "SPY MODULE")}
+              <ProcessArrow />
+              {renderRedesignedCard("THERMAL GEL AVI", "THERMAL GEL AVI")}
+              <ProcessArrow />
+              {renderRedesignedCard("SCREW DEFECT", "SCREW DEFECT")}
             </div>
-          </div>
 
-          {/* RFM Section Bracket */}
-          <div className="col-span-8 flex items-center">
-            {/* Downward tick */}
-            <div className="h-[7px] w-[1.5px] bg-[#0091ff] self-end" />
-            <div className="flex-1 flex items-center">
-              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
-              <span className="px-2.5 text-[#0091ff] text-[12.5px] font-black tracking-widest">
-                RFM
-              </span>
-              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
-              {/* Arrowhead */}
-              <div className="w-1.5 h-1.5 border-t-[1.5px] border-r-[1.5px] border-[#0091ff] rotate-45 -mr-[3px] -mt-[0.5px]" />
-              {/* Downward tick */}
-              <div className="h-[7px] w-[1.5px] bg-[#0091ff] self-end" />
+            {/* Visual spacer/divider for the two groups with loop connector */}
+            <div className="border-t border-[#1c3149]/40 my-1 flex-shrink-0 z-10 relative overflow-visible">
+              <svg className="absolute left-0 right-0 -top-[16px] h-[52px] w-full overflow-visible pointer-events-none" viewBox="0 0 100 52" preserveAspectRatio="none">
+                <defs>
+                  <marker
+                    id="connector-arrow"
+                    viewBox="0 0 10 10"
+                    refX="6"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#0091ff" />
+                  </marker>
+                </defs>
+                <path
+                  d="M 93.75,0 L 93.75,16 L 6.25,16 L 6.25,47"
+                  fill="none"
+                  stroke="#0091ff"
+                  strokeWidth="1.2"
+                  strokeDasharray="3 2.5"
+                  vectorEffect="non-scaling-stroke"
+                  className="opacity-70"
+                  markerEnd="url(#connector-arrow)"
+                />
+              </svg>
+            </div>
+
+            {/* Next 8 Items (Group 2) */}
+            <div className="flex items-center gap-1.5 w-full z-10">
+              {renderRedesignedCard("FPY UNIT", "FPY UNIT")}
+              <ProcessArrow />
+              {renderRedesignedCard("SPY UNIT", "SPY UNIT")}
+              <ProcessArrow />
+              {renderRedesignedCard("OTA")}
+              <ProcessArrow />
+              {renderRedesignedCard("RTWP")}
+              <ProcessArrow />
+              {renderRedesignedCard("BURN-IN", "BURN-IN")}
+              <ProcessArrow />
+              {renderRedesignedCard("LBTS", "LBTS")}
+              <ProcessArrow />
+              {renderRedesignedCard("IP")}
+              <ProcessArrow />
+              {renderRedesignedCard("AUTO OGI")}
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-1.5 2xl:gap-2">
-          {processPerformance.map((item, idx) => {
-            const cardColor = getCardBorderColor(item);
-            const colorCurrent = getTimelineNodeColor(item);
-            const colorNext =
-              idx < processPerformance.length - 1
-                ? getTimelineNodeColor(processPerformance[idx + 1])
-                : "";
-
-            return (
-              <div key={idx} className="flex flex-col w-full min-w-0">
-                {/* Card */}
-                {/* Card */}
-                {(() => {
-                  // Real hourly series from the API: 24 points for the full day,
-                  // 8 for a selected shift. Replaces the seeded random walk that
-                  // used to fill this in — it produced a plausible-looking line
-                  // from the current value and a hash of the card's name, which
-                  // meant every sparkline on this strip was decorative.
-                  const { points, trendDirection } = getProcessTrendData(
-                    item.trend,
-                    activeShift,
-                  );
-
-                  return (
-                    <div
-                      className={`relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 ${
-                        item.status === "Critical"
-                          ? "animate-border-pulse-critical"
-                          : ""
-                      }`}
-                      style={{
-                        // Figma card surface with a wash of the status colour
-                        // over it, set here rather than as a bg-[...] class
-                        // because the tint depends on runtime status.
-                        //
-                        // It used to be #030810 — the PAGE ground — which is
-                        // darker than the panel these sit on, so every card read
-                        // as a hole punched in the section rather than a card
-                        // resting on it.
-                        //
-                        // The wash is deliberately faint. Figma has no graph in
-                        // these cards; ours do, and the sparkline plus its target
-                        // line have to stay legible on top, which a strong status
-                        // fill would swallow.
-                        background: `linear-gradient(180deg, ${cardColor}1f 0%, ${cardColor}0a 100%), #101c2b`,
-                        borderColor:
-                          item.status === "Critical"
-                            ? undefined
-                            : `${cardColor}40`,
-                        boxShadow:
-                          item.status === "Critical"
-                            ? undefined
-                            : `0 4px 12px ${cardColor}15`,
-                      }}
-                    >
-                      {/* Header */}
-                      <div className="flex items-start gap-1 mb-0.5 2xl:mb-1.5 flex-shrink-0">
-                        <item.icon
-                          size={10}
-                          className="text-white flex-shrink-0 mt-[1px] 2xl:size-[12px]"
-                        />
-                        <span
-                          className={`text-white font-black uppercase leading-tight whitespace-nowrap ${
-                            item.name.length > 15
-                              ? "text-[7.5px] 2xl:text-[10px]"
-                              : "text-[9.5px] 2xl:text-[12px]"
-                          }`}
-                        >
-                          {item.name}
-                        </span>
-                      </div>
-                      {/* Body */}
-                      <div className="flex-1 flex flex-col justify-center items-center min-h-0 -mt-1.5 2xl:-mt-2">
-                        {item.type === "yield" && (
-                          <div className="flex flex-col items-center justify-center">
-                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
-                              Yield %
-                            </span>
-                            <span
-                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
-                              style={{
-                                color: item.color,
-                                textShadow: `0 0 8px ${item.color}30`,
-                              }}
-                            >
-                              {item.data.yield}
-                            </span>
-                          </div>
-                        )}
-                        {item.type === "dpmo" && (
-                          <div className="flex flex-col items-center justify-center">
-                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
-                              Index
-                            </span>
-                            <span
-                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
-                              style={{
-                                color: item.color,
-                                textShadow: `0 0 8px ${item.color}30`,
-                              }}
-                            >
-                              {item.data.index}
-                            </span>
-                          </div>
-                        )}
-                        {item.type === "failure" && (
-                          <div className="flex flex-col items-center justify-center">
-                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
-                              Failure %
-                            </span>
-                            <span
-                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
-                              style={{
-                                color: item.color,
-                                textShadow: `0 0 8px ${item.color}30`,
-                              }}
-                            >
-                              {item.data.failure}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Trend Indicator */}
-                        <span
-                          className="text-[7.5px] 2xl:text-[9.5px] font-bold mt-1 leading-none flex items-center gap-0.5"
-                          style={{
-                            color:
-                              trendDirection === "up"
-                                ? "#22c55e"
-                                : trendDirection === "down"
-                                  ? "#ff4c4c"
-                                  : "#63788f",
-                          }}
-                        ></span>
-                      </div>
-
-                      {/* Sparkline (bottom 18-22%) */}
-                      {/* overflow-visible, not hidden: the sparkline's hover
-                          readout sits above the plot area and would otherwise be
-                          clipped away by this wrapper. */}
-                      <div className="h-[22px] 2xl:h-[28px] w-full flex-shrink-0 mt-auto mb-1 2xl:mb-1.5 overflow-visible relative">
-                        <Sparkline
-                          points={points}
-                          type={item.type}
-                          status={item.status}
-                          color={item.color}
-                          target={item.target}
-                          targetDirection={item.targetDirection}
-                        />
-                      </div>
-
-                      {/* Target value, bottom-right of the card. Kept out of the
-                          plot area so the dashed line runs the full width, and out
-                          of the metric subtitle so the heading stays short. */}
-                      {isNum(item.target) && (
-                        <span className="absolute bottom-1 right-1.5 2xl:right-2 text-[#63788f] text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
-                          tgt {item.target}
-                          {item.targetUnit === "percent" ? "%" : ""}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Timeline Node */}
-                <div className="relative h-6 flex justify-center items-center w-full mt-2">
-                  {/* Right line segment (connecting this node to the next) */}
-                  {idx !== processPerformanceData.length - 1 && (
-                    <div
-                      className="absolute left-[50%] right-[-50%] h-[2px] top-1/2 -translate-y-1/2 z-0"
-                      style={{
-                        background: `linear-gradient(to right, ${colorCurrent}, ${colorNext})`,
-                      }}
-                    />
-                  )}
-                  {/* Dot */}
-                  {/* The ring masks the connecting line behind the dot, so it
-                      has to be the SECTION's fill — not the page ground, which
-                      is what it was and which now shows as a dark halo. */}
-                  <div
-                    className="w-2.5 h-2.5 rounded-full relative z-10 ring-[3px] ring-[#101c2b] transition-all duration-300"
-                    style={{
-                      backgroundColor: colorCurrent,
-                      boxShadow: `0 0 10px ${colorCurrent}`,
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+        {/* Right Section: 1x1 Box layout */}
+        <div className="lg:col-span-1 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col justify-between h-full min-h-[300px]">
+          <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
+            CUSTOMER & HFTPY
+          </span>
+          <div className="flex-grow flex flex-col gap-3.5">
+            {renderLargeKpiCard("CUSTOMER", "CUSTOMER")}
+            {renderLargeKpiCard("UNITHFTPY", "UNIT-HFTPY")}
+          </div>
         </div>
-      </section>
-
-      {/* Row 1: Top KPI Cards */}
-      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {kpiCards.slice(0, 6).map((card) => {
-          const delta = card.delta_vs_yesterday ?? 0;
-          const target = (card as any).target as number | null | undefined;
-          // Numeric value behind the formatted string ("93.1%" -> 93.1), so the
-          // card can be judged against its target.
-          const actual = Number.parseFloat(
-            String(card.value).replace(/[^\d.-]/g, ""),
-          );
-          const meetsTarget =
-            isNum(target) && Number.isFinite(actual) ? actual >= target : null;
-
-          // The headline colour now answers "are we on target", not "did we move
-          // since yesterday" — a card can slip a little and still be fine, which
-          // is why every card was red while four of them were above target.
-          // Cards with no agreed target keep the vs-yesterday behaviour.
-          let trendColor: string;
-          if (meetsTarget !== null) {
-            trendColor = meetsTarget ? "#22c55e" : "#ff4c4c";
-          } else if (delta > 0) {
-            trendColor = "#22c55e";
-          } else if (delta < 0) {
-            trendColor = "#ff4c4c";
-          } else {
-            trendColor = card.color || "#8fa0b5";
-          }
-
-          // The vs-Yesterday line is muted grey on every KPI card, deliberately
-          // uncoloured. The ▲/▼ glyph already carries the direction, so tinting
-          // the text as well put a second green/red signal on a card whose
-          // headline is already coloured by target compliance — two verdicts
-          // competing for one glance, and they disagree whenever a card slips
-          // while staying above target.
-          //
-          // This is a caption, not a verdict. trendColor above is the verdict.
-          const deltaColor = "#8fa0b5";
-          return (
-            <div
-              key={card.id}
-              className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-2.5 flex flex-col justify-between h-[114px] relative overflow-hidden transition-all duration-300 hover:-translate-y-1"
-              style={{ boxShadow: `0 4px 12px ${trendColor}15` }}
-            >
-              <div className="flex items-center gap-1.5 z-10">
-                {getKpiIcon(card.id, trendColor)}
-                <span className="text-white text-[12px] uppercase font-bold tracking-wider leading-tight">
-                  {card.title}
-                </span>
-              </div>
-              <div className="flex flex-col mt-0.5 z-10 mb-3">
-                {card.id === 9 ? (
-                  <div className="flex items-baseline gap-1.5 justify-between">
-                    <span
-                      className="text-[23px] font-black font-mono leading-none"
-                      style={{
-                        color: trendColor,
-                        textShadow: `0 0 8px ${trendColor}40`,
-                      }}
-                    >
-                      {card.value}
-                    </span>
-                    <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
-                      Cur
-                    </span>
-                    {/* No "94.5%" fallback any more. A literal standing in for a
-                        missing projection is indistinguishable from a real one,
-                        and the backend flags this figure as hardcoded already —
-                        inventing a second one in the UI compounds it. */}
-                    <span
-                      className="text-[#3fd3c6] text-[15px] font-black font-mono ml-auto leading-none"
-                      style={{ textShadow: `0 0 6px rgba(63,211,198,0.3)` }}
-                      title={
-                        hftpyBlock?.projection_is_hardcoded
-                          ? "Projection is a fixed constant, not a computed forecast"
-                          : undefined
-                      }
-                    >
-                      {card.projectedValue || "—"}
-                    </span>
-                    <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
-                      Proj
-                    </span>
-                  </div>
-                ) : (
-                  <span
-                    className="text-[26px] font-black font-mono leading-none"
-                    style={{
-                      color: trendColor,
-                      textShadow: `0 0 8px ${trendColor}40`,
-                    }}
-                  >
-                    {card.value}
-                  </span>
-                )}
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span
-                    className="text-[11.5px] font-bold"
-                    style={{ color: deltaColor }}
-                  >
-                    {card.change}
-                  </span>
-                  {isNum(target) && (
-                    <span className="text-[#63788f] text-[9.5px] font-bold ml-auto whitespace-nowrap">
-                      tgt {target}%
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="absolute bottom-[4px] left-0 right-0 h-[16px] pointer-events-none">
-                {card.id !== 9 &&
-                  renderFullSparkline(
-                    card.points,
-                    card.yesterdayPoints,
-                    trendColor,
-                    target,
-                  )}
-              </div>
-            </div>
-          );
-        })}
       </section>
 
 
