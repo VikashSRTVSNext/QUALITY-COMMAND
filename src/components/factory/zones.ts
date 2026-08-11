@@ -146,6 +146,11 @@ export interface ZoneOverlay {
   label: [number, number];
 }
 
+// ---------------------------------------------------------------------------
+// TIP: You can visually edit, drag, and fine-tune these coordinates in the browser.
+// Open the "Quality Plant Floor Layout" modal in the UI, click "Edit Overlay" at the 
+// top-right, adjust the handles, and click "Copy Config" to get the updated JSON.
+// ---------------------------------------------------------------------------
 export const ZONE_OVERLAYS: Record<string, ZoneOverlay> = {
   // SMT runs along the north-west wall and MFT along the north-east one; they
   // meet at a single shared vertex, (783, 276), so the two outlines tile rather

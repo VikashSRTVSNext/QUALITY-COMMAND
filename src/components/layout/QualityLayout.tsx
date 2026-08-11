@@ -1105,6 +1105,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     })),
   );
   const [productYield, setProductYield] = useState<any[]>([]);
+  const [productSort, setProductSort] = useState<{
+    key: "name" | "tested" | "failed" | null;
+    order: "asc" | "desc";
+  }>({ key: null, order: "asc" });
   // Distinguishes "still fetching" and "fetch failed" from a genuinely empty
   // result, so an unreachable API never reads as "No records found".
   const [yieldFetchState, setYieldFetchState] = useState<
@@ -1213,8 +1217,30 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [shopFloorHour, setShopFloorHour] = useState<number | null>(null);
 
   const currentYieldData = React.useMemo(() => {
-    return productYield;
-  }, [productYield]);
+    if (!productSort.key) return productYield;
+    return [...productYield].sort((a, b) => {
+      const key = productSort.key!;
+      const order = productSort.order;
+
+      if (key === "name") {
+        const valA = (a.name || "").toString().toLowerCase();
+        const valB = (b.name || "").toString().toLowerCase();
+        return order === "asc"
+          ? valA.localeCompare(valB)
+          : valB.localeCompare(valA);
+      } else {
+        const parseNum = (val: any) => {
+          if (val === null || val === undefined) return 0;
+          const clean = val.toString().replace(/,/g, "");
+          const num = parseFloat(clean);
+          return isNaN(num) ? 0 : num;
+        };
+        const valA = parseNum(a[key]);
+        const valB = parseNum(b[key]);
+        return order === "asc" ? valA - valB : valB - valA;
+      }
+    });
+  }, [productYield, productSort]);
 
   const visibleAlerts = React.useMemo(
     () =>
@@ -2597,365 +2623,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
       </header>
 
-      {/* Row 1: Top KPI Cards */}
-      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {kpiCards.slice(0, 6).map((card) => {
-          const delta = card.delta_vs_yesterday ?? 0;
-          const target = (card as any).target as number | null | undefined;
-          // Numeric value behind the formatted string ("93.1%" -> 93.1), so the
-          // card can be judged against its target.
-          const actual = Number.parseFloat(
-            String(card.value).replace(/[^\d.-]/g, ""),
-          );
-          const meetsTarget =
-            isNum(target) && Number.isFinite(actual) ? actual >= target : null;
-
-          // The headline colour now answers "are we on target", not "did we move
-          // since yesterday" — a card can slip a little and still be fine, which
-          // is why every card was red while four of them were above target.
-          // Cards with no agreed target keep the vs-yesterday behaviour.
-          let trendColor: string;
-          if (meetsTarget !== null) {
-            trendColor = meetsTarget ? "#22c55e" : "#ff4c4c";
-          } else if (delta > 0) {
-            trendColor = "#22c55e";
-          } else if (delta < 0) {
-            trendColor = "#ff4c4c";
-          } else {
-            trendColor = card.color || "#8fa0b5";
-          }
-
-          // The vs-Yesterday line is muted grey on every KPI card, deliberately
-          // uncoloured. The ▲/▼ glyph already carries the direction, so tinting
-          // the text as well put a second green/red signal on a card whose
-          // headline is already coloured by target compliance — two verdicts
-          // competing for one glance, and they disagree whenever a card slips
-          // while staying above target.
-          //
-          // This is a caption, not a verdict. trendColor above is the verdict.
-          const deltaColor = "#8fa0b5";
-          return (
-            <div
-              key={card.id}
-              className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-2.5 flex flex-col justify-between h-[114px] relative overflow-hidden transition-all duration-300 hover:-translate-y-1"
-              style={{ boxShadow: `0 4px 12px ${trendColor}15` }}
-            >
-              <div className="flex items-center gap-1.5 z-10">
-                {getKpiIcon(card.id, trendColor)}
-                <span className="text-white text-[12px] uppercase font-bold tracking-wider leading-tight">
-                  {card.title}
-                </span>
-              </div>
-              <div className="flex flex-col mt-0.5 z-10 mb-3">
-                {card.id === 9 ? (
-                  <div className="flex items-baseline gap-1.5 justify-between">
-                    <span
-                      className="text-[23px] font-black font-mono leading-none"
-                      style={{
-                        color: trendColor,
-                        textShadow: `0 0 8px ${trendColor}40`,
-                      }}
-                    >
-                      {card.value}
-                    </span>
-                    <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
-                      Cur
-                    </span>
-                    {/* No "94.5%" fallback any more. A literal standing in for a
-                        missing projection is indistinguishable from a real one,
-                        and the backend flags this figure as hardcoded already —
-                        inventing a second one in the UI compounds it. */}
-                    <span
-                      className="text-[#3fd3c6] text-[15px] font-black font-mono ml-auto leading-none"
-                      style={{ textShadow: `0 0 6px rgba(63,211,198,0.3)` }}
-                      title={
-                        hftpyBlock?.projection_is_hardcoded
-                          ? "Projection is a fixed constant, not a computed forecast"
-                          : undefined
-                      }
-                    >
-                      {card.projectedValue || "—"}
-                    </span>
-                    <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
-                      Proj
-                    </span>
-                  </div>
-                ) : (
-                  <span
-                    className="text-[26px] font-black font-mono leading-none"
-                    style={{
-                      color: trendColor,
-                      textShadow: `0 0 8px ${trendColor}40`,
-                    }}
-                  >
-                    {card.value}
-                  </span>
-                )}
-                <div className="flex items-baseline gap-1.5 mt-0.5">
-                  <span
-                    className="text-[11.5px] font-bold"
-                    style={{ color: deltaColor }}
-                  >
-                    {card.change}
-                  </span>
-                  {isNum(target) && (
-                    <span className="text-[#63788f] text-[9.5px] font-bold ml-auto whitespace-nowrap">
-                      tgt {target}%
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="absolute bottom-[4px] left-0 right-0 h-[16px] pointer-events-none">
-                {card.id !== 9 &&
-                  renderFullSparkline(
-                    card.points,
-                    card.yesterdayPoints,
-                    trendColor,
-                    target,
-                  )}
-              </div>
-            </div>
-          );
-        })}
-      </section>
-
-      {/* Row 2: Process Performance */}
-      <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
-        {/* Title for mobile/tablet */}
-        <span className="lg:hidden text-[#f8fafc] text-[15px] uppercase font-bold tracking-widest mb-3">
-          PROCESS PERFORMANCE
-        </span>
-
-        {/* Brackets row for desktop */}
-        <div className="hidden lg:grid grid-cols-12 gap-2 items-center mb-3">
-          {/* SMT Section Bracket */}
-          <div className="col-span-4 flex items-center gap-2">
-            <span className="text-[#f8fafc] text-[12px] font-black tracking-wider uppercase flex-shrink-0">
-              PROCESS PERFORMANCE
-            </span>
-            <div className="flex-1 flex items-center">
-              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
-              <span className="px-2.5 text-[#0091ff] text-[12.5px] font-black tracking-widest">
-                SMT
-              </span>
-              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
-              {/* Downward tick */}
-              <div className="h-[7px] w-[1.5px] bg-[#0091ff] self-end" />
-            </div>
-          </div>
-
-          {/* RFM Section Bracket */}
-          <div className="col-span-8 flex items-center">
-            {/* Downward tick */}
-            <div className="h-[7px] w-[1.5px] bg-[#0091ff] self-end" />
-            <div className="flex-1 flex items-center">
-              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
-              <span className="px-2.5 text-[#0091ff] text-[12.5px] font-black tracking-widest">
-                RFM
-              </span>
-              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
-              {/* Arrowhead */}
-              <div className="w-1.5 h-1.5 border-t-[1.5px] border-r-[1.5px] border-[#0091ff] rotate-45 -mr-[3px] -mt-[0.5px]" />
-              {/* Downward tick */}
-              <div className="h-[7px] w-[1.5px] bg-[#0091ff] self-end" />
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-1.5 2xl:gap-2">
-          {processPerformance.map((item, idx) => {
-            const cardColor = getCardBorderColor(item);
-            const colorCurrent = getTimelineNodeColor(item);
-            const colorNext =
-              idx < processPerformance.length - 1
-                ? getTimelineNodeColor(processPerformance[idx + 1])
-                : "";
-
-            return (
-              <div key={idx} className="flex flex-col w-full min-w-0">
-                {/* Card */}
-                {/* Card */}
-                {(() => {
-                  // Real hourly series from the API: 24 points for the full day,
-                  // 8 for a selected shift. Replaces the seeded random walk that
-                  // used to fill this in — it produced a plausible-looking line
-                  // from the current value and a hash of the card's name, which
-                  // meant every sparkline on this strip was decorative.
-                  const { points, trendDirection } = getProcessTrendData(
-                    item.trend,
-                    activeShift,
-                  );
-
-                  return (
-                    <div
-                      className={`relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 ${
-                        item.status === "Critical"
-                          ? "animate-border-pulse-critical"
-                          : ""
-                      }`}
-                      style={{
-                        // Figma card surface with a wash of the status colour
-                        // over it, set here rather than as a bg-[...] class
-                        // because the tint depends on runtime status.
-                        //
-                        // It used to be #030810 — the PAGE ground — which is
-                        // darker than the panel these sit on, so every card read
-                        // as a hole punched in the section rather than a card
-                        // resting on it.
-                        //
-                        // The wash is deliberately faint. Figma has no graph in
-                        // these cards; ours do, and the sparkline plus its target
-                        // line have to stay legible on top, which a strong status
-                        // fill would swallow.
-                        background: `linear-gradient(180deg, ${cardColor}1f 0%, ${cardColor}0a 100%), #101c2b`,
-                        borderColor:
-                          item.status === "Critical"
-                            ? undefined
-                            : `${cardColor}40`,
-                        boxShadow:
-                          item.status === "Critical"
-                            ? undefined
-                            : `0 4px 12px ${cardColor}15`,
-                      }}
-                    >
-                      {/* Header */}
-                      <div className="flex items-start gap-1 mb-0.5 2xl:mb-1.5 flex-shrink-0">
-                        <item.icon
-                          size={10}
-                          className="text-white flex-shrink-0 mt-[1px] 2xl:size-[12px]"
-                        />
-                        <span className="text-white text-[9.5px] 2xl:text-[12px] font-black uppercase leading-tight whitespace-normal break-words">
-                          {item.name}
-                        </span>
-                      </div>
-                      {/* Body */}
-                      <div className="flex-1 flex flex-col justify-center items-center min-h-0 -mt-1.5 2xl:-mt-2">
-                        {item.type === "yield" && (
-                          <div className="flex flex-col items-center justify-center">
-                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
-                              Yield %
-                            </span>
-                            <span
-                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
-                              style={{
-                                color: item.color,
-                                textShadow: `0 0 8px ${item.color}30`,
-                              }}
-                            >
-                              {item.data.yield}
-                            </span>
-                          </div>
-                        )}
-                        {item.type === "dpmo" && (
-                          <div className="flex flex-col items-center justify-center">
-                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
-                              Index
-                            </span>
-                            <span
-                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
-                              style={{
-                                color: item.color,
-                                textShadow: `0 0 8px ${item.color}30`,
-                              }}
-                            >
-                              {item.data.index}
-                            </span>
-                          </div>
-                        )}
-                        {item.type === "failure" && (
-                          <div className="flex flex-col items-center justify-center">
-                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
-                              Failure %
-                            </span>
-                            <span
-                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
-                              style={{
-                                color: item.color,
-                                textShadow: `0 0 8px ${item.color}30`,
-                              }}
-                            >
-                              {item.data.failure}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Trend Indicator */}
-                        <span
-                          className="text-[7.5px] 2xl:text-[9.5px] font-bold mt-1 leading-none flex items-center gap-0.5"
-                          style={{
-                            color:
-                              trendDirection === "up"
-                                ? "#22c55e"
-                                : trendDirection === "down"
-                                  ? "#ff4c4c"
-                                  : "#63788f",
-                          }}
-                        ></span>
-                      </div>
-
-                      {/* Sparkline (bottom 18-22%) */}
-                      {/* overflow-visible, not hidden: the sparkline's hover
-                          readout sits above the plot area and would otherwise be
-                          clipped away by this wrapper. */}
-                      <div className="h-[22px] 2xl:h-[28px] w-full flex-shrink-0 mt-auto mb-1 2xl:mb-1.5 overflow-visible relative">
-                        <Sparkline
-                          points={points}
-                          type={item.type}
-                          status={item.status}
-                          color={item.color}
-                          target={item.target}
-                          targetDirection={item.targetDirection}
-                        />
-                      </div>
-
-                      {/* Target value, bottom-right of the card. Kept out of the
-                          plot area so the dashed line runs the full width, and out
-                          of the metric subtitle so the heading stays short. */}
-                      {isNum(item.target) && (
-                        <span className="absolute bottom-1 right-1.5 2xl:right-2 text-[#63788f] text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
-                          tgt {item.target}
-                          {item.targetUnit === "percent" ? "%" : ""}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Timeline Node */}
-                <div className="relative h-6 flex justify-center items-center w-full mt-2">
-                  {/* Right line segment (connecting this node to the next) */}
-                  {idx !== processPerformanceData.length - 1 && (
-                    <div
-                      className="absolute left-[50%] right-[-50%] h-[2px] top-1/2 -translate-y-1/2 z-0"
-                      style={{
-                        background: `linear-gradient(to right, ${colorCurrent}, ${colorNext})`,
-                      }}
-                    />
-                  )}
-                  {/* Dot */}
-                  {/* The ring masks the connecting line behind the dot, so it
-                      has to be the SECTION's fill — not the page ground, which
-                      is what it was and which now shows as a dark halo. */}
-                  <div
-                    className="w-2.5 h-2.5 rounded-full relative z-10 ring-[3px] ring-[#101c2b] transition-all duration-300"
-                    style={{
-                      backgroundColor: colorCurrent,
-                      boxShadow: `0 0 10px ${colorCurrent}`,
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
       {/* Row 3: Middle Analysis Hub */}
       <main className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.8fr)_minmax(0,5fr)_minmax(0,2.5fr)] gap-4">
         {/* Section 1: Factory Quality Twin */}
         <section className="bg-[#101c2b] border border-white/20 rounded-xl p-4 flex flex-col h-[400px]">
           <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-3 flex-shrink-0">
-            <span className="text-[15.5px] font-black tracking-widest text-[#f8fafc]">
+            <span className="text-[14px] font-black tracking-widest text-[#8fa0b5]">
               QUALITY HEAT MAP
             </span>
             {/* Legend colors come from STATUS_CSS so the swatches always match
@@ -3002,7 +2675,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
         {/* Section 2: Product Yield */}
         <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[400px]">
-          <span className="text-[15.5px] font-black tracking-widest text-[#f8fafc] uppercase mb-1.5">
+          <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase mb-1.5">
             PRODUCT YIELD
           </span>
           {/* Tabs */}
@@ -3035,23 +2708,109 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar">
             <table className="w-full min-w-[720px] text-left text-[12px] border-collapse relative">
               <thead>
-                <tr className="border-b border-[#1c3149] text-[#63788f] font-bold text-[10px] uppercase">
-                  <th className="pb-1.5 font-black pl-2">S.No</th>
-                  <th className="pb-1.5 font-black">PRODUCT NAME</th>
-                  <th className="pb-1.5 font-black text-center">TESTED</th>
-                  <th className="pb-1.5 font-black text-center">
-                    FAILED COUNT
+                <tr className="text-[#63788f] font-bold text-[10px] uppercase">
+                  <th className="pb-2 font-black pl-2 sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                    S.No
                   </th>
-                  <th className="pb-1.5 font-black text-center">FPY %</th>
-                  <th className="pb-1.5 font-black text-center">SPY %</th>
-                  <th className="pb-1.5 font-black text-center">
+                  <th
+                    onClick={() => {
+                      setProductSort((prev) => {
+                        if (prev.key !== "name")
+                          return { key: "name", order: "asc" };
+                        if (prev.order === "asc")
+                          return { key: "name", order: "desc" };
+                        return { key: null, order: "asc" };
+                      });
+                    }}
+                    className="pb-2 font-black sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10 cursor-pointer select-none hover:text-white transition-colors"
+                  >
+                    <div className="flex items-center gap-1">
+                      PRODUCT NAME
+                      <span
+                        className={`text-[10px] font-black ${productSort.key === "name" ? "text-white" : "text-white/40"}`}
+                      >
+                        {productSort.key === "name" &&
+                        productSort.order === "asc"
+                          ? " ▲"
+                          : productSort.key === "name" &&
+                              productSort.order === "desc"
+                            ? " ▼"
+                            : " ↕"}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => {
+                      setProductSort((prev) => {
+                        if (prev.key !== "tested")
+                          return { key: "tested", order: "asc" };
+                        if (prev.order === "asc")
+                          return { key: "tested", order: "desc" };
+                        return { key: null, order: "asc" };
+                      });
+                    }}
+                    className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10 cursor-pointer select-none hover:text-white transition-colors"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      TESTED
+                      <span
+                        className={`text-[10px] font-black ${productSort.key === "tested" ? "text-white" : "text-white/40"}`}
+                      >
+                        {productSort.key === "tested" &&
+                        productSort.order === "asc"
+                          ? " ▲"
+                          : productSort.key === "tested" &&
+                              productSort.order === "desc"
+                            ? " ▼"
+                            : " ↕"}
+                      </span>
+                    </div>
+                  </th>
+                  <th
+                    onClick={() => {
+                      setProductSort((prev) => {
+                        if (prev.key !== "failed")
+                          return { key: "failed", order: "asc" };
+                        if (prev.order === "asc")
+                          return { key: "failed", order: "desc" };
+                        return { key: null, order: "asc" };
+                      });
+                    }}
+                    className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10 cursor-pointer select-none hover:text-white transition-colors"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      FAILED COUNT
+                      <span
+                        className={`text-[10px] font-black ${productSort.key === "failed" ? "text-white" : "text-white/40"}`}
+                      >
+                        {productSort.key === "failed" &&
+                        productSort.order === "asc"
+                          ? " ▲"
+                          : productSort.key === "failed" &&
+                              productSort.order === "desc"
+                            ? " ▼"
+                            : " ↕"}
+                      </span>
+                    </div>
+                  </th>
+                  <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                    FPY %
+                  </th>
+                  <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                    SPY %
+                  </th>
+                  <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
                     TARGET YIELD %
                   </th>
-                  <th className="pb-1.5 font-black text-center">FPY STATUS</th>
+                  <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                    FPY STATUS
+                  </th>
                   {/* Header stays plain. The period this column judges against
                       is carried by the cells themselves, which name it in the
                       empty state and in the tooltip. */}
-                  <th className="pb-1.5 font-black pl-3">AI RECOMMENDATION</th>
+                  <th className="pb-2 font-black pl-3 sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                    AI RECOMMENDATION
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1c3149]/45 font-mono text-[11px]">
@@ -3076,7 +2835,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 {paginatedYieldData.map((row, idx) => (
                   <tr key={row.id} className="hover:bg-[#101c2b]/40">
                     <td className="py-[4px] text-[#8fa0b5] pl-2">
-                      {((yieldPage - 1) * ITEMS_PER_PAGE) + idx + 1}.
+                      {(yieldPage - 1) * ITEMS_PER_PAGE + idx + 1}.
                     </td>
                     <td className="py-[4px] text-white font-sans font-bold">
                       {row.name}
@@ -3471,7 +3230,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         {/* Section 3: Attention Center Alerts */}
         <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[400px]">
           <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-2 flex-shrink-0">
-            <span className="text-[15.5px] font-black tracking-widest text-[#f8fafc] uppercase">
+            <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase">
               ATTENTION CENTER
             </span>
             <div className="flex gap-2 text-[11px]">
@@ -3619,6 +3378,368 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
         </section>
       </main>
+
+
+            {/* Row 2: Process Performance */}
+      <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
+        {/* Title for mobile/tablet */}
+        <span className="lg:hidden text-[#f8fafc] text-[15px] uppercase font-bold tracking-widest mb-3">
+          PROCESS PERFORMANCE
+        </span>
+
+        {/* Brackets row for desktop */}
+        <div className="hidden lg:grid grid-cols-12 gap-2 items-center mb-3">
+          {/* SMT Section Bracket */}
+          <div className="col-span-4 flex items-center gap-2">
+            <span className="text-[#f8fafc] text-[12px] font-black tracking-wider uppercase flex-shrink-0">
+              PROCESS PERFORMANCE
+            </span>
+            <div className="flex-1 flex items-center">
+              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
+              <span className="px-2.5 text-[#0091ff] text-[12.5px] font-black tracking-widest">
+                SMT
+              </span>
+              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
+              {/* Downward tick */}
+              <div className="h-[7px] w-[1.5px] bg-[#0091ff] self-end" />
+            </div>
+          </div>
+
+          {/* RFM Section Bracket */}
+          <div className="col-span-8 flex items-center">
+            {/* Downward tick */}
+            <div className="h-[7px] w-[1.5px] bg-[#0091ff] self-end" />
+            <div className="flex-1 flex items-center">
+              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
+              <span className="px-2.5 text-[#0091ff] text-[12.5px] font-black tracking-widest">
+                RFM
+              </span>
+              <div className="flex-1 h-[1.5px] bg-[#0091ff]" />
+              {/* Arrowhead */}
+              <div className="w-1.5 h-1.5 border-t-[1.5px] border-r-[1.5px] border-[#0091ff] rotate-45 -mr-[3px] -mt-[0.5px]" />
+              {/* Downward tick */}
+              <div className="h-[7px] w-[1.5px] bg-[#0091ff] self-end" />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-6 lg:grid-cols-12 gap-1.5 2xl:gap-2">
+          {processPerformance.map((item, idx) => {
+            const cardColor = getCardBorderColor(item);
+            const colorCurrent = getTimelineNodeColor(item);
+            const colorNext =
+              idx < processPerformance.length - 1
+                ? getTimelineNodeColor(processPerformance[idx + 1])
+                : "";
+
+            return (
+              <div key={idx} className="flex flex-col w-full min-w-0">
+                {/* Card */}
+                {/* Card */}
+                {(() => {
+                  // Real hourly series from the API: 24 points for the full day,
+                  // 8 for a selected shift. Replaces the seeded random walk that
+                  // used to fill this in — it produced a plausible-looking line
+                  // from the current value and a hash of the card's name, which
+                  // meant every sparkline on this strip was decorative.
+                  const { points, trendDirection } = getProcessTrendData(
+                    item.trend,
+                    activeShift,
+                  );
+
+                  return (
+                    <div
+                      className={`relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 ${
+                        item.status === "Critical"
+                          ? "animate-border-pulse-critical"
+                          : ""
+                      }`}
+                      style={{
+                        // Figma card surface with a wash of the status colour
+                        // over it, set here rather than as a bg-[...] class
+                        // because the tint depends on runtime status.
+                        //
+                        // It used to be #030810 — the PAGE ground — which is
+                        // darker than the panel these sit on, so every card read
+                        // as a hole punched in the section rather than a card
+                        // resting on it.
+                        //
+                        // The wash is deliberately faint. Figma has no graph in
+                        // these cards; ours do, and the sparkline plus its target
+                        // line have to stay legible on top, which a strong status
+                        // fill would swallow.
+                        background: `linear-gradient(180deg, ${cardColor}1f 0%, ${cardColor}0a 100%), #101c2b`,
+                        borderColor:
+                          item.status === "Critical"
+                            ? undefined
+                            : `${cardColor}40`,
+                        boxShadow:
+                          item.status === "Critical"
+                            ? undefined
+                            : `0 4px 12px ${cardColor}15`,
+                      }}
+                    >
+                      {/* Header */}
+                      <div className="flex items-start gap-1 mb-0.5 2xl:mb-1.5 flex-shrink-0">
+                        <item.icon
+                          size={10}
+                          className="text-white flex-shrink-0 mt-[1px] 2xl:size-[12px]"
+                        />
+                        <span
+                          className={`text-white font-black uppercase leading-tight whitespace-nowrap ${
+                            item.name.length > 15
+                              ? "text-[7.5px] 2xl:text-[10px]"
+                              : "text-[9.5px] 2xl:text-[12px]"
+                          }`}
+                        >
+                          {item.name}
+                        </span>
+                      </div>
+                      {/* Body */}
+                      <div className="flex-1 flex flex-col justify-center items-center min-h-0 -mt-1.5 2xl:-mt-2">
+                        {item.type === "yield" && (
+                          <div className="flex flex-col items-center justify-center">
+                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
+                              Yield %
+                            </span>
+                            <span
+                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
+                              style={{
+                                color: item.color,
+                                textShadow: `0 0 8px ${item.color}30`,
+                              }}
+                            >
+                              {item.data.yield}
+                            </span>
+                          </div>
+                        )}
+                        {item.type === "dpmo" && (
+                          <div className="flex flex-col items-center justify-center">
+                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
+                              Index
+                            </span>
+                            <span
+                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
+                              style={{
+                                color: item.color,
+                                textShadow: `0 0 8px ${item.color}30`,
+                              }}
+                            >
+                              {item.data.index}
+                            </span>
+                          </div>
+                        )}
+                        {item.type === "failure" && (
+                          <div className="flex flex-col items-center justify-center">
+                            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none">
+                              Failure %
+                            </span>
+                            <span
+                              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
+                              style={{
+                                color: item.color,
+                                textShadow: `0 0 8px ${item.color}30`,
+                              }}
+                            >
+                              {item.data.failure}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Trend Indicator */}
+                        <span
+                          className="text-[7.5px] 2xl:text-[9.5px] font-bold mt-1 leading-none flex items-center gap-0.5"
+                          style={{
+                            color:
+                              trendDirection === "up"
+                                ? "#22c55e"
+                                : trendDirection === "down"
+                                  ? "#ff4c4c"
+                                  : "#63788f",
+                          }}
+                        ></span>
+                      </div>
+
+                      {/* Sparkline (bottom 18-22%) */}
+                      {/* overflow-visible, not hidden: the sparkline's hover
+                          readout sits above the plot area and would otherwise be
+                          clipped away by this wrapper. */}
+                      <div className="h-[22px] 2xl:h-[28px] w-full flex-shrink-0 mt-auto mb-1 2xl:mb-1.5 overflow-visible relative">
+                        <Sparkline
+                          points={points}
+                          type={item.type}
+                          status={item.status}
+                          color={item.color}
+                          target={item.target}
+                          targetDirection={item.targetDirection}
+                        />
+                      </div>
+
+                      {/* Target value, bottom-right of the card. Kept out of the
+                          plot area so the dashed line runs the full width, and out
+                          of the metric subtitle so the heading stays short. */}
+                      {isNum(item.target) && (
+                        <span className="absolute bottom-1 right-1.5 2xl:right-2 text-[#63788f] text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
+                          tgt {item.target}
+                          {item.targetUnit === "percent" ? "%" : ""}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Timeline Node */}
+                <div className="relative h-6 flex justify-center items-center w-full mt-2">
+                  {/* Right line segment (connecting this node to the next) */}
+                  {idx !== processPerformanceData.length - 1 && (
+                    <div
+                      className="absolute left-[50%] right-[-50%] h-[2px] top-1/2 -translate-y-1/2 z-0"
+                      style={{
+                        background: `linear-gradient(to right, ${colorCurrent}, ${colorNext})`,
+                      }}
+                    />
+                  )}
+                  {/* Dot */}
+                  {/* The ring masks the connecting line behind the dot, so it
+                      has to be the SECTION's fill — not the page ground, which
+                      is what it was and which now shows as a dark halo. */}
+                  <div
+                    className="w-2.5 h-2.5 rounded-full relative z-10 ring-[3px] ring-[#101c2b] transition-all duration-300"
+                    style={{
+                      backgroundColor: colorCurrent,
+                      boxShadow: `0 0 10px ${colorCurrent}`,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Row 1: Top KPI Cards */}
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {kpiCards.slice(0, 6).map((card) => {
+          const delta = card.delta_vs_yesterday ?? 0;
+          const target = (card as any).target as number | null | undefined;
+          // Numeric value behind the formatted string ("93.1%" -> 93.1), so the
+          // card can be judged against its target.
+          const actual = Number.parseFloat(
+            String(card.value).replace(/[^\d.-]/g, ""),
+          );
+          const meetsTarget =
+            isNum(target) && Number.isFinite(actual) ? actual >= target : null;
+
+          // The headline colour now answers "are we on target", not "did we move
+          // since yesterday" — a card can slip a little and still be fine, which
+          // is why every card was red while four of them were above target.
+          // Cards with no agreed target keep the vs-yesterday behaviour.
+          let trendColor: string;
+          if (meetsTarget !== null) {
+            trendColor = meetsTarget ? "#22c55e" : "#ff4c4c";
+          } else if (delta > 0) {
+            trendColor = "#22c55e";
+          } else if (delta < 0) {
+            trendColor = "#ff4c4c";
+          } else {
+            trendColor = card.color || "#8fa0b5";
+          }
+
+          // The vs-Yesterday line is muted grey on every KPI card, deliberately
+          // uncoloured. The ▲/▼ glyph already carries the direction, so tinting
+          // the text as well put a second green/red signal on a card whose
+          // headline is already coloured by target compliance — two verdicts
+          // competing for one glance, and they disagree whenever a card slips
+          // while staying above target.
+          //
+          // This is a caption, not a verdict. trendColor above is the verdict.
+          const deltaColor = "#8fa0b5";
+          return (
+            <div
+              key={card.id}
+              className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-2.5 flex flex-col justify-between h-[114px] relative overflow-hidden transition-all duration-300 hover:-translate-y-1"
+              style={{ boxShadow: `0 4px 12px ${trendColor}15` }}
+            >
+              <div className="flex items-center gap-1.5 z-10">
+                {getKpiIcon(card.id, trendColor)}
+                <span className="text-white text-[12px] uppercase font-bold tracking-wider leading-tight">
+                  {card.title}
+                </span>
+              </div>
+              <div className="flex flex-col mt-0.5 z-10 mb-3">
+                {card.id === 9 ? (
+                  <div className="flex items-baseline gap-1.5 justify-between">
+                    <span
+                      className="text-[23px] font-black font-mono leading-none"
+                      style={{
+                        color: trendColor,
+                        textShadow: `0 0 8px ${trendColor}40`,
+                      }}
+                    >
+                      {card.value}
+                    </span>
+                    <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
+                      Cur
+                    </span>
+                    {/* No "94.5%" fallback any more. A literal standing in for a
+                        missing projection is indistinguishable from a real one,
+                        and the backend flags this figure as hardcoded already —
+                        inventing a second one in the UI compounds it. */}
+                    <span
+                      className="text-[#3fd3c6] text-[15px] font-black font-mono ml-auto leading-none"
+                      style={{ textShadow: `0 0 6px rgba(63,211,198,0.3)` }}
+                      title={
+                        hftpyBlock?.projection_is_hardcoded
+                          ? "Projection is a fixed constant, not a computed forecast"
+                          : undefined
+                      }
+                    >
+                      {card.projectedValue || "—"}
+                    </span>
+                    <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
+                      Proj
+                    </span>
+                  </div>
+                ) : (
+                  <span
+                    className="text-[26px] font-black font-mono leading-none"
+                    style={{
+                      color: trendColor,
+                      textShadow: `0 0 8px ${trendColor}40`,
+                    }}
+                  >
+                    {card.value}
+                  </span>
+                )}
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span
+                    className="text-[11.5px] font-bold"
+                    style={{ color: deltaColor }}
+                  >
+                    {card.change}
+                  </span>
+                  {isNum(target) && (
+                    <span className="text-[#63788f] text-[9.5px] font-bold ml-auto whitespace-nowrap">
+                      tgt {target}%
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="absolute bottom-[4px] left-0 right-0 h-[16px] pointer-events-none">
+                {card.id !== 9 &&
+                  renderFullSparkline(
+                    card.points,
+                    card.yesterdayPoints,
+                    trendColor,
+                    target,
+                  )}
+              </div>
+            </div>
+          );
+        })}
+      </section>
+
+
 
       {/* Row 4: Bottom Operational KPIs */}
       <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4 mt-1.5">
