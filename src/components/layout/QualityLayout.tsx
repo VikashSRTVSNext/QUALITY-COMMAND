@@ -1698,9 +1698,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               ? `${hftpyBlock.delta_vs_projection > 0 ? "+" : ""}${hftpyBlock.delta_vs_projection.toFixed(1)}% vs proj`
               : "",
             delta_vs_yesterday: hftpyBlock.delta_vs_projection ?? 0,
-            // No sparkline: the block carries no period series, and the seeded
-            // random walk that used to fill this was decorative.
-            trend: null,
+            // `points` is left alone: card 9 renders no sparkline
+            // (`card.id !== 9 && renderFullSparkline(...)`), and the block carries
+            // no period series to plot even if it did.
           };
         }
 
@@ -2531,8 +2531,20 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
                       Cur
                     </span>
-                    <span className="text-[#3fd3c6] text-[15px] font-black font-mono ml-auto leading-none" style={{ textShadow: `0 0 6px rgba(63,211,198,0.3)` }}>
-                      {card.projectedValue || "94.5%"}
+                    {/* No "94.5%" fallback any more. A literal standing in for a
+                        missing projection is indistinguishable from a real one,
+                        and the backend flags this figure as hardcoded already —
+                        inventing a second one in the UI compounds it. */}
+                    <span
+                      className="text-[#3fd3c6] text-[15px] font-black font-mono ml-auto leading-none"
+                      style={{ textShadow: `0 0 6px rgba(63,211,198,0.3)` }}
+                      title={
+                        hftpyBlock?.projection_is_hardcoded
+                          ? "Projection is a fixed constant, not a computed forecast"
+                          : undefined
+                      }
+                    >
+                      {card.projectedValue || "—"}
                     </span>
                     <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
                       Proj
