@@ -1912,8 +1912,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         const incoming = rawProcessPerformance[apiKey];
         // Attach the hourly series once, here, so every branch below inherits it
         // through its `...item` spread. Set to null when the API sends no trend
-        // (DPMOI and SPI have no hourly source) so the sparkline draws nothing
-        // rather than falling back to the seeded placeholder points.
+        // (SPI has no hourly source) so the sparkline draws nothing rather than
+        // falling back to the seeded placeholder points.
+        //
+        // DPMOI's series is keyed `dpmo`, not `yield_pct` — it is an index, not a
+        // rate. getProcessTrendData reads trend.metric to pick the key, so no
+        // special case is needed here, but the y-axis is defects-per-million and
+        // lower is better, the opposite of every other card on the row.
         const item = { ...prevItem, trend: incoming?.trend ?? null };
         if (incoming) {
           const target = incoming.target !== undefined ? incoming.target : null;
@@ -2620,11 +2625,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             trendColor = card.color || "#8fa0b5";
           }
 
-          // The vs-Yesterday line keeps its own direction colour: it is a
-          // statement about movement, and tinting it by target compliance would
-          // show a fall in green.
-          const deltaColor =
-            delta > 0 ? "#22c55e" : delta < 0 ? "#ff4c4c" : "#8fa0b5";
+          // The vs-Yesterday line is muted grey on every KPI card, deliberately
+          // uncoloured. The ▲/▼ glyph already carries the direction, so tinting
+          // the text as well put a second green/red signal on a card whose
+          // headline is already coloured by target compliance — two verdicts
+          // competing for one glance, and they disagree whenever a card slips
+          // while staying above target.
+          //
+          // This is a caption, not a verdict. trendColor above is the verdict.
+          const deltaColor = "#8fa0b5";
           return (
             <div
               key={card.id}
