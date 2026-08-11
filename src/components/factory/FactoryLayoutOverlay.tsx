@@ -941,6 +941,64 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
             </div>
           </div>
 
+          {/* Polygon Point Controls */}
+          {activeZoneId && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (!activeZoneId) return;
+                  const overlay = overlays[activeZoneId];
+                  if (!overlay) return;
+                  const poly: [number, number][] = overlay.poly;
+                  // Insert a new point midway between the last and first vertex
+                  const last = poly[poly.length - 1];
+                  const first = poly[0];
+                  const mid: [number, number] = [
+                    Math.round((last[0] + first[0]) / 2),
+                    Math.round((last[1] + first[1]) / 2),
+                  ];
+                  const nextPoly = [...poly, mid];
+                  const nextOverlays = {
+                    ...overlays,
+                    [activeZoneId]: { ...overlay, poly: nextPoly },
+                  };
+                  setOverlays(nextOverlays);
+                  localStorage.setItem("custom_zone_overlays", JSON.stringify(nextOverlays));
+                  triggerToast(`Point P${nextPoly.length} added`);
+                }}
+                className="flex-1 py-1.5 bg-[#1e293b] hover:bg-[#0284c7] border border-white/10 hover:border-[#38bdf8]/40 text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[11px] uppercase tracking-wider"
+                title="Insert a new polygon point between the last and first vertex"
+              >
+                + Add Point
+              </button>
+              <button
+                onClick={() => {
+                  if (!activeZoneId) return;
+                  const overlay = overlays[activeZoneId];
+                  if (!overlay) return;
+                  const poly: [number, number][] = overlay.poly;
+                  if (poly.length <= 3) {
+                    triggerToast("Minimum 3 points required.");
+                    return;
+                  }
+                  const nextPoly = poly.slice(0, -1);
+                  const nextOverlays = {
+                    ...overlays,
+                    [activeZoneId]: { ...overlay, poly: nextPoly },
+                  };
+                  setOverlays(nextOverlays);
+                  localStorage.setItem("custom_zone_overlays", JSON.stringify(nextOverlays));
+                  triggerToast(`Point P${poly.length} removed`);
+                }}
+                className="flex-1 py-1.5 bg-[#1e293b] hover:bg-red-600/60 border border-white/10 hover:border-red-500/40 text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[11px] uppercase tracking-wider"
+                title="Remove the last polygon point (min 3 required)"
+                disabled={!activeZoneId || (overlays[activeZoneId]?.poly?.length ?? 0) <= 3}
+              >
+                − Remove Point
+              </button>
+            </div>
+          )}
+
           {/* Add New Zone Form */}
           {!showAddForm ? (
             <button
@@ -1002,7 +1060,7 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
           <div className="text-[#8fa0b5] leading-relaxed text-[11px] bg-white/5 p-2.5 rounded border border-white/5">
             <p className="font-black text-white uppercase text-[9px] tracking-wider mb-1">🎮 Control Guide:</p>
             <ul className="list-disc list-inside space-y-0.5 ml-1 text-[#a3b3c9]">
-              <li>Drag <span className="text-[#38bdf8] font-bold">P1 - P4</span> handles to position corners.</li>
+              <li>Drag <span className="text-[#38bdf8] font-bold">P1 – Pn</span> handles to position corners. Use <span className="text-white font-bold">+ Add Point / − Remove Point</span> above to change polygon shape.</li>
               <li>Drag <span className="text-[#10b981] font-bold">Anchor</span> to connect leader line to room.</li>
               <li>Drag <span className="text-[#f59e0b] font-bold">Label</span> to reposition status box.</li>
               <li>Click a handle & press <span className="text-white bg-white/10 px-1 py-0.5 rounded text-[10px]">↑ ↓ ← →</span> to nudge. Hold <span className="text-white bg-white/10 px-1 py-0.5 rounded text-[10px]">Shift</span> to jump 10px.</li>
