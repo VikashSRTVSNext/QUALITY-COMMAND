@@ -1532,7 +1532,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         setRawProcessPerformance(data.process_performance);
       }
 
-      // 4. Factory Quality Twin
+      // 4. Factory Quality Twin — DISABLED: zones are hardcoded to "healthy"
+      //    in zones.ts until live API data is verified. Re-enable by uncommenting.
+      /*
       if (data.factory_twin && Array.isArray(data.factory_twin.zones)) {
         setTwinZones((prev) => {
           return prev.map((zone) => {
@@ -1548,25 +1550,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               const yieldPct = dayData.yield_pct;
               const expected = incoming.inputs_expected ?? 0;
               const present = incoming.inputs_present ?? 0;
-
-              // Base description of the zone (from ZONES config)
               const baseDesc =
-                zone.id === "smt"
-                  ? "SMT placement lines 1–4"
-                  : zone.id === "mft"
-                    ? "Module function test"
-                    : zone.id === "thermalgel"
-                      ? "Thermal gel dispense"
-                      : zone.id === "rfm"
-                        ? "RF module calibration"
-                        : zone.id === "testing"
-                          ? "Functional test"
-                          : zone.id === "packaging"
-                            ? "Final pack & label"
-                            : "";
-
+                zone.id === "smt" ? "SMT placement lines 1–4"
+                : zone.id === "mft" ? "Module function test"
+                : zone.id === "thermalgel" ? "Thermal gel dispense"
+                : zone.id === "rfm" ? "RF module calibration"
+                : zone.id === "testing" ? "Functional test"
+                : zone.id === "packaging" ? "Final pack & label"
+                : "";
               const detailStr = `${baseDesc} · Yield: ${yieldPct != null ? `${yieldPct.toFixed(1)}%` : "N/A"} · Inputs: ${present}/${expected} steps`;
-
               return {
                 ...zone,
                 status: mapStatus(dayData.status ?? incoming.status),
@@ -1578,6 +1570,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           });
         });
       }
+      */
 
       // 5. Product Yield - Handled by separate REST API polling now
 

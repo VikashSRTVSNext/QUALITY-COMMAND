@@ -2,7 +2,7 @@
 // Consumed by both the R3F scene (FactoryScene) and the HTML overlay
 // (labels / detail card) so there is a single source of truth.
 
-export type ZoneStatus = "healthy" | "warning" | "critical" | "unknown";
+export type ZoneStatus = "healthy" | "critical" | "unknown";
 
 export interface ZoneDef {
   id: string;
@@ -19,26 +19,23 @@ export interface ZoneDef {
   kind: "smt" | "mft" | "thermalgel" | "rfm" | "testing" | "packaging";
 }
 
-// Status → hex (numbers for three.js, strings for DOM). Green / amber / red.
+// Status → hex (numbers for three.js, strings for DOM). Green / red / grey only.
 export const STATUS_HEX: Record<ZoneStatus, number> = {
-  healthy: 0x2fe0a0,
-  warning: 0xf5b02e,
+  healthy:  0x2fe0a0,
   critical: 0xf24b5c,
-  unknown: 0x64748b,
+  unknown:  0x64748b,
 };
 
 export const STATUS_CSS: Record<ZoneStatus, string> = {
-  healthy: "#2fe0a0",
-  warning: "#f5b02e",
+  healthy:  "#2fe0a0",
   critical: "#f24b5c",
-  unknown: "#64748b",
+  unknown:  "#64748b",
 };
 
 export const STATUS_LABEL: Record<ZoneStatus, string> = {
-  healthy: "Healthy",
-  warning: "At Risk",
+  healthy:  "Healthy",
   critical: "Critical",
-  unknown: "Unknown",
+  unknown:  "Unknown",
 };
 
 // Compact 2-column × 3-row grid so the cells read as one cohesive plant floor.
@@ -47,74 +44,74 @@ export const ZONES: ZoneDef[] = [
   {
     id: "smt",
     name: "SMT",
-    status: "unknown",
-    score: 0,
+    status: "healthy",
+    score: 100,
     kind: "smt",
     x: -7.75,
     z: -12.5,
     w: 14,
     d: 11,
-    detail: "SMT placement lines 1–4 · Status unknown",
+    detail: "SMT placement lines 1–4 · Healthy",
   },
   {
     id: "mft",
     name: "MFT",
-    status: "unknown",
-    score: 0,
+    status: "healthy",
+    score: 100,
     kind: "mft",
     x: 7.75,
     z: -12.5,
     w: 14,
     d: 11,
-    detail: "Module function test · Status unknown",
+    detail: "Module function test · Healthy",
   },
   {
     id: "thermalgel",
     name: "THERMAL GEL",
-    status: "unknown",
-    score: 0,
+    status: "healthy",
+    score: 100,
     kind: "thermalgel",
     x: -7.75,
     z: 0,
     w: 14,
     d: 11,
-    detail: "Thermal gel dispense · Status unknown",
+    detail: "Thermal gel dispense · Healthy",
   },
   {
     id: "rfm",
     name: "RFM",
-    status: "unknown",
-    score: 0,
+    status: "healthy",
+    score: 100,
     kind: "rfm",
     x: 7.75,
     z: 0,
     w: 14,
     d: 11,
-    detail: "RF module calibration · Status unknown",
+    detail: "RF module calibration · Healthy",
   },
   {
     id: "testing",
     name: "TESTING",
-    status: "unknown",
-    score: 0,
+    status: "healthy",
+    score: 100,
     kind: "testing",
     x: -7.75,
     z: 12.5,
     w: 14,
     d: 11,
-    detail: "Functional test · Status unknown",
+    detail: "Functional test · Healthy",
   },
   {
     id: "packaging",
     name: "PACKAGING",
-    status: "unknown",
-    score: 0,
+    status: "healthy",
+    score: 100,
     kind: "packaging",
     x: 7.75,
     z: 12.5,
     w: 14,
     d: 11,
-    detail: "Final pack & label · Status unknown",
+    detail: "Final pack & label · Healthy",
   },
 ];
 
