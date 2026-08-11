@@ -383,7 +383,7 @@ export const KpiMetricsRow: React.FC = () => {
 
           {/* Bottom Area: Trend Indicator and Sparkline */}
           <div className="flex justify-between items-end mt-2">
-            <div className="flex items-center gap-1 text-[14px] font-black text-[#ff4c4c]">
+            <div className="flex items-center gap-1 text-[14px] font-black text-[#8fa0b5]">
               <TrendingUp size={13} />
               <span>+{kpis.downtime.diffPercentage}% vs yesterday</span>
             </div>

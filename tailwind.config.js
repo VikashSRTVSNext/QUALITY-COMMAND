@@ -60,7 +60,7 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Outfit', 'Inter', 'sans-serif'],
+        sans: ['"Segoe UI"', '-apple-system', 'BlinkMacSystemFont', 'Roboto', 'sans-serif'],
       },
       boxShadow: {
         glowPrimary: '0 0 15px rgba(0, 90, 255, 0.35)',

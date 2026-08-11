@@ -97,8 +97,6 @@ const ScrewIcon = ({
   </svg>
 );
 
-
-
 const CustomSymmetricalLeafIcon = ({
   size = 16,
   className = "",
@@ -534,7 +532,7 @@ const SafetyChart = ({
   const gradId = React.useId();
 
   return (
-    <div className="w-full h-[70px] 2xl:h-[55px] mt-1 relative select-none">
+    <div className="w-full h-[70px] 2xl:h-[55px] mt-1 relative select- mb-3">
       <svg
         width="100%"
         height="100%"
@@ -992,6 +990,24 @@ const isNum = (v: any): v is number =>
 const fmtFixed = (v: any, digits: number, fallback = "...") =>
   isNum(v) ? v.toFixed(digits) : fallback;
 
+/** Fiscal-period label (P01..P12) for a complaint month.
+ *
+ *  The Customer Reflection figures are CALENDAR-MONTH counts — the workbook's
+ *  'Graph 2026' sheet reports per month and has nothing finer. The period labels
+ *  work because the fiscal periods are numbered to track months (P01 opens 3 Jan,
+ *  P07 opens 4 Jul), so the ordinal mapping is right, but the label is NOMINAL:
+ *  P07 truly runs 4 Jul - 7 Aug while the "July" count covers 1-31 Jul.
+ *
+ *  Used so this axis matches Safety, CO2 and CI on the same dashboard. Falls back
+ *  to whatever label the payload carried if the month cannot be read.
+ */
+const complaintPeriodLabel = (m: any): string => {
+  const month = Number(String(m?.period_month ?? "").slice(5, 7));
+  return month >= 1 && month <= 12
+    ? `P${String(month).padStart(2, "0")}`
+    : (m?.label ?? "");
+};
+
 // Compact money/count for the CI gauges: 653520 -> "654K", 2360000 -> "2.4M".
 // The API sends savings in euros (the sheet holds thousands and the backend
 // scales them), so this is the only place the magnitude is shortened.
@@ -1013,10 +1029,10 @@ const toCiMetric = (m: any, unit: string): CiMetricView => {
     // instead of dividing by a zero range.
     max: isNum(m?.scale_max) && m.scale_max > 0 ? m.scale_max : value,
     centerLabel: `${fmtCompact(value)}${suffix}`,
-    achievedLabel: isNum(m?.achieved)
-      ? `${fmtCompact(value)}${suffix}`
-      : "—",
-    targetLabel: isNum(m?.target) ? `Target ${fmtCompact(m.target)}${suffix}` : "",
+    achievedLabel: isNum(m?.achieved) ? `${fmtCompact(value)}${suffix}` : "—",
+    targetLabel: isNum(m?.target)
+      ? `Target ${fmtCompact(m.target)}${suffix}`
+      : "",
   };
 };
 
@@ -1047,14 +1063,20 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         ...card,
         title: card.label,
         value: isPercent ? "0.0%" : "0",
-        projectedValue: (card as any).projected !== undefined ? "0.0%" : undefined,
+        projectedValue:
+          (card as any).projected !== undefined ? "0.0%" : undefined,
         change: isPercent
           ? `${deltaSign} ${Math.abs(delta).toFixed(1)}% vs Yesterday`
           : `${deltaSign} ${Math.abs(delta)} vs yesterday`,
-        points: (card.trend as (number | null)[]).map(() => null) as (number | null)[],
+        points: (card.trend as (number | null)[]).map(() => null) as (
+          | number
+          | null
+        )[],
         yesterdayPoints: (card as any).yesterdayTrend
-          ? ((card as any).yesterdayTrend as (number | null)[]).map(() => null) as (number | null)[]
-          : undefined as (number | null)[] | undefined,
+          ? (((card as any).yesterdayTrend as (number | null)[]).map(
+              () => null,
+            ) as (number | null)[])
+          : (undefined as (number | null)[] | undefined),
       };
     }),
   );
@@ -1161,7 +1183,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [greenEnergyPct, setGreenEnergyPct] = useState(0);
   const [co2Emission, setCo2Emission] = useState(0);
   const [customerComplaintsCount, setCustomerComplaintsCount] = useState(0);
-  const [customerComplaintsPoints, setCustomerComplaintsPoints] = useState<number[]>([]);
+  const [customerComplaintsPoints, setCustomerComplaintsPoints] = useState<
+    number[]
+  >([]);
   const [complaintsXTicks, setComplaintsXTicks] = useState<string[]>([]);
   const [customerEri, setCustomerEri] = useState(0);
   const [eriData, setEriData] = useState<EriData | null>(null);
@@ -1169,13 +1193,24 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   // nothing about this card is a literal in the markup, including the targets and
   // the gauge range, which is why they are state and not JSX text.
   const [ciMonthLabel] = useState("");
-  const [ciLeanSavings, setCiLeanSavings] = useState<CiMetricView>(EMPTY_CI_METRIC);
+  const [ciLeanSavings, setCiLeanSavings] =
+    useState<CiMetricView>(EMPTY_CI_METRIC);
   const [ciKaizen, setCiKaizen] = useState<CiMetricView>(EMPTY_CI_METRIC);
+  // Month-by-month CI figures, January to the newest completed month. Drives the
+  // savings line chart that replaced the two semi-circle gauges.
+  const [ciMonths, setCiMonths] = useState<
+    { label: string; lean_savings?: number | null; kaizen?: number | null }[]
+  >([]);
   const [twinZones, setTwinZones] = useState<ZoneDef[]>(ZONES);
   const [shopFloorConditions, setShopFloorConditions] = useState<{
     temp: number | null;
     humidity: number | null;
   }>({ temp: null, humidity: null });
+  // Which hour the headline BMS reading came from, so the header can say WHEN it
+  // was measured. The workbook is published a month ahead and contains rows for
+  // dates that have not happened, so a temperature with no timestamp is
+  // indistinguishable from a stale one.
+  const [shopFloorHour, setShopFloorHour] = useState<number | null>(null);
 
   const currentYieldData = React.useMemo(() => {
     return productYield;
@@ -1373,8 +1408,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             // in August when the month had 1.
             setCustomerComplaintsCount(cc.latest?.count ?? 0);
             if (Array.isArray(cc.months)) {
-              setCustomerComplaintsPoints(cc.months.map((m: any) => m.count ?? 0));
-              setComplaintsXTicks(cc.months.map((m: any) => m.label ?? ""));
+              setCustomerComplaintsPoints(
+                cc.months.map((m: any) => m.count ?? 0),
+              );
+              setComplaintsXTicks(cc.months.map(complaintPeriodLabel));
             }
           }
         }
@@ -1442,8 +1479,21 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         setHftpyBlock(data.hftpy);
       }
 
-      // 2b. Shop Floor Conditions
-      if (data.shop_floor_conditions) {
+      // 2b. Shop Floor Conditions — temperature and humidity from the BMS trend
+      // workbook, hourly. `shop_floor` is the block the backend publishes;
+      // `shop_floor_conditions` is a fallback for any older payload.
+      //
+      // `!== undefined`, and nulls are NOT coalesced to the previous value: the
+      // block is null when the workbook has no reading for today, and the header
+      // must then show N/A rather than yesterday's temperature as current.
+      if (data.shop_floor !== undefined) {
+        const sf = data.shop_floor;
+        setShopFloorConditions({
+          temp: isNum(sf?.temp_c) ? sf.temp_c : null,
+          humidity: isNum(sf?.humidity_pct) ? sf.humidity_pct : null,
+        });
+        setShopFloorHour(isNum(sf?.hour_of_day) ? sf.hour_of_day : null);
+      } else if (data.shop_floor_conditions) {
         const sfc = data.shop_floor_conditions;
         setShopFloorConditions((prev) => ({
           temp: sfc.temp ?? sfc.temperature ?? prev.temp,
@@ -1571,9 +1621,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           const co2 = data.sustainability.co2_emission_tco2;
           // Rounded to whole tonnes for display: the workbook carries four
           // decimals (1133.2099) which is false precision on a card this size.
-          setCo2Emission(
-            isNum(co2.value) ? Math.round(co2.value) : 0,
-          );
+          setCo2Emission(isNum(co2.value) ? Math.round(co2.value) : 0);
           // Nulls survive into the series on purpose — an unreported period must
           // read as a gap, not as zero emissions.
           if (co2.trend) setCo2Points(co2.trend);
@@ -1587,13 +1635,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         setCustomerComplaintsCount(cc.total ?? cc.latest?.count ?? 0);
         if (Array.isArray(cc.months)) {
           setCustomerComplaintsPoints(cc.months.map((m: any) => m.count ?? 0));
-          setComplaintsXTicks(cc.months.map((m: any) => m.label ?? ""));
+          setComplaintsXTicks(cc.months.map(complaintPeriodLabel));
         }
       } else if (data.customer_reflection) {
         if (data.customer_reflection.incidents !== undefined) {
           setCustomerComplaintsCount(data.customer_reflection.incidents.value);
           if (Array.isArray(data.customer_reflection.incidents.trend)) {
-            setCustomerComplaintsPoints(data.customer_reflection.incidents.trend);
+            setCustomerComplaintsPoints(
+              data.customer_reflection.incidents.trend,
+            );
           } else {
             setCustomerComplaintsPoints((prev) => {
               const val = data.customer_reflection.incidents.value;
@@ -1625,11 +1675,18 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         // if (data.ci.month_label) setCiMonthLabel(data.ci.month_label);
         if (metrics.lean_savings) {
           setCiLeanSavings(
-            toCiMetric(metrics.lean_savings, metrics.lean_savings.currency === "EUR" ? "€" : ""),
+            toCiMetric(
+              metrics.lean_savings,
+              metrics.lean_savings.currency === "EUR" ? "€" : "",
+            ),
           );
         }
         if (metrics.kaizen) {
           setCiKaizen(toCiMetric(metrics.kaizen, ""));
+        }
+        // Month-by-month series for the savings line chart.
+        if (Array.isArray(data.ci.months)) {
+          setCiMonths(data.ci.months);
         }
       }
     };
@@ -1691,7 +1748,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             // an em dash rather than 0.0%, which would read as "every product
             // missed" instead of "not enough volume to judge yet".
             value: isNum(actual) ? `${actual.toFixed(1)}%` : "—",
-            projectedValue: isNum(projection) ? `${projection.toFixed(1)}%` : "—",
+            projectedValue: isNum(projection)
+              ? `${projection.toFixed(1)}%`
+              : "—",
             // Against the projection, not against yesterday: HFTPY is a
             // period-to-date figure and there is no meaningful day-over-day move.
             change: isNum(hftpyBlock.delta_vs_projection)
@@ -2052,18 +2111,28 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const getTimelineNodeColor = (card: (typeof processPerformanceData)[0]) => {
     // Green or red only. "At Risk" is no longer produced for these cards, but is
     // treated as a miss rather than reintroducing amber if it ever appears.
-    if (card.status === "Critical" || card.status === "At Risk") return "#ff4c4c";
-    if (card.status === "N/A" || card.status === "..." ||
-        card.status === "Not Run") return "#0091ff";
+    if (card.status === "Critical" || card.status === "At Risk")
+      return "#ff4c4c";
+    if (
+      card.status === "N/A" ||
+      card.status === "..." ||
+      card.status === "Not Run"
+    )
+      return "#0091ff";
     return "#22c55e";
   };
 
   const getCardBorderColor = (card: (typeof processPerformanceData)[0]) => {
     // Green or red only. "At Risk" is no longer produced for these cards, but is
     // treated as a miss rather than reintroducing amber if it ever appears.
-    if (card.status === "Critical" || card.status === "At Risk") return "#ff4c4c";
-    if (card.status === "N/A" || card.status === "..." ||
-        card.status === "Not Run") return "#0091ff";
+    if (card.status === "Critical" || card.status === "At Risk")
+      return "#ff4c4c";
+    if (
+      card.status === "N/A" ||
+      card.status === "..." ||
+      card.status === "Not Run"
+    )
+      return "#0091ff";
     return "#22c55e";
   };
 
@@ -2304,6 +2373,37 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     return Array.from(new Set(ticks));
   };
   const incidentYTicks = getYTicks(accidentPoints, 4);
+  // Savings plotted in THOUSANDS of euros. SafetyChart labels its y-axis with
+  // String(tick), so raw euros would render "2360000" and the label column would
+  // eat the plot area. The axis caption says K€ so the unit is not implied.
+  const ciSavingsPoints = React.useMemo(
+    () =>
+      ciMonths.map((m) => (isNum(m.lean_savings) ? m.lean_savings / 1000 : 0)),
+    [ciMonths],
+  );
+  // Four descending ticks (SafetyChart wants max first), rounded out to a
+  // readable step so the peak month sits inside the plot rather than on its edge.
+  const ciSavingsYTicks = React.useMemo(() => {
+    const max = Math.max(1, ...ciSavingsPoints);
+    const step = Math.max(100, Math.ceil(max / 3 / 100) * 100);
+    return [3, 2, 1, 0].map((i) => i * step);
+  }, [ciSavingsPoints]);
+  // Kaizen is a plain count, so it plots unscaled — no K/M division needed.
+  const ciMonthTicks = React.useMemo(
+    () => ciMonths.map((m) => (m.label || "").split("'")[0]),
+    [ciMonths],
+  );
+  const ciKaizenPoints = React.useMemo(
+    () => ciMonths.map((m) => (isNum(m.kaizen) ? m.kaizen : 0)),
+    [ciMonths],
+  );
+  const ciKaizenYTicks = React.useMemo(() => {
+    const max = Math.max(1, ...ciKaizenPoints);
+    // Step of 50 rather than 100: the count sits in the low hundreds, so a
+    // coarser step would flatten the whole series into the bottom third.
+    const step = Math.max(50, Math.ceil(max / 3 / 50) * 50);
+    return [3, 2, 1, 0].map((i) => i * step);
+  }, [ciKaizenPoints]);
   // Green when at or under target, red when over. Safety was hardcoded red, so a
   // clean period rendered a red "0" and a red trend line — the card looked like
   // an alarm for the best possible result. The headline and its chart take the
@@ -2387,22 +2487,38 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {dateStr}
           </span>
           <span className="hidden xl:inline h-3.5 w-[1px] bg-[#1c3149]" />
-          <span className="text-white font-bold whitespace-nowrap">{timeStr}</span>
+          <span className="text-white font-bold whitespace-nowrap">
+            {timeStr}
+          </span>
           <span className="hidden 2xl:inline h-3.5 w-[1px] bg-[#1c3149]" />
           <div className="hidden 2xl:flex items-center gap-1 text-[#06b6d4]">
             <Thermometer size={14} className="text-[#06b6d4]" />
-            <span className="text-white font-bold">
+            <span
+              className="text-white font-bold"
+              title={
+                shopFloorHour !== null
+                  ? `Shop-floor temperature at ${String(shopFloorHour).padStart(2, "0")}:00 (BMS)`
+                  : "No BMS reading available for today"
+              }
+            >
               {shopFloorConditions.temp !== null
-                ? `${shopFloorConditions.temp}°C`
+                ? `${shopFloorConditions.temp.toFixed(1)}°C`
                 : "N/A"}
             </span>
           </div>
           <span className="hidden 2xl:inline h-3.5 w-[1px] bg-[#1c3149]" />
           <div className="hidden 2xl:flex items-center gap-1 text-[#06b6d4]">
             <Droplets size={14} className="text-[#06b6d4]" />
-            <span className="text-white font-bold">
+            <span
+              className="text-white font-bold"
+              title={
+                shopFloorHour !== null
+                  ? `Shop-floor relative humidity at ${String(shopFloorHour).padStart(2, "0")}:00 (BMS)`
+                  : "No BMS reading available for today"
+              }
+            >
               {shopFloorConditions.humidity !== null
-                ? `${shopFloorConditions.humidity}%`
+                ? `${shopFloorConditions.humidity.toFixed(1)}%`
                 : "N/A"}
             </span>
           </div>
@@ -2483,7 +2599,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           const target = (card as any).target as number | null | undefined;
           // Numeric value behind the formatted string ("93.1%" -> 93.1), so the
           // card can be judged against its target.
-          const actual = Number.parseFloat(String(card.value).replace(/[^\d.-]/g, ""));
+          const actual = Number.parseFloat(
+            String(card.value).replace(/[^\d.-]/g, ""),
+          );
           const meetsTarget =
             isNum(target) && Number.isFinite(actual) ? actual >= target : null;
 
@@ -2524,7 +2642,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   <div className="flex items-baseline gap-1.5 justify-between">
                     <span
                       className="text-[23px] font-black font-mono leading-none"
-                      style={{ color: trendColor, textShadow: `0 0 8px ${trendColor}40` }}
+                      style={{
+                        color: trendColor,
+                        textShadow: `0 0 8px ${trendColor}40`,
+                      }}
                     >
                       {card.value}
                     </span>
@@ -2553,7 +2674,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 ) : (
                   <span
                     className="text-[26px] font-black font-mono leading-none"
-                    style={{ color: trendColor, textShadow: `0 0 8px ${trendColor}40` }}
+                    style={{
+                      color: trendColor,
+                      textShadow: `0 0 8px ${trendColor}40`,
+                    }}
                   >
                     {card.value}
                   </span>
@@ -2573,12 +2697,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 </div>
               </div>
               <div className="absolute bottom-[4px] left-0 right-0 h-[16px] pointer-events-none">
-                {card.id !== 9 && renderFullSparkline(
-                  card.points,
-                  card.yesterdayPoints,
-                  trendColor,
-                  target,
-                )}
+                {card.id !== 9 &&
+                  renderFullSparkline(
+                    card.points,
+                    card.yesterdayPoints,
+                    trendColor,
+                    target,
+                  )}
               </div>
             </div>
           );
@@ -2842,7 +2967,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </div>
           </div>
 
-          <div className="flex-1 relative bg-[#030810] border border-white/15 rounded-lg overflow-hidden flex items-center justify-center group cursor-pointer" onClick={() => setIsTwinModalOpen(true)}>
+          <div
+            className="flex-1 relative bg-[#030810] border border-white/15 rounded-lg overflow-hidden flex items-center justify-center group cursor-pointer"
+            onClick={() => setIsTwinModalOpen(true)}
+          >
             <FactoryLayoutOverlay
               zones={twinZones}
               variant="compact"
@@ -2850,7 +2978,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             />
             {/* Overlay Gradient / Glass effect */}
             <div className="absolute inset-0 bg-gradient-to-t from-[#030810]/40 via-transparent to-transparent pointer-events-none" />
-            
+
             {/* Hover overlay with explore button — commented out on request.
                 The parent div keeps its onClick, so clicking the layout still
                 opens the twin modal; only the hover prompt is hidden. */}
@@ -3036,13 +3164,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                           // sheet.xlsx and never needed the HFTPY plan, so telling
                           // a module row it is "awaiting P08 plan" would point at
                           // the wrong missing thing entirely.
-                          if (!yieldPlanStatus.available && activeYieldTab === "UNITS") {
+                          if (
+                            !yieldPlanStatus.available &&
+                            activeYieldTab === "UNITS"
+                          ) {
                             return (
                               <span
                                 className="text-[#63788f] italic"
                                 title={`No ${yieldPlanStatus.month ?? ""} sheet in HFTPY Plan.xlsx — add it to get period recommendations.`}
                               >
-                                awaiting {yieldPlanStatus.month ?? "period"} plan
+                                awaiting {yieldPlanStatus.month ?? "period"}{" "}
+                                plan
                               </span>
                             );
                           }
@@ -3108,7 +3240,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                               }
                             >
                               <div className="flex justify-between gap-2">
-                                <span className="text-[#63788f]">Yield / target</span>
+                                <span className="text-[#63788f]">
+                                  Yield / target
+                                </span>
                                 <span className="text-[#c8d6e4] font-bold tabular-nums">
                                   {isNum(yr.current_yield)
                                     ? `${(yr.current_yield * 100).toFixed(1)}%`
@@ -3127,7 +3261,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                               </div>
                               <div className="flex justify-between gap-2 items-center mt-[1px]">
                                 <span className="text-[#63788f]">
-                                  {onTarget ? "Failures spare" : "Passes to recover"}
+                                  {onTarget
+                                    ? "Failures spare"
+                                    : "Passes to recover"}
                                 </span>
                                 <span
                                   className="font-black px-1.5 py-[1px] rounded text-[8.5px] uppercase tracking-wide tabular-nums"
@@ -3201,7 +3337,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                               yr.recommendation ||
                               [
                                 `${yr.product}: ${yr.tested_quantity.toLocaleString()} of ${isNum(yr.planned_quantity) ? yr.planned_quantity.toLocaleString() : "—"} planned units built at ${isNum(yr.current_yield) ? (yr.current_yield * 100).toFixed(1) : "—"}%, against a ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% period target.`,
-                                isNum(yr.remaining_quantity) && isNum(yr.required_future_yield)
+                                isNum(yr.remaining_quantity) &&
+                                isNum(yr.required_future_yield)
                                   ? `The remaining ${yr.remaining_quantity.toLocaleString()} units must average ${(yr.required_future_yield * 100).toFixed(1)}%.`
                                   : "No remaining quantity is known, so no required yield can be computed.",
                                 unprecedented && isNum(yr.best_historical_yield)
@@ -3214,7 +3351,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                             }
                           >
                             <div className="flex justify-between gap-2">
-                              <span className="text-[#63788f]">Total planned</span>
+                              <span className="text-[#63788f]">
+                                Total planned
+                              </span>
                               <span className="text-[#c8d6e4] font-bold tabular-nums">
                                 {isNum(yr.planned_quantity)
                                   ? yr.planned_quantity.toLocaleString()
@@ -3230,7 +3369,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                               </span>
                             </div>
                             <div className="flex justify-between gap-2">
-                              <span className="text-[#63788f]">Expected yield</span>
+                              <span className="text-[#63788f]">
+                                Expected yield
+                              </span>
                               <span className="font-bold tabular-nums text-[#c8d6e4]">
                                 {isNum(yr.required_future_yield)
                                   ? `${(yr.required_future_yield * 100).toFixed(1)}%`
@@ -3641,7 +3782,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 <SafetyChart
                   points={customerComplaintsPoints}
                   yTicks={customerComplaintsYTicks}
-                  xTicks={complaintsXTicks.length > 0 ? complaintsXTicks : safetyXTicks}
+                  xTicks={
+                    complaintsXTicks.length > 0
+                      ? complaintsXTicks
+                      : safetyXTicks
+                  }
                   color="#a855f7"
                 />
               </div>
@@ -3702,7 +3847,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 />
               </div>
               {eriData && (
-                <div className="flex justify-between text-[9px] text-[#63788f] font-bold mt-0.5 pb-1.5">
+                <div className="flex justify-between text-[9px] text-[#63788f] font-bold mt-0.5 pb-1.5 mb-3">
                   <span>Returns</span>
                   <span className="text-white font-mono">
                     {eriData.returns} / {eriData.deliveries}
@@ -3728,62 +3873,67 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               </span>
             )}
           </div>
-          <div className="flex-1 grid grid-cols-2 gap-3 items-center min-h-0 pt-2">
-            <div className="flex flex-col h-full justify-between">
-              <div className="flex justify-between items-baseline">
-                <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
-                  LEAN SAVINGS
+          {/* Two month-wise lines, one per metric — replacing the semi-circle
+              gauges. A gauge needs a scale maximum, and with no agreed target in
+              any workbook that maximum was the trailing year's best month, so the
+              arc answered "this month against our best month" — a question nobody
+              asked. The lines show the same figures without inventing a reference
+              point, which is also why neither carries a target line.
+
+              Value-over-caption layout matches the Safety card, so the two read
+              the same way. "Last Month" rather than Safety's "This Month" because
+              CI genuinely reports the last COMPLETED month: ideas are marked
+              implemented throughout a month, so the running one would collapse to
+              near-zero every 1st. */}
+          <div className="flex-1 grid grid-cols-2 gap-3 min-h-0 pt-2">
+            <div className="flex flex-col h-full min-h-0">
+              <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
+                Lean savings
+                <span className="text-[#63788f] ml-1 normal-case">
+                  (K&euro;)
                 </span>
-                <span className="text-[#63788f] text-[10px] font-bold font-sans">
-                  {ciLeanSavings.targetLabel || "No target set"}
+              </span>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-[#a855f7] text-[24px] font-black leading-none font-mono">
+                  {fmtCompact(ciLeanSavings.value, "—")}
+                </span>
+                <span className="text-[#63788f] text-[10px] font-bold">
+                  Last Month
                 </span>
               </div>
-              <div className="flex-1 flex items-center justify-center w-full mt-2">
-                <SemiCircleGauge
-                  value={ciLeanSavings.value}
-                  min={0}
-                  max={ciLeanSavings.max}
-                  labelMin="0"
-                  labelMax={fmtCompact(ciLeanSavings.max, "—")}
-                  color="#a855f7"
-                  showValueInCenter={true}
-                  centerLabel={ciLeanSavings.centerLabel}
-                />
-              </div>
-              <div className="flex justify-between text-[10px] text-[#63788f] font-bold">
-                <span>Achieved</span>
-                <span className="text-white font-mono">
-                  {ciLeanSavings.achievedLabel}
-                </span>
+              <div className="flex-1 min-h-[44px] flex items-center justify-center mt-1">
+                <div className="w-full h-full">
+                  <SafetyChart
+                    points={ciSavingsPoints}
+                    yTicks={ciSavingsYTicks}
+                    xTicks={ciMonthTicks}
+                    color="#a855f7"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col h-full justify-between border-l border-[#1c3149]/30 pl-3">
-              <div className="flex justify-between items-baseline">
-                <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
-                  NO. OF KAIZEN
-                </span>
-                <span className="text-[#63788f] text-[10px] font-bold">
-                  {ciKaizen.targetLabel || "No target set"}
-                </span>
-              </div>
-              <div className="flex-1 flex items-center justify-center w-full mt-2">
-                <SemiCircleGauge
-                  value={ciKaizen.value}
-                  min={0}
-                  max={ciKaizen.max}
-                  labelMin="0"
-                  labelMax={fmtCompact(ciKaizen.max, "—")}
-                  color="#0ea5e9"
-                  showValueInCenter={true}
-                  centerLabel={ciKaizen.centerLabel}
-                />
-              </div>
-              <div className="flex justify-between text-[10px] text-[#63788f] font-bold">
-                <span>Achieved</span>
-                <span className="text-white font-mono">
+            <div className="flex flex-col h-full min-h-0 border-l border-[#1c3149]/30 pl-3">
+              <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
+                No. of Kaizen
+              </span>
+              <div className="flex items-baseline gap-1.5 mt-1">
+                <span className="text-[#0ea5e9] text-[24px] font-black leading-none font-mono">
                   {ciKaizen.achievedLabel}
                 </span>
+                <span className="text-[#63788f] text-[10px] font-bold">
+                  Last Month
+                </span>
+              </div>
+              <div className="flex-1 min-h-[44px] flex items-center justify-center mt-1">
+                <div className="w-full h-full">
+                  <SafetyChart
+                    points={ciKaizenPoints}
+                    yTicks={ciKaizenYTicks}
+                    xTicks={ciMonthTicks}
+                    color="#0ea5e9"
+                  />
+                </div>
               </div>
             </div>
           </div>
