@@ -3027,7 +3027,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             <table className="w-full min-w-[720px] text-left text-[12px] border-collapse relative">
               <thead>
                 <tr className="border-b border-[#1c3149] text-[#63788f] font-bold text-[10px] uppercase">
-                  <th className="pb-1.5 font-black pl-2">#</th>
+                  <th className="pb-1.5 font-black pl-2">S.No</th>
                   <th className="pb-1.5 font-black">PRODUCT NAME</th>
                   <th className="pb-1.5 font-black text-center">TESTED</th>
                   <th className="pb-1.5 font-black text-center">
@@ -3064,9 +3064,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     </td>
                   </tr>
                 )}
-                {paginatedYieldData.map((row) => (
+                {paginatedYieldData.map((row, idx) => (
                   <tr key={row.id} className="hover:bg-[#101c2b]/40">
-                    <td className="py-[4px] text-[#8fa0b5] pl-2">{row.id}</td>
+                    <td className="py-[4px] text-[#8fa0b5] pl-2">
+                      {((yieldPage - 1) * ITEMS_PER_PAGE) + idx + 1}.
+                    </td>
                     <td className="py-[4px] text-white font-sans font-bold">
                       {row.name}
                     </td>
