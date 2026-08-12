@@ -1129,6 +1129,92 @@ const fmtAlertAge = (m: any) => {
   return mins ? `${hours}h ${mins}m ago` : `${hours}h ago`;
 };
 
+// ── Process Performance stage groups ────────────────────────────────────────
+// Gap between process cards, in px. Shared by the card rows AND the group bar
+// above them — the bar's widths are derived from it, so the two must not drift.
+const PROCESS_CARD_GAP = 10;
+
+// Every stage group uses the one blue. Kept as a constant because RFM is drawn
+// as two separate segments (row 1 tail, then the band below) and they must stay
+// the same colour to read as one group.
+const STAGE_GROUP_COLOR = "#0091ff";
+
+// One cell of the stage-group bar, sized to sit exactly above `span` cards.
+//
+// A plain flex-1 / flex-2 split lands half a gap out per cell, because the gaps
+// between cards fall INSIDE a group that spans several of them while the gaps
+// between groups do not. Growing on the card count alone and pushing the group's
+// own internal gaps into flex-basis makes each cell resolve to exactly
+// span*cardWidth + (span-1)*gap, matching the cards beneath at any width.
+//
+// Omit `label` to draw a bare line — used where a group opens on one row and is
+// named on another. Pass `spacer` for a cell that draws nothing and only holds
+// its width. `startCap`/`endCap` off means the group carries on past that end.
+const StageGroupBar: React.FC<{
+  span: number;
+  label?: string;
+  color?: string;
+  spacer?: boolean;
+  startCap?: boolean;
+  endCap?: boolean;
+}> = ({
+  span,
+  label,
+  color = STAGE_GROUP_COLOR,
+  spacer = false,
+  startCap = true,
+  endCap = true,
+}) => {
+  const cap = (
+    <span
+      className="w-[2px] h-2 rounded-sm flex-shrink-0"
+      style={{ backgroundColor: color }}
+    />
+  );
+  return (
+    <div
+      className="min-w-0 flex items-center gap-1.5"
+      style={{
+        flexGrow: span,
+        flexShrink: 1,
+        flexBasis: (span - 1) * PROCESS_CARD_GAP,
+      }}
+      aria-hidden={!label}
+    >
+      {!spacer && (
+        <>
+          {startCap && cap}
+          <span
+            className="h-[2px] flex-1"
+            style={{
+              background: label
+                ? `linear-gradient(90deg, ${color}66, ${color})`
+                : `${color}b3`,
+            }}
+          />
+          {label && (
+            <>
+              <span
+                className="text-[10px] font-black tracking-[0.18em] whitespace-nowrap leading-none"
+                style={{ color }}
+              >
+                {label}
+              </span>
+              <span
+                className="h-[2px] flex-1"
+                style={{
+                  background: `linear-gradient(270deg, ${color}66, ${color})`,
+                }}
+              />
+            </>
+          )}
+          {endCap && cap}
+        </>
+      )}
+    </div>
+  );
+};
+
 export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const navigate = useNavigate();
   const [timeStr, setTimeStr] = useState(() =>
@@ -2681,22 +2767,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     return last + 1;
   }, [processPerformance, activeShift]);
 
-  const ProcessArrow = () => (
-    <svg
-      className="w-3.5 h-3.5 text-[#0091ff]/45 flex-shrink-0 animate-pulse"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth="2.5"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-      />
-    </svg>
-  );
-
   const renderRedesignedCard = (metricName: string, customTitle?: string) => {
     const procItem = processPerformance.find(
       (p) =>
@@ -2749,7 +2819,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
       return (
         <div
-          className={`relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 flex-1 min-w-0 ${
+          className={`relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[112px] 2xl:h-[131px] transition-all duration-300 flex-1 min-w-0 ${
             procItem.status === "Critical"
               ? "animate-border-pulse-critical"
               : ""
@@ -2870,7 +2940,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       return (
         <div
           key={kpiItem.id}
-          className="relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 flex-1 min-w-0"
+          className="relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[112px] 2xl:h-[131px] transition-all duration-300 flex-1 min-w-0"
           style={{
             background: `linear-gradient(180deg, ${trendColor}1f 0%, ${trendColor}0a 100%), #101c2b`,
             borderColor: `${trendColor}40`,
@@ -3294,75 +3364,63 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               [Hourly]
             </span>
           </div>
-          <div className="flex flex-col gap-4 flex-grow justify-between relative">
-            {/* First 8 Items (Group 1) */}
-            <div className="flex items-center gap-1.5 w-full z-10">
-              {renderRedesignedCard("SPI")}
-              <ProcessArrow />
-              {renderRedesignedCard("DPMOI")}
-              <ProcessArrow />
-              {renderRedesignedCard("AXI", "AXI")}
-              <ProcessArrow />
-              {renderRedesignedCard("SMT DEFECTS @ MFT")}
-              <ProcessArrow />
-              {renderRedesignedCard("FPY MODULE", "FPY MODULE")}
-              <ProcessArrow />
-              {renderRedesignedCard("SPY MODULE", "SPY MODULE")}
-              <ProcessArrow />
-              {renderRedesignedCard("THERMAL GEL AVI", "THERMAL GEL AVI")}
-              <ProcessArrow />
-              {renderRedesignedCard("SCREW DEFECT", "SCREW DEFECT")}
+          <div className="flex flex-col gap-3 flex-grow justify-between relative">
+            {/* Bar + first 8 items kept in one wrapper so the outer column still
+                has three children — it is justify-between, and a fourth child
+                would redistribute the whole strip. */}
+            <div className="flex flex-col gap-2">
+              {/* Stage-group bar. Spans are in cards, and must add up to the
+                  number of cards in the row below (4 + 2 + 2 = 8), or every cell
+                  after the mismatch drifts out of alignment. */}
+              <div
+                className="flex items-center w-full flex-shrink-0 z-10"
+                style={{ gap: PROCESS_CARD_GAP }}
+              >
+                <StageGroupBar span={4} label="SMT" />
+                <StageGroupBar span={2} label="MFT" />
+                {/* RFM opens here (THERMAL GEL AVI, SCREW DEFECT) and is named on
+                    the band below, so this end stays open. */}
+                <StageGroupBar span={2} endCap={false} />
+              </div>
+
+              <div
+                className="flex items-center w-full z-10"
+                style={{ gap: PROCESS_CARD_GAP }}
+              >
+                {renderRedesignedCard("SPI")}
+                {renderRedesignedCard("DPMOI")}
+                {renderRedesignedCard("AXI", "AXI")}
+                {renderRedesignedCard("SMT DEFECTS @ MFT")}
+                {renderRedesignedCard("FPY MODULE", "FPY MODULE")}
+                {renderRedesignedCard("SPY MODULE", "SPY MODULE")}
+                {renderRedesignedCard("THERMAL GEL AVI", "THERMAL GEL AVI")}
+                {renderRedesignedCard("SCREW DEFECT", "SCREW DEFECT")}
+              </div>
             </div>
 
-            {/* Visual spacer/divider for the two groups with loop connector */}
-            <div className="border-t border-[#1c3149]/40 my-1 flex-shrink-0 z-10 relative overflow-visible">
-              <svg
-                className="absolute left-0 right-0 -top-[16px] h-[52px] w-full overflow-visible pointer-events-none"
-                viewBox="0 0 100 52"
-                preserveAspectRatio="none"
-              >
-                <defs>
-                  <marker
-                    id="connector-arrow"
-                    viewBox="0 0 10 10"
-                    refX="6"
-                    refY="5"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto-start-reverse"
-                  >
-                    <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#0091ff" />
-                  </marker>
-                </defs>
-                <path
-                  d="M 93.75,0 L 93.75,16 L 6.25,16 L 6.25,47"
-                  fill="none"
-                  stroke="#0091ff"
-                  strokeWidth="1.2"
-                  strokeDasharray="3 2.5"
-                  vectorEffect="non-scaling-stroke"
-                  className="opacity-70"
-                  markerEnd="url(#connector-arrow)"
-                />
-              </svg>
+            {/* RFM continues here and closes at AUTO OGI, the last card of row 2.
+                span={8} is the full row, so this doubles as the divider the
+                plain border used to draw. Its start stays open because the group
+                already began above THERMAL GEL AVI. */}
+            <div
+              className="flex items-center w-full flex-shrink-0"
+              style={{ gap: PROCESS_CARD_GAP }}
+            >
+              <StageGroupBar span={8} label="RFM" startCap={false} />
             </div>
 
             {/* Next 8 Items (Group 2) */}
-            <div className="flex items-center gap-1.5 w-full z-10">
+            <div
+              className="flex items-center w-full z-10"
+              style={{ gap: PROCESS_CARD_GAP }}
+            >
               {renderRedesignedCard("FPY UNIT", "FPY UNIT")}
-              <ProcessArrow />
               {renderRedesignedCard("SPY UNIT", "SPY UNIT")}
-              <ProcessArrow />
               {renderRedesignedCard("OTA")}
-              <ProcessArrow />
               {renderRedesignedCard("RTWP")}
-              <ProcessArrow />
               {renderRedesignedCard("BURN-IN", "BURN-IN")}
-              <ProcessArrow />
               {renderRedesignedCard("LBTS", "LBTS")}
-              <ProcessArrow />
               {renderRedesignedCard("IP")}
-              <ProcessArrow />
               {renderRedesignedCard("AUTO OGI")}
             </div>
           </div>
