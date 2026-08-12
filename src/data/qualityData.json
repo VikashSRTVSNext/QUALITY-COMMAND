@@ -15,7 +15,7 @@
     {
       "id": 2,
       "key": "spy_unit",
-      "target": 98,
+      "target": 96,
       "label": "SPY - UNIT (%)",
       "value": 97.27,
       "delta_vs_yesterday": -1.76,
