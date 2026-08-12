@@ -990,18 +990,23 @@ const isNum = (v: any): v is number =>
 const fmtFixed = (v: any, digits: number, fallback = "...") =>
   isNum(v) ? v.toFixed(digits) : fallback;
 
-/** Fiscal-period label (P01..P12) for a complaint month.
+/** Fiscal-period label (P01..P12) for a row keyed by calendar month.
  *
- *  The Customer Reflection figures are CALENDAR-MONTH counts — the workbook's
- *  'Graph 2026' sheet reports per month and has nothing finer. The period labels
- *  work because the fiscal periods are numbered to track months (P01 opens 3 Jan,
- *  P07 opens 4 Jul), so the ordinal mapping is right, but the label is NOMINAL:
- *  P07 truly runs 4 Jul - 7 Aug while the "July" count covers 1-31 Jul.
+ *  Shared by Customer Reflection and by both CI charts, because both are fed by
+ *  CALENDAR-MONTH sources — the complaints workbook's 'Graph 2026' sheet and
+ *  mart_ci.period_month — and neither has anything finer to offer.
  *
- *  Used so this axis matches Safety, CO2 and CI on the same dashboard. Falls back
- *  to whatever label the payload carried if the month cannot be read.
+ *  The period labels work because the fiscal periods are numbered to track
+ *  months (P01 opens 3 Jan, P07 opens 4 Jul), so the ordinal mapping is right.
+ *  But the label is NOMINAL, and that is the caveat to keep in mind: P07 truly
+ *  runs 4 Jul - 7 Aug, while the "July" figure underneath it covers 1-31 Jul.
+ *  These axes are period-LABELLED, not period-AGGREGATED.
+ *
+ *  Used so every month-wise axis on the dashboard — Safety, CO2, CI, Customer
+ *  Reflection — reads in the same units the plant plans in. Falls back to
+ *  whatever label the payload carried if the month cannot be read.
  */
-const complaintPeriodLabel = (m: any): string => {
+const monthPeriodLabel = (m: any): string => {
   const month = Number(String(m?.period_month ?? "").slice(5, 7));
   return month >= 1 && month <= 12
     ? `P${String(month).padStart(2, "0")}`
@@ -1203,7 +1208,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   // Month-by-month CI figures, January to the newest completed month. Drives the
   // savings line chart that replaced the two semi-circle gauges.
   const [ciMonths, setCiMonths] = useState<
-    { label: string; lean_savings?: number | null; kaizen?: number | null }[]
+    {
+      label: string;
+      // ISO first-of-month from mart_ci.period_month. Carried so the x-axis can
+      // be labelled by fiscal period rather than by month name.
+      period_month?: string | null;
+      lean_savings?: number | null;
+      kaizen?: number | null;
+    }[]
   >([]);
   const [twinZones, setTwinZones] = useState<ZoneDef[]>(ZONES);
   const [shopFloorConditions, setShopFloorConditions] = useState<{
@@ -1437,7 +1449,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               setCustomerComplaintsPoints(
                 cc.months.map((m: any) => m.count ?? 0),
               );
-              setComplaintsXTicks(cc.months.map(complaintPeriodLabel));
+              setComplaintsXTicks(cc.months.map(monthPeriodLabel));
             }
           }
         }
@@ -1654,7 +1666,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         setCustomerComplaintsCount(cc.total ?? cc.latest?.count ?? 0);
         if (Array.isArray(cc.months)) {
           setCustomerComplaintsPoints(cc.months.map((m: any) => m.count ?? 0));
-          setComplaintsXTicks(cc.months.map(complaintPeriodLabel));
+          setComplaintsXTicks(cc.months.map(monthPeriodLabel));
         }
       } else if (data.customer_reflection) {
         if (data.customer_reflection.incidents !== undefined) {
@@ -2132,7 +2144,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     }
   };
 
-
   const getCardBorderColor = (card: (typeof processPerformanceData)[0]) => {
     // Green or red only. "At Risk" is no longer produced for these cards, but is
     // treated as a miss rather than reintroducing amber if it ever appears.
@@ -2372,8 +2383,18 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   };
 
   const ProcessArrow = () => (
-    <svg className="w-3.5 h-3.5 text-[#0091ff]/45 flex-shrink-0 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+    <svg
+      className="w-3.5 h-3.5 text-[#0091ff]/45 flex-shrink-0 animate-pulse"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="2.5"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+      />
     </svg>
   );
 
@@ -2385,26 +2406,29 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         (metricName === "THERMAL GEL AVI" && p.name === "THERMAL AVI") ||
         (metricName === "SCREW DEFECT" && p.name === "SCREW DEFECTS") ||
         (metricName === "BURN-IN" && p.name === "BURN-IN - S") ||
-        (metricName === "LBTS" && p.name === "LBTS - S")
+        (metricName === "LBTS" && p.name === "LBTS - S"),
     );
 
     if (procItem) {
       const displayTitle = customTitle || metricName;
       const cardColor = getCardBorderColor(procItem);
-      const { points } = getProcessTrendData(
-        procItem.trend,
-        activeShift,
-      );
+      const { points } = getProcessTrendData(procItem.trend, activeShift);
 
       return (
         <div
           className={`relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[116px] 2xl:h-[135px] transition-all duration-300 flex-1 min-w-0 ${
-            procItem.status === "Critical" ? "animate-border-pulse-critical" : ""
+            procItem.status === "Critical"
+              ? "animate-border-pulse-critical"
+              : ""
           }`}
           style={{
             background: `linear-gradient(180deg, ${cardColor}1f 0%, ${cardColor}0a 100%), #101c2b`,
-            borderColor: procItem.status === "Critical" ? undefined : `${cardColor}40`,
-            boxShadow: procItem.status === "Critical" ? undefined : `0 4px 12px ${cardColor}15`,
+            borderColor:
+              procItem.status === "Critical" ? undefined : `${cardColor}40`,
+            boxShadow:
+              procItem.status === "Critical"
+                ? undefined
+                : `0 4px 12px ${cardColor}15`,
           }}
         >
           <div className="flex items-start gap-1 mb-0.5 2xl:mb-1.5 flex-shrink-0">
@@ -2455,7 +2479,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
           {isNum(procItem.target) && (
             <span className="absolute bottom-1 right-1.5 2xl:right-2 text-[#63788f] text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
-              tgt {procItem.target}
+              Tgt {procItem.target}
               {procItem.targetUnit === "percent" ? "%" : ""}
             </span>
           )}
@@ -2470,8 +2494,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         (metricName === "SPY MODULE" && k.label === "SPY - MODULE (%)") ||
         (metricName === "FPY UNIT" && k.label === "FPY - UNIT (%)") ||
         (metricName === "SPY UNIT" && k.label === "SPY - UNIT (%)") ||
-        (metricName === "CUSTOMER" && k.label === "CUSTOMER QUALITY AUDIT (%)") ||
-        (metricName === "UNITHFTPY" && k.label === "UNIT-HFTPY (%)")
+        (metricName === "CUSTOMER" &&
+          k.label === "CUSTOMER QUALITY AUDIT (%)") ||
+        (metricName === "UNITHFTPY" && k.label === "UNIT-HFTPY (%)"),
     );
 
     if (kpiItem) {
@@ -2547,7 +2572,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
           {isNum(target) && (
             <span className="absolute bottom-1 right-1.5 2xl:right-2 text-[#63788f] text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
-              tgt {target}%
+              Tgt {target}%
             </span>
           )}
         </div>
@@ -2561,8 +2586,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     const kpiItem = kpiCards.find(
       (k) =>
         k.label === metricName ||
-        (metricName === "CUSTOMER" && k.label === "CUSTOMER QUALITY AUDIT (%)") ||
-        (metricName === "UNITHFTPY" && k.label === "UNIT-HFTPY (%)")
+        (metricName === "CUSTOMER" &&
+          k.label === "CUSTOMER QUALITY AUDIT (%)") ||
+        (metricName === "UNITHFTPY" && k.label === "UNIT-HFTPY (%)"),
     );
 
     if (!kpiItem) return null;
@@ -2646,7 +2672,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               {kpiItem.value}
             </span>
           )}
-          
+
           <div className="flex items-baseline gap-1.5 mt-1.5">
             <span
               className="text-[11px] 2xl:text-[12.5px] font-bold"
@@ -2656,7 +2682,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </span>
             {isNum(target) && (
               <span className="text-[#63788f] text-[9.5px] 2xl:text-[11px] font-bold ml-auto whitespace-nowrap">
-                tgt {target}%
+                Tgt {target}%
               </span>
             )}
           </div>
@@ -2704,8 +2730,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     return [3, 2, 1, 0].map((i) => i * step);
   }, [ciSavingsPoints]);
   // Kaizen is a plain count, so it plots unscaled — no K/M division needed.
+  // P01..P12 rather than Jan..Dec, matching every other month-wise axis on the
+  // dashboard. Shared by the savings and Kaizen charts, so they can never
+  // disagree about which period a point belongs to. See monthPeriodLabel for why
+  // the label is nominal: the CI figures are calendar-month sums.
   const ciMonthTicks = React.useMemo(
-    () => ciMonths.map((m) => (m.label || "").split("'")[0]),
+    () => ciMonths.map(monthPeriodLabel),
     [ciMonths],
   );
   const ciKaizenPoints = React.useMemo(
@@ -3691,7 +3721,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
             {/* Visual spacer/divider for the two groups with loop connector */}
             <div className="border-t border-[#1c3149]/40 my-1 flex-shrink-0 z-10 relative overflow-visible">
-              <svg className="absolute left-0 right-0 -top-[16px] h-[52px] w-full overflow-visible pointer-events-none" viewBox="0 0 100 52" preserveAspectRatio="none">
+              <svg
+                className="absolute left-0 right-0 -top-[16px] h-[52px] w-full overflow-visible pointer-events-none"
+                viewBox="0 0 100 52"
+                preserveAspectRatio="none"
+              >
                 <defs>
                   <marker
                     id="connector-arrow"
@@ -3742,16 +3776,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         {/* Right Section: 1x1 Box layout */}
         <div className="lg:col-span-1 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col justify-between h-full min-h-[300px]">
           <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
-            CUSTOMER & HFTPY
+            KEY PERFORMANCE INDICATOR
           </span>
           <div className="flex-grow flex flex-col gap-3.5">
-            {renderLargeKpiCard("CUSTOMER", "CUSTOMER")}
+            {renderLargeKpiCard("CUSTOMER", "CUSTOMER QUALITY AUDIT")}
             {renderLargeKpiCard("UNITHFTPY", "UNIT-HFTPY")}
           </div>
         </div>
       </section>
-
-
 
       {/* Row 4: Bottom Operational KPIs */}
       <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4 mt-1.5">
@@ -3866,7 +3898,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 </span>
 
                 <div className="mt-1 flex items-baseline leading-none">
-                  <span className="text-[#3b82f6] text-[21px] font-black font-mono">
+                  <span className="text-[#22c55e] text-[21px] font-black font-mono">
                     {co2Emission.toLocaleString()}
                   </span>
                   <span className="ml-1 text-[11px] text-[#8fa0b5]">tCO₂</span>
@@ -3884,7 +3916,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     points={co2Points}
                     yTicks={co2YTicks}
                     xTicks={co2Labels.length ? co2Labels : safetyXTicks}
-                    color="#3b82f6"
+                    color="#22c55e"
                   />
                 </div>
               </div>
@@ -3895,7 +3927,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         {/* Card 3: Customer Reflection */}
         <div className="bg-[#101c2b] border border-[#1c3149] rounded-xl pt-3 px-3 pb-[17px] flex flex-col h-[195px] 2xl:h-[172px] justify-between">
           <div className="flex items-center gap-1.5 border-b border-[#1c3149]/50 pb-1.5 flex-shrink-0">
-            <Target size={15} className="text-[#a855f7]" />
+            <Target size={15} className="text-[#22c55e]" />
             <span className="text-[#8fa0b5] text-[12px] font-black uppercase tracking-wider">
               CUSTOMER REFLECTION
             </span>
@@ -3907,7 +3939,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   COMPLAINTS
                 </span>
                 <div className="flex items-baseline gap-1.5 mt-1">
-                  <span className="text-[#a855f7] text-[24px] font-black leading-none font-mono">
+                  <span className="text-[#22c55e] text-[24px] font-black leading-none font-mono">
                     {customerComplaintsCount}
                   </span>
                   {/* "Overall", not "This Month". The figure is the payload's
@@ -3928,7 +3960,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       ? complaintsXTicks
                       : safetyXTicks
                   }
-                  color="#a855f7"
+                  color="#22c55e"
                 />
               </div>
             </div>
@@ -4002,7 +4034,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         {/* Card 4: CI */}
         <div className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
           <div className="flex items-center gap-1.5 border-b border-[#1c3149]/50 pb-1.5 flex-shrink-0">
-            <Trophy size={15} className="text-[#0ea5e9]" />
+            <Trophy size={15} className="text-[#22c55e]" />
             <span className="text-[#8fa0b5] text-[12px] font-black uppercase tracking-wider">
               CI
             </span>
@@ -4035,7 +4067,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 </span>
               </span>
               <div className="flex items-baseline gap-1.5 mt-1 mb-3">
-                <span className="text-[#a855f7] text-[24px] font-black leading-none font-mono">
+                <span className="text-[#22c55e] text-[24px] font-black leading-none font-mono">
                   {fmtCompact(ciLeanSavings.value, "—")}
                 </span>
                 <span className="text-[#63788f] text-[10px] font-bold">
@@ -4048,7 +4080,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     points={ciSavingsPoints}
                     yTicks={ciSavingsYTicks}
                     xTicks={ciMonthTicks}
-                    color="#a855f7"
+                    color="#22c55e"
                   />
                 </div>
               </div>
@@ -4059,7 +4091,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 No. of Kaizen
               </span>
               <div className="flex items-baseline gap-1.5 mt-1 mb-3">
-                <span className="text-[#0ea5e9] text-[24px] font-black leading-none font-mono">
+                <span className="text-[#22c55e] text-[24px] font-black leading-none font-mono">
                   {ciKaizen.achievedLabel}
                 </span>
                 <span className="text-[#63788f] text-[10px] font-bold">
@@ -4072,7 +4104,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     points={ciKaizenPoints}
                     yTicks={ciKaizenYTicks}
                     xTicks={ciMonthTicks}
-                    color="#0ea5e9"
+                    color="#22c55e"
                   />
                 </div>
               </div>
