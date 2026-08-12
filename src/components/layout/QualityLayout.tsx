@@ -2185,9 +2185,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       isKpiRed("SPY - UNIT (%)"),
     ].filter(Boolean).length;
     const testingZoneStatus: "healthy" | "warning" | "critical" =
-      testingRedCount === 0 ? "healthy"
-      : testingRedCount === 1 ? "warning"
-      : "critical";
+      testingRedCount === 0
+        ? "healthy"
+        : testingRedCount === 1
+          ? "warning"
+          : "critical";
 
     // ── MFT zone — 2 KPI cards (FPY MODULE + SPY MODULE) ────────────────────
     const mftRedCount = [
@@ -2195,9 +2197,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       isKpiRed("SPY - MODULE (%)"),
     ].filter(Boolean).length;
     const mftZoneStatus: "healthy" | "warning" | "critical" =
-      mftRedCount === 0 ? "healthy"
-      : mftRedCount === 1 ? "warning"
-      : "critical";
+      mftRedCount === 0
+        ? "healthy"
+        : mftRedCount === 1
+          ? "warning"
+          : "critical";
 
     // ── Packaging zone — 1 KPI card (CUSTOMER QUALITY AUDIT) ───────────────
     const packagingZoneStatus: "healthy" | "critical" = isKpiRed(
@@ -2209,10 +2213,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     setTwinZones((prev) =>
       prev.map((zone) => {
         if (zone.id === "smt") return { ...zone, status: smtZoneStatus };
-        if (zone.id === "thermalgel") return { ...zone, status: thermalZoneStatus };
-        if (zone.id === "testing") return { ...zone, status: testingZoneStatus };
+        if (zone.id === "thermalgel")
+          return { ...zone, status: thermalZoneStatus };
+        if (zone.id === "testing")
+          return { ...zone, status: testingZoneStatus };
         if (zone.id === "mft") return { ...zone, status: mftZoneStatus };
-        if (zone.id === "packaging") return { ...zone, status: packagingZoneStatus };
+        if (zone.id === "packaging")
+          return { ...zone, status: packagingZoneStatus };
         return zone;
       }),
     );
@@ -3040,6 +3047,99 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
       </header>
 
+      {/* Redesigned Process Performance & Overall Quality Row */}
+      <section className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-3">
+        {/* Left Section: 8x8 Box layout */}
+        <div className="lg:col-span-3 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
+          <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
+            PROCESS PERFORMANCE
+          </span>
+          <div className="flex flex-col gap-4 flex-grow justify-between relative">
+            {/* First 8 Items (Group 1) */}
+            <div className="flex items-center gap-1.5 w-full z-10">
+              {renderRedesignedCard("SPI")}
+              <ProcessArrow />
+              {renderRedesignedCard("DPMOI")}
+              <ProcessArrow />
+              {renderRedesignedCard("AXI", "AXI")}
+              <ProcessArrow />
+              {renderRedesignedCard("SMT DEFECTS @ MFT")}
+              <ProcessArrow />
+              {renderRedesignedCard("FPY MODULE", "FPY MODULE")}
+              <ProcessArrow />
+              {renderRedesignedCard("SPY MODULE", "SPY MODULE")}
+              <ProcessArrow />
+              {renderRedesignedCard("THERMAL GEL AVI", "THERMAL GEL AVI")}
+              <ProcessArrow />
+              {renderRedesignedCard("SCREW DEFECT", "SCREW DEFECT")}
+            </div>
+
+            {/* Visual spacer/divider for the two groups with loop connector */}
+            <div className="border-t border-[#1c3149]/40 my-1 flex-shrink-0 z-10 relative overflow-visible">
+              <svg
+                className="absolute left-0 right-0 -top-[16px] h-[52px] w-full overflow-visible pointer-events-none"
+                viewBox="0 0 100 52"
+                preserveAspectRatio="none"
+              >
+                <defs>
+                  <marker
+                    id="connector-arrow"
+                    viewBox="0 0 10 10"
+                    refX="6"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#0091ff" />
+                  </marker>
+                </defs>
+                <path
+                  d="M 93.75,0 L 93.75,16 L 6.25,16 L 6.25,47"
+                  fill="none"
+                  stroke="#0091ff"
+                  strokeWidth="1.2"
+                  strokeDasharray="3 2.5"
+                  vectorEffect="non-scaling-stroke"
+                  className="opacity-70"
+                  markerEnd="url(#connector-arrow)"
+                />
+              </svg>
+            </div>
+
+            {/* Next 8 Items (Group 2) */}
+            <div className="flex items-center gap-1.5 w-full z-10">
+              {renderRedesignedCard("FPY UNIT", "FPY UNIT")}
+              <ProcessArrow />
+              {renderRedesignedCard("SPY UNIT", "SPY UNIT")}
+              <ProcessArrow />
+              {renderRedesignedCard("OTA")}
+              <ProcessArrow />
+              {renderRedesignedCard("RTWP")}
+              <ProcessArrow />
+              {renderRedesignedCard("BURN-IN", "BURN-IN")}
+              <ProcessArrow />
+              {renderRedesignedCard("LBTS", "LBTS")}
+              <ProcessArrow />
+              {renderRedesignedCard("IP")}
+              <ProcessArrow />
+              {renderRedesignedCard("AUTO OGI")}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Section: 1x1 Box layout */}
+        <div className="lg:col-span-1 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col justify-between h-full min-h-[300px]">
+          <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
+            KEY PERFORMANCE INDICATOR
+          </span>
+          <div className="flex-grow flex flex-col gap-3.5">
+            {renderLargeKpiCard("CUSTOMER", "CUSTOMER QUALITY AUDIT")}
+            {renderLargeKpiCard("UNITHFTPY", "UNIT-HFTPY")}
+          </div>
+        </div>
+      </section>
+
       {/* Row 3: Middle Analysis Hub */}
       <main className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.8fr)_minmax(0,5fr)_minmax(0,2.5fr)] gap-4">
         {/* Section 1: Factory Quality Twin */}
@@ -3794,99 +3894,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
         </section>
       </main>
-
-      {/* Redesigned Process Performance & Overall Quality Row */}
-      <section className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-3">
-        {/* Left Section: 8x8 Box layout */}
-        <div className="lg:col-span-3 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
-          <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
-            PROCESS PERFORMANCE
-          </span>
-          <div className="flex flex-col gap-4 flex-grow justify-between relative">
-            {/* First 8 Items (Group 1) */}
-            <div className="flex items-center gap-1.5 w-full z-10">
-              {renderRedesignedCard("SPI")}
-              <ProcessArrow />
-              {renderRedesignedCard("DPMOI")}
-              <ProcessArrow />
-              {renderRedesignedCard("AXI", "AXI")}
-              <ProcessArrow />
-              {renderRedesignedCard("SMT DEFECTS @ MFT")}
-              <ProcessArrow />
-              {renderRedesignedCard("FPY MODULE", "FPY MODULE")}
-              <ProcessArrow />
-              {renderRedesignedCard("SPY MODULE", "SPY MODULE")}
-              <ProcessArrow />
-              {renderRedesignedCard("THERMAL GEL AVI", "THERMAL GEL AVI")}
-              <ProcessArrow />
-              {renderRedesignedCard("SCREW DEFECT", "SCREW DEFECT")}
-            </div>
-
-            {/* Visual spacer/divider for the two groups with loop connector */}
-            <div className="border-t border-[#1c3149]/40 my-1 flex-shrink-0 z-10 relative overflow-visible">
-              <svg
-                className="absolute left-0 right-0 -top-[16px] h-[52px] w-full overflow-visible pointer-events-none"
-                viewBox="0 0 100 52"
-                preserveAspectRatio="none"
-              >
-                <defs>
-                  <marker
-                    id="connector-arrow"
-                    viewBox="0 0 10 10"
-                    refX="6"
-                    refY="5"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto-start-reverse"
-                  >
-                    <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#0091ff" />
-                  </marker>
-                </defs>
-                <path
-                  d="M 93.75,0 L 93.75,16 L 6.25,16 L 6.25,47"
-                  fill="none"
-                  stroke="#0091ff"
-                  strokeWidth="1.2"
-                  strokeDasharray="3 2.5"
-                  vectorEffect="non-scaling-stroke"
-                  className="opacity-70"
-                  markerEnd="url(#connector-arrow)"
-                />
-              </svg>
-            </div>
-
-            {/* Next 8 Items (Group 2) */}
-            <div className="flex items-center gap-1.5 w-full z-10">
-              {renderRedesignedCard("FPY UNIT", "FPY UNIT")}
-              <ProcessArrow />
-              {renderRedesignedCard("SPY UNIT", "SPY UNIT")}
-              <ProcessArrow />
-              {renderRedesignedCard("OTA")}
-              <ProcessArrow />
-              {renderRedesignedCard("RTWP")}
-              <ProcessArrow />
-              {renderRedesignedCard("BURN-IN", "BURN-IN")}
-              <ProcessArrow />
-              {renderRedesignedCard("LBTS", "LBTS")}
-              <ProcessArrow />
-              {renderRedesignedCard("IP")}
-              <ProcessArrow />
-              {renderRedesignedCard("AUTO OGI")}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Section: 1x1 Box layout */}
-        <div className="lg:col-span-1 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col justify-between h-full min-h-[300px]">
-          <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
-            KEY PERFORMANCE INDICATOR
-          </span>
-          <div className="flex-grow flex flex-col gap-3.5">
-            {renderLargeKpiCard("CUSTOMER", "CUSTOMER QUALITY AUDIT")}
-            {renderLargeKpiCard("UNITHFTPY", "UNIT-HFTPY")}
-          </div>
-        </div>
-      </section>
 
       {/* Row 4: Bottom Operational KPIs */}
       <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4 mt-1.5">
