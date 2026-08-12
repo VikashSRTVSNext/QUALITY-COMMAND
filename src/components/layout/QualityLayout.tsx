@@ -3370,7 +3370,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
         {/* Right Section: 1x1 Box layout */}
         <div className="lg:col-span-1 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col justify-between h-full min-h-[300px]">
-          <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
+          <span className="text-[12px] font-black tracking-widest text-[#8fa0b5] uppercase border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
             KEY PERFORMANCE INDICATOR
           </span>
           <div className="flex-grow flex flex-col gap-3.5">
