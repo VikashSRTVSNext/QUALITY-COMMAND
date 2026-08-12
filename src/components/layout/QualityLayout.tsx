@@ -3287,7 +3287,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         {/* Left Section: 8x8 Box layout */}
         <div className="lg:col-span-3 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
           <div className="flex items-baseline gap-2 border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
-            <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase">
+            <span className="text-[12px] font-black tracking-widest text-[#8fa0b5] uppercase">
               PROCESS PERFORMANCE
             </span>
             <span className="text-[10px] font-bold tracking-wider text-[#63788f] normal-case">
@@ -3385,7 +3385,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         {/* Section 1: Factory Quality Twin */}
         <section className="bg-[#101c2b] border border-white/20 rounded-xl p-4 flex flex-col h-[380px]">
           <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-3 flex-shrink-0">
-            <span className="text-[14px] font-black tracking-widest text-[#8fa0b5]">
+            <span className="text-[12px] font-black tracking-widest text-[#8fa0b5]">
               QUALITY HEAT MAP
             </span>
             {/* Legend colors come from STATUS_CSS so the swatches always match
@@ -3432,7 +3432,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
         {/* Section 2: Product Yield */}
         <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[380px]">
-          <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase mb-1.5">
+          <span className="text-[12px] font-black tracking-widest text-[#8fa0b5] uppercase mb-1.5">
             PRODUCT YIELD
           </span>
           {/* Tabs */}
@@ -3988,7 +3988,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-2 flex-shrink-0">
             {/* No count badges here — the tab row directly below carries the
                 same numbers per severity, so the badges were saying it twice. */}
-            <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase">
+            <span className="text-[12px] font-black tracking-widest text-[#8fa0b5] uppercase">
               ATTENTION CENTER
             </span>
           </div>
