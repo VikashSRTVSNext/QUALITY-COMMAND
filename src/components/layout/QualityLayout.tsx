@@ -1144,6 +1144,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   );
   const [liveStatus, setLiveStatus] = useState("OFFLINE");
   const [isTwinModalOpen, setIsTwinModalOpen] = useState(false);
+  const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
   const [kpiCards, setKpiCards] = useState(
     qualityData.kpiCards.map((card) => {
       const isPercent = [1, 2, 3, 4, 5, 7, 9].includes(card.id);
@@ -1190,6 +1191,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   );
   const [yieldPage, setYieldPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
+  // Alert cards the fixed-height panel shows before deferring to the modal.
+  const ALERT_PREVIEW_LIMIT = 4;
 
   const [processPerformance, setProcessPerformance] = useState<any[]>(
     processPerformanceData.map((item) => ({
@@ -1228,8 +1231,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [alertsFeedState, setAlertsFeedState] = useState<
     "loading" | "ready" | "error"
   >("loading");
-  const [alertsTotal, setAlertsTotal] = useState(0);
-  const [criticalTotal, setCriticalTotal] = useState(0);
   const [safetyAccident, setSafetyAccident] = useState(0);
   const [safetyNearMiss, setSafetyNearMiss] = useState(0);
   const [accidentPoints, setAccidentPoints] = useState<number[]>([]);
@@ -1353,6 +1354,34 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         (alert) => activeAlertTab === "All" || alert.level === activeAlertTab,
       ),
     [attentionCenterAlerts, activeAlertTab],
+  );
+
+  useEffect(() => {
+    if (!isAlertsModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsAlertsModalOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isAlertsModalOpen]);
+
+  // The panel shows only the newest few; the rest live behind "View All Alerts",
+  // which opens the modal. Without the cap the panel scrolled to an unbounded
+  // length and the cards were the only thing on screen worth reading.
+  const previewAlerts = visibleAlerts.slice(0, ALERT_PREVIEW_LIMIT);
+
+  // Per-tab counts. These are on the tab labels because the feed arrives
+  // severity-first: the leading cards are all Critical, so switching All ->
+  // Critical often leaves the capped preview list byte-identical and the tab
+  // looks broken. The counts are what tell you the filter actually applied.
+  const alertTabCounts = React.useMemo(
+    () => ({
+      All: attentionCenterAlerts.length,
+      Critical: attentionCenterAlerts.filter((a) => a.level === "Critical")
+        .length,
+      Risk: attentionCenterAlerts.filter((a) => a.level === "Risk").length,
+    }),
+    [attentionCenterAlerts],
   );
 
   const totalYieldPages =
@@ -1681,12 +1710,21 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       const attention = data.attention ?? data.attention_center;
       if (attention) {
         if (Array.isArray(attention.alerts)) {
+          // entity_ref is not unique: the feed can carry two alerts for the same
+          // product+station (different rules firing on it). That made two cards
+          // share a React key, and React then kept stale cards across a tab
+          // change — the Critical filter looked like it did nothing. Repeats get
+          // an occurrence suffix, which stays stable while ordering is stable.
+          const idSeen = new Map<string, number>();
           const mappedAlerts = attention.alerts.map((a: any, i: number) => {
             // Rows carry no `id`. entity_ref ("475767A.104|UNIT_PRESSURE_TEST_IN04")
             // is the stable identity of what the alert is about, so it survives
             // reordering between snapshots in a way an array index would not.
             // Undefined keys made React reuse the wrong card on every refresh.
-            const id = a.id ?? a.entity_ref ?? `alert-${i}`;
+            const baseId = a.id ?? a.entity_ref ?? `alert-${i}`;
+            const seen = idSeen.get(baseId) ?? 0;
+            idSeen.set(baseId, seen + 1);
+            const id = seen === 0 ? baseId : `${baseId}#${seen}`;
             const unit = a.unit ?? a.value_unit ?? "";
             return {
               id,
@@ -1699,8 +1737,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 : "—",
               // The panel has two verdicts and the payload has three severities.
               // 'info' folds into Risk rather than being dropped — an alert the
-              // backend raised must stay visible under some tab.
-              level: a.severity === "critical" ? "Critical" : "Risk",
+              // backend raised must stay visible under some tab. Matched
+              // case-insensitively: a payload sending "Critical" instead of
+              // "critical" would otherwise file every alert under Risk and leave
+              // the Critical tab permanently empty.
+              level:
+                String(a.severity).toLowerCase() === "critical"
+                  ? "Critical"
+                  : "Risk",
               // Guarded: a null impact used to throw inside this handler, which
               // aborted the whole snapshot — KPIs and process performance went
               // stale too, with nothing on screen to say why.
@@ -1715,23 +1759,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         } else {
           setAttentionCenterAlerts([]);
         }
-        // `counts` is the current shape: { critical, risk, info }. The badge
-        // reads "N Alerts", so it sums all three — not just the two the tabs
-        // expose. Counts are used in preference to alerts.length because the
-        // list is capped server-side (`truncated`) while the counts are not.
-        const counts = attention.counts;
-        setAlertsTotal(
-          counts
-            ? (counts.critical ?? 0) + (counts.risk ?? 0) + (counts.info ?? 0)
-            : (attention.alerts_total ?? attention.alerts?.length ?? 0),
-        );
-        setCriticalTotal(
-          counts?.critical ??
-            attention.critical_total ??
-            attention.alerts?.filter((x: any) => x.severity === "critical")
-              .length ??
-            0,
-        );
+        // `attention.counts` ({ critical, risk, info }) is deliberately not read.
+        // It is the uncapped server-side tally, while the list it ships with is
+        // capped (`truncated`) — so the two disagree. Every count now on screen
+        // is derived from the alerts actually loaded, so it always matches the
+        // rows you can open. Read counts again only if the UI needs to state a
+        // plant-wide total it cannot enumerate.
       }
 
       // 7. Safety
@@ -3948,39 +3981,30 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         {/* Section 3: Attention Center Alerts */}
         <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[380px]">
           <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-2 flex-shrink-0">
+            {/* No count badges here — the tab row directly below carries the
+                same numbers per severity, so the badges were saying it twice. */}
             <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase">
               ATTENTION CENTER
             </span>
-            <div className="flex gap-2 text-[11px]">
-              <div className="bg-[#ff4c4c] text-white font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-[0_0_10px_rgba(255, 76, 76,0.4)]">
-                {alertsTotal} Alerts
-              </div>
-              <div className="bg-[#050b12] border border-[#ff4c4c]/40 text-[#ff4c4c] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-[0_0_8px_rgba(255, 76, 76,0.2)]">
-                {criticalTotal} Critical
-              </div>
-            </div>
           </div>
 
           {/* Tabs */}
           <div className="flex gap-2 mb-2 flex-shrink-0">
-            <button
-              onClick={() => setActiveAlertTab("All")}
-              className={`${activeAlertTab === "All" ? "bg-[#1e3a8a] text-white border-[#3b82f6]/50" : "bg-[#030810] text-[#63788f] border-[#1c3149] hover:bg-[#1c3149]"} border text-[11px] font-bold px-4 py-1.5 rounded transition-colors`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setActiveAlertTab("Critical")}
-              className={`${activeAlertTab === "Critical" ? "bg-[#1e3a8a] text-white border-[#3b82f6]/50" : "bg-[#030810] text-[#63788f] border-[#1c3149] hover:bg-[#1c3149]"} border text-[11px] font-bold px-4 py-1.5 rounded transition-colors`}
-            >
-              Critical
-            </button>
-            <button
-              onClick={() => setActiveAlertTab("Risk")}
-              className={`${activeAlertTab === "Risk" ? "bg-[#1e3a8a] text-white border-[#3b82f6]/50" : "bg-[#030810] text-[#63788f] border-[#1c3149] hover:bg-[#1c3149]"} border text-[11px] font-bold px-4 py-1.5 rounded transition-colors`}
-            >
-              Risk
-            </button>
+            {(["All", "Critical", "Risk"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveAlertTab(tab)}
+                aria-pressed={activeAlertTab === tab}
+                className={`${activeAlertTab === tab ? "bg-[#1e3a8a] text-white border-[#3b82f6]/50" : "bg-[#030810] text-[#63788f] border-[#1c3149] hover:bg-[#1c3149] hover:text-[#8fa0b5]"} border text-[11px] font-bold px-3 py-1.5 rounded transition-colors flex items-center gap-1.5`}
+              >
+                {tab}
+                <span
+                  className={`${activeAlertTab === tab ? "bg-[#3b82f6]/30 text-white" : "bg-[#1c3149]/70 text-[#63788f]"} rounded px-1 font-mono text-[10px] leading-tight`}
+                >
+                  {alertTabCounts[tab]}
+                </span>
+              </button>
+            ))}
           </div>
 
           {/* min-h-0 lets flex-1 actually bound this box so it scrolls; without
@@ -4002,7 +4026,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 )}
               </div>
             )}
-            {visibleAlerts.map((alert) => (
+            {previewAlerts.map((alert) => (
               <div
                 key={alert.id}
                 className={`group flex-shrink-0 bg-gradient-to-b from-[#0b1520] to-[#070f17] border ${alert.level === "Critical" ? "animate-border-pulse-critical" : "border-[#eab308]/25 hover:border-[#eab308]/45"} rounded-lg pl-3 pr-2.5 py-2.5 relative flex flex-col gap-2 overflow-hidden transition-all duration-300`}
@@ -4101,8 +4125,26 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             ))}
           </div>
 
-          <div className="flex justify-end pt-3 text-[10px] font-bold text-[#3b82f6] cursor-pointer hover:text-white mt-1">
-            View All Alerts <ChevronRight size={11} className="ml-0.5" />
+          {/* Counted off the loaded alerts, not the server's `counts` tally: that
+              tally is uncapped while the list it ships with is not, so it can
+              promise more rows than the modal can actually show. */}
+          <div className="flex justify-between items-center pt-2.5 mt-1 flex-shrink-0 border-t border-[#1c3149]/50">
+            <span className="text-[10px] font-bold text-[#63788f]">
+              {visibleAlerts.length > ALERT_PREVIEW_LIMIT
+                ? `Showing ${ALERT_PREVIEW_LIMIT} of ${visibleAlerts.length}`
+                : `Showing ${visibleAlerts.length}`}
+            </span>
+            <button
+              onClick={() => setIsAlertsModalOpen(true)}
+              disabled={visibleAlerts.length === 0}
+              className="flex items-center gap-1 text-[10px] font-bold text-[#3b82f6] hover:text-white disabled:text-[#3b5069] disabled:cursor-not-allowed transition-colors"
+            >
+              View All Alerts
+              <span className="bg-[#1e3a8a]/60 border border-[#3b82f6]/40 rounded px-1.5 py-[1px] font-mono">
+                {visibleAlerts.length}
+              </span>
+              <ChevronRight size={11} />
+            </button>
           </div>
         </section>
       </main>
@@ -4472,6 +4514,144 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {/* Model Viewport */}
             <div className="flex-1 relative min-h-0 bg-[#030810] flex items-center justify-center p-4">
               <FactoryLayoutOverlay zones={twinZones} variant="full" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* All alerts. The panel shows ALERT_PREVIEW_LIMIT compact cards; this is
+          the full set as a table, which scans far better at this row count and
+          fits each alert on a single row. */}
+      {isAlertsModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 lg:p-8"
+          onClick={() => setIsAlertsModalOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-[1200px] max-h-[85vh] bg-[#101c2b] border border-[#1c3149] rounded-2xl overflow-hidden flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex justify-between items-center bg-[#101c2b]/90 px-6 py-4 border-b border-[#1c3149] flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#ff4c4c] animate-pulse" />
+                <span className="text-[16px] font-black text-white uppercase tracking-wider">
+                  Attention Center
+                </span>
+              </div>
+              <button
+                onClick={() => setIsAlertsModalOpen(false)}
+                className="bg-[#16253a] hover:bg-[#ff4c4c] text-[#8fa0b5] hover:text-white border border-[#26405a] rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {/* Filter row — shares activeAlertTab with the panel, so the tab you
+                pick here is still applied when the modal closes. */}
+            <div className="flex items-center justify-between px-6 py-3 border-b border-[#1c3149]/60 flex-shrink-0">
+              <div className="flex gap-2">
+                {(["All", "Critical", "Risk"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveAlertTab(tab)}
+                    aria-pressed={activeAlertTab === tab}
+                    className={`${activeAlertTab === tab ? "bg-[#1e3a8a] text-white border-[#3b82f6]/50" : "bg-[#030810] text-[#63788f] border-[#1c3149] hover:bg-[#1c3149] hover:text-[#8fa0b5]"} border text-[11px] font-bold px-3 py-1.5 rounded transition-colors flex items-center gap-1.5`}
+                  >
+                    {tab}
+                    <span
+                      className={`${activeAlertTab === tab ? "bg-[#3b82f6]/30 text-white" : "bg-[#1c3149]/70 text-[#63788f]"} rounded px-1 font-mono text-[10px] leading-tight`}
+                    >
+                      {alertTabCounts[tab]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <span className="text-[11px] font-bold text-[#63788f]">
+                {visibleAlerts.length}{" "}
+                {visibleAlerts.length === 1 ? "alert" : "alerts"}
+              </span>
+            </div>
+
+            {/* Table */}
+            <div className="flex-1 min-h-0 overflow-auto custom-scrollbar px-6 py-3">
+              {visibleAlerts.length === 0 ? (
+                <div className="flex items-center justify-center py-16 text-[12px] font-bold text-[#63788f]">
+                  No records found
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse">
+                  <thead className="text-[10px] text-[#63788f] uppercase tracking-wider">
+                    <tr>
+                      <th className="pb-2 font-black sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                        Severity
+                      </th>
+                      <th className="pb-2 font-black sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                        Alert
+                      </th>
+                      <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                        Impact
+                      </th>
+                      <th className="pb-2 font-black text-right sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                        Age
+                      </th>
+                      <th className="pb-2 font-black sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                        AI Recommendation
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#1c3149]/45">
+                    {visibleAlerts.map((alert) => {
+                      const isCritical = alert.level === "Critical";
+                      const tone = isCritical ? "#ff4c4c" : "#eab308";
+                      return (
+                        <tr
+                          key={alert.id}
+                          className="hover:bg-[#16253a]/40 transition-colors align-top"
+                        >
+                          <td className="py-2.5 pr-3 whitespace-nowrap">
+                            <span
+                              className="text-[9.5px] font-black uppercase tracking-wider px-1.5 py-[2px] rounded border inline-flex items-center gap-1.5"
+                              style={{
+                                color: tone,
+                                borderColor: `${tone}4d`,
+                                backgroundColor: `${tone}1a`,
+                              }}
+                            >
+                              <span
+                                className="w-1.5 h-1.5 rounded-full"
+                                style={{
+                                  backgroundColor: tone,
+                                  boxShadow: `0 0 6px ${tone}`,
+                                }}
+                              />
+                              {alert.level}
+                            </span>
+                          </td>
+                          <td className="py-2.5 pr-3 text-[11.5px] font-semibold text-[#e8eef5] leading-snug min-w-[220px]">
+                            {alert.title}
+                          </td>
+                          <td className="py-2.5 pr-3 text-center text-[10px] font-bold text-[#8fa0b5] whitespace-nowrap">
+                            {alert.impact}
+                          </td>
+                          <td className="py-2.5 pr-3 text-right text-[10px] font-bold text-[#63788f] whitespace-nowrap font-mono">
+                            {alert.time}
+                          </td>
+                          <td className="py-2.5 text-[11px] text-[#c3cdda] font-medium leading-snug min-w-[280px]">
+                            <div className="flex items-start gap-1.5">
+                              <Bot
+                                size={11}
+                                className="text-[#818cf8] mt-[2px] flex-shrink-0"
+                              />
+                              <span>{alert.rec}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
