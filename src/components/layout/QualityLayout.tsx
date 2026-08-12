@@ -30,7 +30,13 @@ import {
 import { useNavigate } from "react-router-dom";
 import qualityData from "../../data/qualityData.json";
 import { apiUrl, DASHBOARD_SSE_URL } from "../../core/api/config";
-import { ZONES, ZoneDef, STATUS_CSS, STATUS_LABEL } from "../factory/zones";
+import {
+  ZONES,
+  ZoneDef,
+  ZoneStatus,
+  STATUS_CSS,
+  STATUS_LABEL,
+} from "../factory/zones";
 import FactoryLayoutOverlay from "../factory/FactoryLayoutOverlay";
 
 interface QualityLayoutProps {
@@ -160,7 +166,6 @@ const CustomEriIcon = ({
 const Sparkline = ({
   points,
   type,
-  status,
   color,
   target,
   targetDirection,
@@ -172,7 +177,8 @@ const Sparkline = ({
   // the day fills in.
   points: (number | null)[];
   type: string;
-  status: string;
+  // Already graded by the caller (see cardVerdict) — the line does not re-derive
+  // its own verdict, so it can never contradict the tile around it.
   color: string;
   target?: number | null;
   targetDirection?: string | null;
@@ -262,16 +268,12 @@ const Sparkline = ({
     penDown = true;
   });
 
-  // Binary against the target: met or missed. No amber — a card either holds its
-  // target or it does not, and a third "nearly" state only made a miss look
-  // survivable. "At Risk" should no longer reach here (the mapping below is now
-  // binary at source) but is treated as a miss if it ever does.
-  let glowColor = color;
-  if (status === "Healthy") {
-    glowColor = "#22c55e";
-  } else if (status === "Critical" || status === "At Risk") {
-    glowColor = "#ff4c4c";
-  }
+  // The caller has already graded the card green / amber / red on its distance
+  // from target and passes that colour in. The old override that re-derived the
+  // glow from the `status` string is gone — status is binary at source, so it
+  // collapsed amber back to one of the two extremes and the line disagreed with
+  // the tile it sat inside.
+  const glowColor = color;
 
   const targetY =
     target !== null && target !== undefined
@@ -1128,6 +1130,123 @@ const fmtAlertAge = (m: any) => {
   const mins = Math.round(m % 60);
   return mins ? `${hours}h ${mins}m ago` : `${hours}h ago`;
 };
+
+// ── Heat-map zone grading ───────────────────────────────────────────────────
+// A zone is graded from the Process Performance cards that feed it, each card
+// judged against its OWN target rather than a shared threshold:
+//
+//   green   target met
+//   yellow  target missed, but still inside the band
+//   red     target missed by more than the band
+//
+// For higher-is-better percentages the band is 5 points, which is the rule as
+// specified: target 95 → 95 and up green, 90–94 yellow, 89 and below red.
+const ZONE_BAND_POINTS = 5;
+
+// Lower-is-better cards (the DPMOI index, failure rates) get a 5% relative band
+// instead. Their targets are small numbers — DPMOI's is around 2 — so a flat
+// 5-point band would sit further from the target than any real reading, and
+// yellow and red could never be reached at all.
+const ZONE_BAND_RELATIVE = 0.05;
+
+type MetricGrade = "green" | "yellow" | "red" | "unknown";
+
+// "unknown" means the card cannot be graded — no target agreed for it (SPI, AXI),
+// or nothing ran this shift. Those carry no signal and are skipped by the zone,
+// rather than counting as a pass and painting it green on no evidence.
+const gradeAgainstTarget = (card: any): MetricGrade => {
+  const target = card?.target;
+  const actual = card?.actual;
+  if (!isNum(target) || !isNum(actual)) return "unknown";
+
+  // The API states the direction; fall back to the card type, where a yield is
+  // the only kind that improves as it rises.
+  const lowerIsBetter = card.targetDirection
+    ? card.targetDirection === "lower"
+    : card.type !== "yield";
+
+  if (lowerIsBetter) {
+    if (actual <= target) return "green";
+    return actual <= target * (1 + ZONE_BAND_RELATIVE) ? "yellow" : "red";
+  }
+  if (actual >= target) return "green";
+  return actual >= target - ZONE_BAND_POINTS ? "yellow" : "red";
+};
+
+// The one place a grade turns into a colour. Cards and heat-map zones both read
+// from here, so a tile and its zone can never disagree about what amber means.
+const GRADE_CSS: Record<MetricGrade, string> = {
+  green: "#22c55e",
+  yellow: "#eab308",
+  red: "#ff4c4c",
+  unknown: "#0091ff",
+};
+
+// THE grade for one process card. Both the tile's own colour and its zone's
+// colour come from this, so a zone can never disagree with the cards inside it —
+// and a single-card zone (thermalgel) is exactly the colour of its one card.
+const cardGrade = (card: any): MetricGrade => {
+  // Nothing ran, so there is nothing to grade. Neutral rather than scored
+  // against a target it never had a chance to meet.
+  if (
+    card.status === "N/A" ||
+    card.status === "..." ||
+    card.status === "Not Run"
+  ) {
+    return "unknown";
+  }
+
+  const graded = gradeAgainstTarget(card);
+  if (graded !== "unknown") return graded;
+
+  // No target agreed for this card (SPI, AXI, Manual OGI). There is no band to
+  // measure against, so it keeps the binary pass/fail the API's own verdict gave
+  // it — those cards can never show amber, because nothing defines "near" here.
+  return card.status === "Critical" || card.status === "At Risk"
+    ? "red"
+    : "green";
+};
+
+// KPI-card grade. These hold their figure as a display string ("94.2%") and carry
+// no target_direction — every one is a yield, so higher is better and they land
+// on the 5-point band. Falls back to direction of travel when untargeted, which
+// is what the KPI tiles have always done.
+const kpiCardGrade = (card: any): MetricGrade => {
+  if (!card) return "unknown";
+  const actual = Number.parseFloat(String(card.value).replace(/[^\d.-]/g, ""));
+  const graded = gradeAgainstTarget({
+    target: card.target,
+    actual: Number.isFinite(actual) ? actual : null,
+    targetDirection: "higher",
+  });
+  if (graded !== "unknown") return graded;
+  const delta = card.delta_vs_yesterday ?? 0;
+  if (delta > 0) return "green";
+  if (delta < 0) return "red";
+  return "unknown";
+};
+
+// What a process tile paints, and whether it is in the hard-fail state that gets
+// the pulsing border. Amber deliberately does NOT pulse — the animation is what
+// makes a tile demand attention, and a near-miss should not.
+const cardVerdict = (card: any): { color: string; red: boolean } => {
+  const grade = cardGrade(card);
+  return { color: GRADE_CSS[grade], red: grade === "red" };
+};
+
+// Worst grade wins: one red card puts the whole zone red, one amber card makes it
+// amber, and it is only green when every card is. A zone is as healthy as its
+// weakest step. With a single card this collapses to that card's own grade.
+const zoneStatusFromGrades = (all: MetricGrade[]): ZoneStatus => {
+  const grades = all.filter((g) => g !== "unknown");
+  if (grades.length === 0) return "unknown";
+  if (grades.includes("red")) return "critical";
+  if (grades.includes("yellow")) return "warning";
+  return "healthy";
+};
+
+const bandedZoneStatus = (cards: any[]): ZoneStatus =>
+  zoneStatusFromGrades(cards.map(cardGrade));
 
 // ── Process Performance stage groups ────────────────────────────────────────
 // Gap between process cards, in px. Shared by the card rows AND the group bar
@@ -2361,45 +2480,34 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     });
   }, [activeShift, rawProcessPerformance]);
 
-  // Derive heat-map zone statuses from live process-performance / KPI card statuses.
+  // Derive heat-map zone statuses from live process-performance / KPI cards.
   //
-  // SMT zone   ← processPerformance: SPI, DPMOI, AXI - S, SMT DEFECTS @ MFT
-  //   0 red → healthy (green) | 1 red → warning (amber) | 2+ red → critical (red)
+  // Three zones are graded on DISTANCE FROM TARGET (gradeAgainstTarget): each
+  // card is green when it holds its target, amber when it misses by less than
+  // its band, red beyond that — and the zone takes its worst card, so one bad
+  // step is enough to turn it red.
   //
-  // thermalgel ← processPerformance: THERMAL AVI (shown in UI as "THERMAL GEL AVI")
-  //   Single card: red → critical (red) | otherwise → healthy (green)
+  //   smt        ← processPerformance: SPI, DPMOI, AXI - S, SMT DEFECTS @ MFT
+  //   mft        ← kpiCards: FPY - MODULE (%), SPY - MODULE (%)
+  //   thermalgel ← processPerformance: THERMAL AVI (UI label "THERMAL GEL AVI")
+  //   rfm        ← processPerformance: every card whose section is "RFM"
+  //   packaging  ← kpiCards: CUSTOMER QUALITY AUDIT (%)
   //
-  // testing    ← kpiCards: FPY UNIT + SPY UNIT
-  //   Both green → healthy | 1 red → warning (amber) | both red → critical
+  // One still counts how many cards failed outright, with no regard for the size
+  // of the miss:
   //
-  // mft        ← kpiCards: FPY MODULE + SPY MODULE
-  //   Both green → healthy | 1 red → warning (amber) | both red → critical
+  //   testing    ← kpiCards: FPY UNIT + SPY UNIT
+  //     0 red → healthy | 1 red → warning | both red → critical
   //
-  // packaging  ← kpiCards: CUSTOMER QUALITY AUDIT
-  //   Single card: target met → healthy (green) | missed → critical (red)
-  // Neutral statuses ("N/A", "Not Run", "...") count as 0 reds so a shift with
-  // no data does not falsely colour the zone.
+  // Ungradeable cards — no target agreed, or nothing ran this shift — are
+  // skipped rather than counted as passes. A zone with nothing left to grade
+  // reports "unknown" (grey) instead of an unearned green.
   useEffect(() => {
-    // ── processPerformance helpers ──────────────────────────────────────────
-    const isProcRed = (status: string) =>
-      status === "Critical" || status === "At Risk";
-
-    // Multi-card zone: 0 red→green, 1 red→amber, 2+→red
-    const multiCardZoneStatus = (
-      cards: typeof processPerformance,
-    ): "healthy" | "warning" | "critical" => {
-      const redCount = cards.filter((p) => isProcRed(p.status)).length;
-      if (redCount === 0) return "healthy";
-      if (redCount === 1) return "warning";
-      return "critical";
-    };
-
-    // Single-card zone: red→critical, anything else→healthy (no amber)
-    const singleCardZoneStatus = (
-      card: typeof processPerformance,
-    ): "healthy" | "critical" => {
-      return card.some((p) => isProcRed(p.status)) ? "critical" : "healthy";
-    };
+    // The old pass/fail helpers that read each card's `status` string are gone.
+    // Every process-performance zone now grades on distance from target, which
+    // needs the raw actual and target rather than the binary verdict the status
+    // string had already collapsed them into. The KPI-driven zones that still
+    // count reds keep their own helper below.
 
     // ── kpiCards helper ─────────────────────────────────────────────────────
     // Mirrors the same red/green decision the card renderer makes:
@@ -2419,17 +2527,24 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     };
 
     // ── SMT zone — 4 process-performance cards ──────────────────────────────
+    // Graded by distance from target (see gradeAgainstTarget), not by counting
+    // how many cards failed: a single card more than its band below target puts
+    // the zone red on its own. The other zones still use the count rule below.
     const SMT_CARD_NAMES = ["SPI", "DPMOI", "AXI - S", "SMT DEFECTS @ MFT"];
     const smtCards = processPerformance.filter((p) =>
       SMT_CARD_NAMES.includes(p.name),
     );
-    const smtZoneStatus = multiCardZoneStatus(smtCards);
+    const smtZoneStatus = bandedZoneStatus(smtCards);
 
     // ── Thermal Gel zone — 1 process-performance card ───────────────────────
+    // Same grading as SMT and MFT. A single card, so its own grade is the zone's
+    // — which means this zone can now show amber, where the old rule only ever
+    // gave it green or red. THERMAL AVI is a higher-is-better yield, so it uses
+    // the 5-point band.
     const thermalCard = processPerformance.filter(
       (p) => p.name === "THERMAL AVI",
     );
-    const thermalZoneStatus = singleCardZoneStatus(thermalCard);
+    const thermalZoneStatus = bandedZoneStatus(thermalCard);
 
     // ── Testing zone — 2 KPI cards (FPY UNIT + SPY UNIT) ───────────────────
     const testingRedCount = [
@@ -2444,23 +2559,41 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           : "critical";
 
     // ── MFT zone — 2 KPI cards (FPY MODULE + SPY MODULE) ────────────────────
-    const mftRedCount = [
-      isKpiRed("FPY - MODULE (%)"),
-      isKpiRed("SPY - MODULE (%)"),
-    ].filter(Boolean).length;
-    const mftZoneStatus: "healthy" | "warning" | "critical" =
-      mftRedCount === 0
-        ? "healthy"
-        : mftRedCount === 1
-          ? "warning"
-          : "critical";
+    // Same distance-from-target grading as SMT, replacing the red-count rule.
+    // Both are higher-is-better yields with real targets (90 and 96), so these
+    // are the cards the 5-point band actually applies to:
+    //   FPY MODULE  ≥90 green · 85–89 yellow · ≤84 red
+    //   SPY MODULE  ≥96 green · 91–95 yellow · ≤90 red
+    const mftZoneStatus = zoneStatusFromGrades(
+      ["FPY - MODULE (%)", "SPY - MODULE (%)"].map((label) =>
+        kpiCardGrade(kpiCards.find((k) => k.label === label)),
+      ),
+    );
+
+    // ── RFM zone — every process-performance card the payload files under RFM ─
+    // This zone was previously never assigned a status at all: it fell through
+    // the map below untouched and kept the seed "healthy" from zones.ts, so it
+    // showed green however the RF steps were actually running.
+    //
+    // Membership is read from each card's own `section` rather than a name list,
+    // so a card added to the RFM section starts counting without a change here.
+    // That includes THERMAL AVI, which also drives the thermalgel zone — the
+    // data files it under RFM and the strip's RFM span opens on it, so it is
+    // deliberately counted in both rather than carved out.
+    const rfmCards = processPerformance.filter((p) => p.section === "RFM");
+    const rfmZoneStatus = bandedZoneStatus(rfmCards);
 
     // ── Packaging zone — 1 KPI card (CUSTOMER QUALITY AUDIT) ───────────────
-    const packagingZoneStatus: "healthy" | "critical" = isKpiRed(
-      "CUSTOMER QUALITY AUDIT (%)",
-    )
-      ? "critical"
-      : "healthy";
+    // Same grading as the zones above. Note the target here is 100, so the band
+    // sits entirely below a clean audit:
+    //   100 green · 95–99 yellow · ≤94 red
+    // Under the old rule any shortfall at all went straight to red; a single
+    // failed unit out of a hundred now reads as a warning instead.
+    const packagingZoneStatus = zoneStatusFromGrades([
+      kpiCardGrade(
+        kpiCards.find((k) => k.label === "CUSTOMER QUALITY AUDIT (%)"),
+      ),
+    ]);
 
     setTwinZones((prev) =>
       prev.map((zone) => {
@@ -2470,6 +2603,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         if (zone.id === "testing")
           return { ...zone, status: testingZoneStatus };
         if (zone.id === "mft") return { ...zone, status: mftZoneStatus };
+        if (zone.id === "rfm") return { ...zone, status: rfmZoneStatus };
         if (zone.id === "packaging")
           return { ...zone, status: packagingZoneStatus };
         return zone;
@@ -2504,20 +2638,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     } else {
       document.exitFullscreen();
     }
-  };
-
-  const getCardBorderColor = (card: (typeof processPerformanceData)[0]) => {
-    // Green or red only. "At Risk" is no longer produced for these cards, but is
-    // treated as a miss rather than reintroducing amber if it ever appears.
-    if (card.status === "Critical" || card.status === "At Risk")
-      return "#ff4c4c";
-    if (
-      card.status === "N/A" ||
-      card.status === "..." ||
-      card.status === "Not Run"
-    )
-      return "#0091ff";
-    return "#22c55e";
   };
 
   const renderFullSparkline = (
@@ -2780,7 +2900,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
     if (procItem) {
       const displayTitle = customTitle || metricName;
-      const cardColor = getCardBorderColor(procItem);
+      // Green / amber / red on distance from target — the same grading the heat
+      // map uses, so a tile and its zone always agree. `red` is the hard fail
+      // that pulses; amber is a miss inside the band and stays still.
+      const { color: cardColor, red: cardIsRed } = cardVerdict(procItem);
       const { points } = getProcessTrendData(procItem.trend, activeShift);
 
       // SPI ONLY. Its payload carries the 24-bucket scaffold but no values,
@@ -2820,18 +2943,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       return (
         <div
           className={`relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[112px] 2xl:h-[131px] transition-all duration-300 flex-1 min-w-0 ${
-            procItem.status === "Critical"
-              ? "animate-border-pulse-critical"
-              : ""
+            cardIsRed ? "animate-border-pulse-critical" : ""
           }`}
           style={{
             background: `linear-gradient(180deg, ${cardColor}1f 0%, ${cardColor}0a 100%), #101c2b`,
-            borderColor:
-              procItem.status === "Critical" ? undefined : `${cardColor}40`,
-            boxShadow:
-              procItem.status === "Critical"
-                ? undefined
-                : `0 4px 12px ${cardColor}15`,
+            borderColor: cardIsRed ? undefined : `${cardColor}40`,
+            boxShadow: cardIsRed ? undefined : `0 4px 12px ${cardColor}15`,
           }}
         >
           <div className="flex items-start gap-1 mb-0.5 2xl:mb-1.5 flex-shrink-0">
@@ -2869,8 +2986,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               <span
                 className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
                 style={{
-                  color: procItem.color,
-                  textShadow: `0 0 8px ${procItem.color}30`,
+                  color: cardColor,
+                  textShadow: `0 0 8px ${cardColor}30`,
                 }}
               >
                 {procItem.type === "yield" && procItem.data.yield}
@@ -2884,8 +3001,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             <Sparkline
               points={plotPoints}
               type={procItem.type}
-              status={procItem.status}
-              color={procItem.color}
+              color={cardColor}
               target={procItem.target}
               targetDirection={procItem.targetDirection}
               synthetic={useSample}
@@ -2916,24 +3032,18 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
     if (kpiItem) {
       const displayTitle = customTitle || metricName;
-      const delta = kpiItem.delta_vs_yesterday ?? 0;
+      // Still needed below for the sparkline's target line and the "Tgt" caption.
       const target = (kpiItem as any).target as number | null | undefined;
-      const actual = Number.parseFloat(
-        String(kpiItem.value).replace(/[^\d.-]/g, ""),
-      );
-      const meetsTarget =
-        isNum(target) && Number.isFinite(actual) ? actual >= target : null;
 
-      let trendColor: string;
-      if (meetsTarget !== null) {
-        trendColor = meetsTarget ? "#22c55e" : "#ff4c4c";
-      } else if (delta > 0) {
-        trendColor = "#22c55e";
-      } else if (delta < 0) {
-        trendColor = "#ff4c4c";
-      } else {
-        trendColor = kpiItem.color || "#8fa0b5";
-      }
+      // Same green / amber / red band as the process cards, and the same call the
+      // heat map makes for this card — FPY MODULE next to SPI is not scored on a
+      // different rule just because its figure arrives from kpiCards, and the tile
+      // cannot end up a different colour from the zone it feeds.
+      const kpiGrade = kpiCardGrade(kpiItem);
+      const trendColor =
+        kpiGrade === "unknown"
+          ? kpiItem.color || "#8fa0b5"
+          : GRADE_CSS[kpiGrade];
 
       const deltaColor = "#8fa0b5";
 
