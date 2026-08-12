@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronDown,
   Maximize2,
@@ -14,7 +15,7 @@ import {
   Scan,
   Thermometer,
   Droplets,
-  Wrench,
+  Bot,
   ChevronRight,
   Bell,
   ChevronLeft,
@@ -163,6 +164,7 @@ const Sparkline = ({
   color,
   target,
   targetDirection,
+  synthetic = false,
 }: {
   // Nulls are hours the line has no value for — an hour in which nothing ran, or
   // one the day has not reached yet. They keep their slot on the x-axis so the
@@ -174,6 +176,9 @@ const Sparkline = ({
   color: string;
   target?: number | null;
   targetDirection?: string | null;
+  // True when the series is an illustrative placeholder rather than measured
+  // data (SPI only). Draws dashed and relabels the hover readout.
+  synthetic?: boolean;
 }) => {
   const width = 100;
   const height = 24;
@@ -342,7 +347,9 @@ const Sparkline = ({
           />
         )}
 
-        {/* Main line */}
+        {/* Main line. Dashed and dimmed when the series is illustrative, so it
+            is distinguishable at a glance from the measured lines on the same
+            strip without needing a legend. */}
         <path
           d={path}
           fill="none"
@@ -350,6 +357,8 @@ const Sparkline = ({
           strokeWidth="1.8"
           strokeLinecap="round"
           strokeLinejoin="round"
+          strokeDasharray={synthetic ? "3 2.5" : undefined}
+          opacity={synthetic ? 0.7 : 1}
         />
 
         {/* Hovered point */}
@@ -383,7 +392,7 @@ const Sparkline = ({
           }}
         >
           <span className="text-[#8fa0b5] text-[8.5px] font-bold uppercase mr-1">
-            hr
+            {synthetic ? "est" : "hr"}
           </span>
           <span className="text-white text-[9.5px] font-mono font-bold">
             {hovered.toFixed(2)}
@@ -403,6 +412,64 @@ const Sparkline = ({
     </div>
   );
 };
+
+// ---------------------------------------------------------------------------
+// ILLUSTRATIVE SERIES — SPI ONLY.
+//
+// SPI has no hourly source. mart_process_interval carries a row per step per
+// hour for every other card on this strip, but the SPI figure arrives already
+// aggregated, so there is genuinely nothing to plot and the card rendered with
+// an empty slot where its neighbours have a line.
+//
+// This fills that slot with a line SHAPED around the real day figure the API
+// sent — the mean is the actual value, the wiggle is invented. It is a visual
+// placeholder, and the two properties below are what keep it from being taken
+// for a measurement:
+//
+//   1. It is drawn DASHED and at reduced opacity, and its hover readout says
+//      "est" where a real one says "hr". Every measured line on this strip is
+//      solid, so dashed reads as "not measured" without needing a legend.
+//   2. The seed is a CONSTANT, not the clock and not Math.random. The shape is
+//      therefore identical on every render, every reload and every screen — so
+//      it can never appear to move, and a moving line can never be mistaken for
+//      fresh data. It also means two people comparing screenshots see the same
+//      picture.
+//
+// Remove this whole block the moment SPI gains an hourly source; nothing else
+// depends on it.
+const SPI_SAMPLE_DEVIATION_PP = 0.6; // percentage points either side of actual
+const SPI_SAMPLE_SEED = 0x5b1f;
+
+/** Deterministic value in [0,1) from an integer seed (xorshift32). */
+const seededUnit = (seed: number): number => {
+  let x = (seed ^ 0x9e3779b9) >>> 0;
+  x = (x ^ (x << 13)) >>> 0;
+  x = x ^ (x >>> 17);
+  x = (x ^ (x << 5)) >>> 0;
+  return x / 0x100000000;
+};
+
+/** `count` points scattered around `value`, clamped to a legal yield.
+ *
+ *  Only the first `elapsed` are filled; the rest come back null. A placeholder
+ *  that ran to the end of the axis claimed the day was over — the line reached
+ *  midnight while shift A was still running, which is a worse lie than having no
+ *  line at all. Nulls keep their slot so the axis stays a fixed 24 (or 8) wide.
+ */
+const synthesiseSampleTrend = (
+  value: number,
+  count: number,
+  elapsed: number,
+): (number | null)[] =>
+  Array.from({ length: count }, (_, i) => {
+    if (i >= elapsed) return null;
+    // 977 is just an odd stride, so neighbouring buckets draw from distant
+    // points of the sequence rather than adjacent ones — otherwise the walk
+    // trends in one direction and looks like a real drift.
+    const dev =
+      (seededUnit(SPI_SAMPLE_SEED + i * 977) * 2 - 1) * SPI_SAMPLE_DEVIATION_PP;
+    return Math.min(100, Math.max(0, value + dev));
+  });
 
 // Hourly trend for one Process Performance card, straight from the API's
 // `trend.buckets` — 24 buckets of one hour, anchored to the 06:15 factory day.
@@ -1044,6 +1111,24 @@ const toCiMetric = (m: any, unit: string): CiMetricView => {
 const fmtCount = (v: any, fallback = "...") =>
   isNum(v) ? v.toLocaleString() : fallback;
 
+// ── Attention Center ────────────────────────────────────────────────────────
+// Alert figures carry NO unit in the payload: an FCR defect rate per 100 boards
+// (74.07 against 10.53) and a yield percentage arrive as bare numbers alike.
+// Nothing is appended unless the row names a unit — the previous hardcoded '%'
+// turned every non-yield alert into a percentage it never was.
+const fmtAlertValue = (v: any, unit: string) =>
+  isNum(v) ? `${Math.round(v * 100) / 100}${unit}` : "—";
+
+// 156 minutes reads as "2h 36m ago", not "156m ago". Alerts sit on screen for
+// a whole shift, so raw minutes stop being legible within the first hour.
+const fmtAlertAge = (m: any) => {
+  if (!isNum(m)) return "";
+  if (m < 60) return `${Math.round(m)}m ago`;
+  const hours = Math.floor(m / 60);
+  const mins = Math.round(m % 60);
+  return mins ? `${hours}h ${mins}m ago` : `${hours}h ago`;
+};
+
 export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const navigate = useNavigate();
   const [timeStr, setTimeStr] = useState(() =>
@@ -1088,6 +1173,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [activeAlertTab, setActiveAlertTab] = useState<
     "All" | "Critical" | "Risk"
   >("All");
+  // Hovered AI recommendation, rendered as a fixed-position tooltip through a
+  // portal. It cannot live inside the alert card: the card is overflow-hidden
+  // and the alert list scrolls, so either box would clip it.
+  const [recTip, setRecTip] = useState<{
+    text: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const [activeShift, setActiveShift] = useState(
     "Full Day (06:15 AM - 06:15 AM)",
   );
@@ -1581,33 +1674,62 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       // 5. Product Yield - Handled by separate REST API polling now
 
       // 6. Attention Center Alerts
-      if (data.attention_center) {
-        if (Array.isArray(data.attention_center.alerts)) {
-          const mappedAlerts = data.attention_center.alerts.map((a: any) => ({
-            id: a.id,
-            title: a.title,
-            time: `${a.age_minutes}m ago`,
-            current: `${a.current}%`,
-            target: `${a.target}%`,
-            dev: `${a.deviation >= 0 ? "+" : ""}${a.deviation}%`,
-            level: a.severity === "critical" ? "Critical" : "Risk",
-            impact: a.impact.charAt(0).toUpperCase() + a.impact.slice(1),
-            rec: a.ai_recommendation,
-          }));
+      //
+      // The service publishes this as `attention`. `attention_center` was the
+      // earlier key and is still read so the panel keeps rendering against a
+      // backend that has not been redeployed.
+      const attention = data.attention ?? data.attention_center;
+      if (attention) {
+        if (Array.isArray(attention.alerts)) {
+          const mappedAlerts = attention.alerts.map((a: any, i: number) => {
+            // Rows carry no `id`. entity_ref ("475767A.104|UNIT_PRESSURE_TEST_IN04")
+            // is the stable identity of what the alert is about, so it survives
+            // reordering between snapshots in a way an array index would not.
+            // Undefined keys made React reuse the wrong card on every refresh.
+            const id = a.id ?? a.entity_ref ?? `alert-${i}`;
+            const unit = a.unit ?? a.value_unit ?? "";
+            return {
+              id,
+              title: a.title,
+              time: fmtAlertAge(a.age_minutes),
+              current: fmtAlertValue(a.current_value ?? a.current, unit),
+              target: fmtAlertValue(a.target_value ?? a.target, unit),
+              dev: isNum(a.deviation)
+                ? `${a.deviation >= 0 ? "+" : ""}${fmtAlertValue(a.deviation, unit)}`
+                : "—",
+              // The panel has two verdicts and the payload has three severities.
+              // 'info' folds into Risk rather than being dropped — an alert the
+              // backend raised must stay visible under some tab.
+              level: a.severity === "critical" ? "Critical" : "Risk",
+              // Guarded: a null impact used to throw inside this handler, which
+              // aborted the whole snapshot — KPIs and process performance went
+              // stale too, with nothing on screen to say why.
+              impact:
+                typeof a.impact === "string" && a.impact
+                  ? a.impact.charAt(0).toUpperCase() + a.impact.slice(1)
+                  : "—",
+              rec: a.ai_recommendation,
+            };
+          });
           setAttentionCenterAlerts(mappedAlerts);
         } else {
           setAttentionCenterAlerts([]);
         }
+        // `counts` is the current shape: { critical, risk, info }. The badge
+        // reads "N Alerts", so it sums all three — not just the two the tabs
+        // expose. Counts are used in preference to alerts.length because the
+        // list is capped server-side (`truncated`) while the counts are not.
+        const counts = attention.counts;
         setAlertsTotal(
-          data.attention_center.alerts_total ??
-            data.attention_center.alerts?.length ??
-            0,
+          counts
+            ? (counts.critical ?? 0) + (counts.risk ?? 0) + (counts.info ?? 0)
+            : (attention.alerts_total ?? attention.alerts?.length ?? 0),
         );
         setCriticalTotal(
-          data.attention_center.critical_total ??
-            data.attention_center.alerts?.filter(
-              (x: any) => x.severity === "critical",
-            ).length ??
+          counts?.critical ??
+            attention.critical_total ??
+            attention.alerts?.filter((x: any) => x.severity === "critical")
+              .length ??
             0,
         );
       }
@@ -1728,7 +1850,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     es.onmessage = (e) => {
       try {
         const parsed = JSON.parse(e.data);
-        if (parsed.kpis || parsed.meta) {
+        // `attention` is listed too: an alerts-only delta carries neither kpis
+        // nor meta, and was being discarded here before it reached handleData.
+        if (
+          parsed.kpis ||
+          parsed.meta ||
+          parsed.attention ||
+          parsed.attention_center
+        ) {
           handleData(parsed);
         }
       } catch (err) {
@@ -2052,6 +2181,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               return {
                 ...item,
                 data: { failure: `${targetData.failure_pct.toFixed(1)}%` },
+                // The unformatted figure, kept alongside the display string so a
+                // consumer needing a number does not parse "4.2%" back apart.
+                actual,
                 status: statusMapped,
                 color: colorMapped,
                 target,
@@ -2068,6 +2200,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     ? `${targetData.yield_pct.toFixed(2)}%`
                     : "...",
                 },
+                actual,
                 status: statusMapped,
                 color: colorMapped,
                 target,
@@ -2492,6 +2625,29 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     }
   };
 
+  // How far into the selected window production has actually reached, measured
+  // from the DATA rather than the clock: the highest bucket any real card has a
+  // value for, plus one.
+  //
+  // Deliberately not `new Date()`. That would need the 06:15 IST day anchor
+  // replicated in the browser's timezone, and it would keep drawing through an
+  // hour in which the plant produced nothing. Reading it off the cards that do
+  // have a source means the placeholder stops exactly where the measured lines
+  // stop, which is the only way the two can look consistent side by side.
+  const elapsedBucketCount = React.useMemo(() => {
+    let last = -1;
+    for (const card of processPerformance) {
+      const { points } = getProcessTrendData((card as any).trend, activeShift);
+      for (let i = points.length - 1; i >= 0; i--) {
+        if (isNum(points[i])) {
+          if (i > last) last = i;
+          break;
+        }
+      }
+    }
+    return last + 1;
+  }, [processPerformance, activeShift]);
+
   const ProcessArrow = () => (
     <svg
       className="w-3.5 h-3.5 text-[#0091ff]/45 flex-shrink-0 animate-pulse"
@@ -2523,6 +2679,40 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       const displayTitle = customTitle || metricName;
       const cardColor = getCardBorderColor(procItem);
       const { points } = getProcessTrendData(procItem.trend, activeShift);
+
+      // SPI ONLY. Its payload carries the 24-bucket scaffold but no values,
+      // because there is no hourly source behind it — so this is the one card on
+      // the strip with an empty plot area. Fill it with an illustrative line
+      // centred on the real day figure the API sent.
+      //
+      // Gated on there being fewer than two real points, so the moment a genuine
+      // hourly series appears for SPI the measured line wins automatically and
+      // this stops running without anyone having to remember to remove it.
+      const useSample =
+        procItem.name === "SPI" &&
+        points.filter((v) => isNum(v)).length < 2 &&
+        isNum((procItem as any).actual);
+      const plotPoints = useSample
+        ? synthesiseSampleTrend(
+            (procItem as any).actual as number,
+            points.length || 24,
+            elapsedBucketCount,
+          )
+        : points;
+
+      // The step produced nothing in the selected window. Two ways that happens,
+      // and both are normal rather than a fault:
+      //
+      //   "Not Run" — the API sent no_data for the whole day. Burn-in and OTA are
+      //               sample tests that run in bursts, so an empty day is expected.
+      //   "N/A"     — the day has rows but this SHIFT has none yet.
+      //
+      // Worth distinguishing from a real zero, because the two placeholders these
+      // states used to render both misinformed: a dash reads as a broken feed, and
+      // "0.00%" reads as total failure and colours the tile red for a step that
+      // simply did not run.
+      const hasNoProduction =
+        procItem.status === "Not Run" || procItem.status === "N/A";
 
       return (
         <div
@@ -2558,32 +2748,44 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
 
           <div className="flex-grow flex flex-col justify-center items-center min-h-0 -mt-1.5 2xl:-mt-2">
-            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none uppercase">
-              {procItem.type === "yield" && "Yield %"}
-              {procItem.type === "dpmo" && "Index"}
-              {procItem.type === "failure" && "Failure %"}
-            </span>
-            <span
-              className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
-              style={{
-                color: procItem.color,
-                textShadow: `0 0 8px ${procItem.color}30`,
-              }}
-            >
-              {procItem.type === "yield" && procItem.data.yield}
-              {procItem.type === "dpmo" && procItem.data.index}
-              {procItem.type === "failure" && procItem.data.failure}
-            </span>
+            {/* The unit caption is suppressed when nothing ran: announcing
+                "Yield %" above "No production" stacks two greys and states a
+                unit for a figure that does not exist. */}
+            {!hasNoProduction && (
+              <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none uppercase">
+                {procItem.type === "yield" && "Yield %"}
+                {procItem.type === "dpmo" && "Index"}
+                {procItem.type === "failure" && "Failure %"}
+              </span>
+            )}
+            {hasNoProduction ? (
+              <span className="text-[#8fa0b5] text-[10px] 2xl:text-[12px] font-bold leading-tight text-center">
+                No production
+              </span>
+            ) : (
+              <span
+                className="text-[16px] 2xl:text-[20px] font-black mt-1.5 2xl:mt-2 font-mono leading-none"
+                style={{
+                  color: procItem.color,
+                  textShadow: `0 0 8px ${procItem.color}30`,
+                }}
+              >
+                {procItem.type === "yield" && procItem.data.yield}
+                {procItem.type === "dpmo" && procItem.data.index}
+                {procItem.type === "failure" && procItem.data.failure}
+              </span>
+            )}
           </div>
 
           <div className="h-[22px] 2xl:h-[28px] w-full flex-shrink-0 mt-auto mb-1 2xl:mb-1.5 overflow-visible relative">
             <Sparkline
-              points={points}
+              points={plotPoints}
               type={procItem.type}
               status={procItem.status}
               color={procItem.color}
               target={procItem.target}
               targetDirection={procItem.targetDirection}
+              synthetic={useSample}
             />
           </div>
 
@@ -3781,7 +3983,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-2">
+          {/* min-h-0 lets flex-1 actually bound this box so it scrolls; without
+              it the cards would push the section taller instead. */}
+          <div
+            className="flex-1 min-h-0 overflow-y-auto custom-scrollbar flex flex-col gap-2"
+            onScroll={() => recTip && setRecTip(null)}
+          >
             {visibleAlerts.length === 0 && (
               <div className="flex-1 flex items-center justify-center py-10 text-center text-[12px] font-bold tracking-wide">
                 {alertsFeedState === "loading" ? (
@@ -3798,7 +4005,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {visibleAlerts.map((alert) => (
               <div
                 key={alert.id}
-                className={`bg-[#081119] border ${alert.level === "Critical" ? "animate-border-pulse-critical" : "border-[#eab308]/40"} rounded-lg p-2.5 relative flex flex-col transition-all duration-300`}
+                className={`group flex-shrink-0 bg-gradient-to-b from-[#0b1520] to-[#070f17] border ${alert.level === "Critical" ? "animate-border-pulse-critical" : "border-[#eab308]/25 hover:border-[#eab308]/45"} rounded-lg pl-3 pr-2.5 py-2.5 relative flex flex-col gap-2 overflow-hidden transition-all duration-300`}
                 style={{
                   boxShadow:
                     alert.level === "Critical"
@@ -3806,15 +4013,27 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       : "0 0 15px rgba(234, 179, 8, 0.05)",
                 }}
               >
-                <div className="flex justify-between items-start mb-1.5">
-                  <div className="flex items-center gap-2">
+                {/* Severity accent stripe */}
+                <span
+                  aria-hidden
+                  className="absolute left-0 top-0 bottom-0 w-[3px]"
+                  style={{
+                    background:
+                      alert.level === "Critical"
+                        ? "linear-gradient(180deg,#ff4c4c,rgba(255,76,76,0.15))"
+                        : "linear-gradient(180deg,#eab308,rgba(234,179,8,0.15))",
+                  }}
+                />
+
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex items-start gap-2 min-w-0">
                     <Bell
                       size={13}
-                      className={
+                      className={`mt-[2px] flex-shrink-0 ${
                         alert.level === "Critical"
                           ? "text-[#ff4c4c]"
                           : "text-[#eab308]"
-                      }
+                      }`}
                       fill={alert.level === "Critical" ? "#ff4c4c" : "#eab308"}
                       style={{
                         filter:
@@ -3823,64 +4042,57 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                             : "drop-shadow(0 0 8px #eab308)",
                       }}
                     />
-                    <span
-                      className={`text-[12.5px] font-bold ${alert.level === "Critical" ? "text-[#ff4c4c]" : "text-[#eab308]"}`}
-                    >
+                    <span className="text-[12px] font-semibold leading-snug text-[#e8eef5]">
                       {alert.title}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-[10.5px] text-[#8fa0b5] font-bold">
-                    {alert.time}{" "}
-                    <ChevronRight size={11} className="text-[#63788f]" />
+                  <div className="flex items-center gap-0.5 text-[10px] text-[#63788f] font-bold whitespace-nowrap flex-shrink-0 group-hover:text-[#8fa0b5] transition-colors">
+                    {alert.time}
+                    <ChevronRight size={11} />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 mb-1.5">
-                  <div className="flex flex-col">
-                    <span className="text-[#63788f] text-[10px] uppercase font-bold">
-                      {alert.failed ? "Failed Count" : "Current"}
-                    </span>
-                    <span className="text-white text-[15px] font-black font-mono leading-tight">
-                      {alert.failed || alert.current}
-                    </span>
-                    <span className="text-[#63788f] text-[9.5px] font-bold mt-0.5">
-                      Impact: {alert.impact}
-                    </span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[#63788f] text-[10px] uppercase font-bold">
-                      Target
-                    </span>
-                    <span className="text-white text-[15px] font-black font-mono leading-tight">
-                      {alert.target}
-                    </span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[#63788f] text-[10px] uppercase font-bold">
-                      Deviation
-                    </span>
-                    <span
-                      className={`text-[15px] font-black font-mono leading-tight ${alert.level === "Critical" ? "text-[#ff4c4c]" : "text-[#ff4c4c]"}`}
-                    >
-                      {alert.dev}
-                    </span>
-                  </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[#5b6f87] text-[9px] uppercase tracking-wider font-bold">
+                    Impact
+                  </span>
+                  <span
+                    className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-[1px] rounded border ${
+                      alert.level === "Critical"
+                        ? "text-[#ff8080] border-[#ff4c4c]/30 bg-[#ff4c4c]/10"
+                        : "text-[#eab308] border-[#eab308]/30 bg-[#eab308]/10"
+                    }`}
+                  >
+                    {alert.impact}
+                  </span>
                 </div>
 
+                {/* The recommendation is clamped to two lines so every card is
+                    the same height; the full text is on hover, in the portal
+                    tooltip rendered at the end of this component. */}
                 <div
-                  className={`mt-auto bg-[#1e1b4b]/30 border ${alert.level === "Critical" ? "border-[#4338ca]/30" : "border-[#4338ca]/30"} rounded p-1.5 flex items-start gap-2`}
+                  className="mt-auto bg-[#4338ca]/[0.08] hover:bg-[#4338ca]/[0.14] border border-[#4338ca]/25 hover:border-[#4338ca]/45 rounded-md p-1.5 flex items-start gap-2 transition-colors cursor-default"
+                  onMouseEnter={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setRecTip({
+                      text: alert.rec,
+                      x: r.left + r.width / 2,
+                      y: r.top,
+                    });
+                  }}
+                  onMouseLeave={() => setRecTip(null)}
                 >
-                  <div className="bg-[#4338ca] w-4.5 h-4.5 rounded flex items-center justify-center flex-shrink-0 text-white shadow-[0_0_12px_rgba(67,56,202,0.6)]">
-                    <Wrench size={10} />
+                  <div className="bg-[#4f46e5] w-4.5 h-4.5 rounded flex items-center justify-center flex-shrink-0 text-white shadow-[0_0_12px_rgba(79,70,229,0.5)]">
+                    <Bot size={11} />
                   </div>
                   <div className="flex flex-col flex-1 min-w-0">
                     <span
-                      className="text-[#4338ca] text-[9px] font-black uppercase tracking-wider"
-                      style={{ textShadow: "0 0 10px rgba(67,56,202,0.4)" }}
+                      className="text-[#818cf8] text-[9px] font-black uppercase tracking-wider"
+                      style={{ textShadow: "0 0 10px rgba(99,102,241,0.35)" }}
                     >
                       AI Recommendation
                     </span>
-                    <span className="text-white text-[10.5px] font-bold leading-none mt-1 truncate">
+                    <span className="text-[#dfe5f0] text-[10.5px] font-semibold leading-snug mt-0.5 line-clamp-2">
                       {alert.rec}
                     </span>
                   </div>
@@ -4264,6 +4476,35 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
         </div>
       )}
+
+      {/* Full AI recommendation for the hovered alert. Portalled to <body> and
+          fixed-positioned so neither the alert card (overflow-hidden) nor the
+          scrolling alert list can clip it. */}
+      {recTip &&
+        createPortal(
+          <div
+            role="tooltip"
+            className="fixed z-[9999] pointer-events-none w-[300px] max-w-[90vw] -translate-x-1/2 -translate-y-full bg-[#0b1220] border border-[#4338ca]/50 rounded-md p-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.7)]"
+            style={{
+              left: Math.min(
+                Math.max(recTip.x, 160),
+                window.innerWidth - 160,
+              ),
+              top: recTip.y - 8,
+            }}
+          >
+            <div className="flex items-center gap-1.5 mb-1">
+              <Bot size={11} className="text-[#818cf8]" />
+              <span className="text-[#818cf8] text-[9px] font-black uppercase tracking-wider">
+                AI Recommendation
+              </span>
+            </div>
+            <p className="text-[#dfe5f0] text-[11px] font-medium leading-relaxed">
+              {recTip.text}
+            </p>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };
