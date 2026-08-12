@@ -2,7 +2,7 @@
 // Consumed by both the R3F scene (FactoryScene) and the HTML overlay
 // (labels / detail card) so there is a single source of truth.
 
-export type ZoneStatus = "healthy" | "critical" | "unknown";
+export type ZoneStatus = "healthy" | "warning" | "critical" | "unknown";
 
 export interface ZoneDef {
   id: string;
@@ -22,18 +22,21 @@ export interface ZoneDef {
 // Status → hex (numbers for three.js, strings for DOM). Green / red / grey only.
 export const STATUS_HEX: Record<ZoneStatus, number> = {
   healthy:  0x2fe0a0,
+  warning:  0xf59e0b,
   critical: 0xf24b5c,
   unknown:  0x64748b,
 };
 
 export const STATUS_CSS: Record<ZoneStatus, string> = {
   healthy:  "#2fe0a0",
+  warning:  "#f59e0b",
   critical: "#f24b5c",
   unknown:  "#64748b",
 };
 
 export const STATUS_LABEL: Record<ZoneStatus, string> = {
   healthy:  "Healthy",
+  warning:  "Warning",
   critical: "Critical",
   unknown:  "Unknown",
 };

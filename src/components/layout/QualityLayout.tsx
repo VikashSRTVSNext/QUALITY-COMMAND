@@ -1469,14 +1469,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     // VITE_DASHBOARD_SSE_URL overrides it.
     const es = new EventSource(DASHBOARD_SSE_URL);
 
-    const mapStatus = (
-      status: string,
-    ): "healthy" | "warning" | "critical" | "unknown" => {
-      if (status === "at_risk" || status === "warning") return "warning";
-      if (status === "critical") return "critical";
-      if (status === "healthy") return "healthy";
-      return "unknown";
-    };
+    // mapStatus helper removed: the factory-twin zone block that used it is
+    // currently disabled (commented out). Re-add if that block is re-enabled.
 
     const handleData = (data: any) => {
       if (!data) return;
@@ -2114,6 +2108,115 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       });
     });
   }, [activeShift, rawProcessPerformance]);
+
+  // Derive heat-map zone statuses from live process-performance / KPI card statuses.
+  //
+  // SMT zone   ← processPerformance: SPI, DPMOI, AXI - S, SMT DEFECTS @ MFT
+  //   0 red → healthy (green) | 1 red → warning (amber) | 2+ red → critical (red)
+  //
+  // thermalgel ← processPerformance: THERMAL AVI (shown in UI as "THERMAL GEL AVI")
+  //   Single card: red → critical (red) | otherwise → healthy (green)
+  //
+  // testing    ← kpiCards: FPY UNIT + SPY UNIT
+  //   Both green → healthy | 1 red → warning (amber) | both red → critical
+  //
+  // mft        ← kpiCards: FPY MODULE + SPY MODULE
+  //   Both green → healthy | 1 red → warning (amber) | both red → critical
+  //
+  // packaging  ← kpiCards: CUSTOMER QUALITY AUDIT
+  //   Single card: target met → healthy (green) | missed → critical (red)
+  // Neutral statuses ("N/A", "Not Run", "...") count as 0 reds so a shift with
+  // no data does not falsely colour the zone.
+  useEffect(() => {
+    // ── processPerformance helpers ──────────────────────────────────────────
+    const isProcRed = (status: string) =>
+      status === "Critical" || status === "At Risk";
+
+    // Multi-card zone: 0 red→green, 1 red→amber, 2+→red
+    const multiCardZoneStatus = (
+      cards: typeof processPerformance,
+    ): "healthy" | "warning" | "critical" => {
+      const redCount = cards.filter((p) => isProcRed(p.status)).length;
+      if (redCount === 0) return "healthy";
+      if (redCount === 1) return "warning";
+      return "critical";
+    };
+
+    // Single-card zone: red→critical, anything else→healthy (no amber)
+    const singleCardZoneStatus = (
+      card: typeof processPerformance,
+    ): "healthy" | "critical" => {
+      return card.some((p) => isProcRed(p.status)) ? "critical" : "healthy";
+    };
+
+    // ── kpiCards helper ─────────────────────────────────────────────────────
+    // Mirrors the same red/green decision the card renderer makes:
+    // if a target exists → red when actual < target; otherwise → red when
+    // delta_vs_yesterday < 0 (trending down).
+    const isKpiRed = (label: string): boolean => {
+      const card = kpiCards.find((k) => k.label === label);
+      if (!card) return false;
+      const target = (card as any).target as number | null | undefined;
+      const actual = Number.parseFloat(
+        String(card.value).replace(/[^\d.-]/g, ""),
+      );
+      if (isNum(target) && Number.isFinite(actual)) {
+        return actual < target; // below target → red
+      }
+      return (card.delta_vs_yesterday ?? 0) < 0; // trending down → red
+    };
+
+    // ── SMT zone — 4 process-performance cards ──────────────────────────────
+    const SMT_CARD_NAMES = ["SPI", "DPMOI", "AXI - S", "SMT DEFECTS @ MFT"];
+    const smtCards = processPerformance.filter((p) =>
+      SMT_CARD_NAMES.includes(p.name),
+    );
+    const smtZoneStatus = multiCardZoneStatus(smtCards);
+
+    // ── Thermal Gel zone — 1 process-performance card ───────────────────────
+    const thermalCard = processPerformance.filter(
+      (p) => p.name === "THERMAL AVI",
+    );
+    const thermalZoneStatus = singleCardZoneStatus(thermalCard);
+
+    // ── Testing zone — 2 KPI cards (FPY UNIT + SPY UNIT) ───────────────────
+    const testingRedCount = [
+      isKpiRed("FPY - UNIT (%)"),
+      isKpiRed("SPY - UNIT (%)"),
+    ].filter(Boolean).length;
+    const testingZoneStatus: "healthy" | "warning" | "critical" =
+      testingRedCount === 0 ? "healthy"
+      : testingRedCount === 1 ? "warning"
+      : "critical";
+
+    // ── MFT zone — 2 KPI cards (FPY MODULE + SPY MODULE) ────────────────────
+    const mftRedCount = [
+      isKpiRed("FPY - MODULE (%)"),
+      isKpiRed("SPY - MODULE (%)"),
+    ].filter(Boolean).length;
+    const mftZoneStatus: "healthy" | "warning" | "critical" =
+      mftRedCount === 0 ? "healthy"
+      : mftRedCount === 1 ? "warning"
+      : "critical";
+
+    // ── Packaging zone — 1 KPI card (CUSTOMER QUALITY AUDIT) ───────────────
+    const packagingZoneStatus: "healthy" | "critical" = isKpiRed(
+      "CUSTOMER QUALITY AUDIT (%)",
+    )
+      ? "critical"
+      : "healthy";
+
+    setTwinZones((prev) =>
+      prev.map((zone) => {
+        if (zone.id === "smt") return { ...zone, status: smtZoneStatus };
+        if (zone.id === "thermalgel") return { ...zone, status: thermalZoneStatus };
+        if (zone.id === "testing") return { ...zone, status: testingZoneStatus };
+        if (zone.id === "mft") return { ...zone, status: mftZoneStatus };
+        if (zone.id === "packaging") return { ...zone, status: packagingZoneStatus };
+        return zone;
+      }),
+    );
+  }, [processPerformance, kpiCards]);
 
   // Keep clock running
   useEffect(() => {
