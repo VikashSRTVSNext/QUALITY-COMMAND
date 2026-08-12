@@ -3286,9 +3286,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       <section className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-3">
         {/* Left Section: 8x8 Box layout */}
         <div className="lg:col-span-3 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
-          <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
-            PROCESS PERFORMANCE
-          </span>
+          <div className="flex items-baseline gap-2 border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
+            <span className="text-[14px] font-black tracking-widest text-[#8fa0b5] uppercase">
+              PROCESS PERFORMANCE
+            </span>
+            <span className="text-[10px] font-bold tracking-wider text-[#63788f] normal-case">
+              [Hourly]
+            </span>
+          </div>
           <div className="flex flex-col gap-4 flex-grow justify-between relative">
             {/* First 8 Items (Group 1) */}
             <div className="flex items-center gap-1.5 w-full z-10">
