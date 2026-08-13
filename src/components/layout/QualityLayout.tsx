@@ -2956,13 +2956,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       // and "BURN-IN" to the endpoint — the exact mistake API_KEY_BY_TILE exists
       // to prevent, and here it would 404 rather than render "..." forever.
       const drillStep =
-        API_KEY_BY_TILE[procItem.name] ??
-        procItem.name.replace(/\s+/g, "_");
+        API_KEY_BY_TILE[procItem.name] ?? procItem.name.replace(/\s+/g, "_");
       // A step with no per-product breakdown, or one that produced nothing, is
       // left inert: opening a modal onto "No production" is a dead end, and a
       // pointer cursor on a tile that does nothing is worse than no affordance.
-      const canDrill =
-        Boolean(DRILLDOWN_STEPS[drillStep]) && !hasNoProduction;
+      const canDrill = Boolean(DRILLDOWN_STEPS[drillStep]) && !hasNoProduction;
       const openDrilldown = () =>
         setDrilldownCard({ step: drillStep, title: displayTitle });
 
@@ -3332,7 +3330,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const customerComplaintsYTicks = getYTicks(customerComplaintsPoints, 4);
 
   return (
-    <div className="w-full min-h-screen bg-[#030810] text-[#f8fafc] flex flex-col p-4 box-border gap-4 font-sans select-none">
+    // gap-3 not gap-4, and a shorter pb, to free the ~20px the branding strip at
+    // the bottom needs. The strip is an in-flow child rather than position-fixed:
+    // the CI and Safety charts already sit flush against the viewport edge, so a
+    // fixed strip would float over their axis labels instead of making room.
+    <div className="w-full min-h-screen bg-[#030810] text-[#f8fafc] flex flex-col px-4 pt-4 pb-2 box-border gap-3 font-sans select-none">
       {/* Top Branding & SubHeader Row */}
       <header className="flex flex-col lg:flex-row justify-between items-center bg-[#101c2b] border border-[#1c3149] rounded-xl px-3.5 py-1.5 gap-3">
         {/* Left Side Branding.
@@ -3509,7 +3511,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       </header>
 
       {/* Redesigned Process Performance & Overall Quality Row */}
-      <section className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-3">
+      <section className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-1.5">
         {/* Left Section: 8x8 Box layout */}
         <div className="lg:col-span-3 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
           <div className="flex items-baseline gap-2 border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
@@ -3903,217 +3905,220 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         the 262 lines below are untouched — flip the condition to
                         `true` to show it on every tab again. */}
                     {activeYieldTab === "UNITS" && (
-                    <td className="py-[2.5px] text-center text-[#c8d6e4] font-sans text-[10px] leading-tight">
-                      {(() => {
-                        // Raw analysis JSON while the Azure OpenAI layer is
-                        // unbuilt. Deliberately the exact fields the model will
-                        // be handed, so the sentence it eventually returns can be
-                        // checked against the numbers it was derived from.
-                        //
-                        // Only the yield-relevant fields are shown; product name
-                        // and the echoed inputs are already columns in this table.
-                        const yr = yieldRecommendations[row.name];
-                        if (!yr) {
-                          // Still fetching: a short note, not a field dump.
-                          if (yieldRecsLoading) {
-                            return (
-                              <span className="text-[#63788f] italic animate-soft-pulse">
-                                loading latest AI update…
-                              </span>
-                            );
-                          }
-                          // No period plan published. Only meaningful on the UNITS
-                          // tab: TRX and PA take their target from Target
-                          // sheet.xlsx and never needed the HFTPY plan, so telling
-                          // a module row it is "awaiting P08 plan" would point at
-                          // the wrong missing thing entirely.
-                          if (
-                            !yieldPlanStatus.available &&
-                            activeYieldTab === "UNITS"
-                          ) {
+                      <td className="py-[2.5px] text-center text-[#c8d6e4] font-sans text-[10px] leading-tight">
+                        {(() => {
+                          // Raw analysis JSON while the Azure OpenAI layer is
+                          // unbuilt. Deliberately the exact fields the model will
+                          // be handed, so the sentence it eventually returns can be
+                          // checked against the numbers it was derived from.
+                          //
+                          // Only the yield-relevant fields are shown; product name
+                          // and the echoed inputs are already columns in this table.
+                          const yr = yieldRecommendations[row.name];
+                          if (!yr) {
+                            // Still fetching: a short note, not a field dump.
+                            if (yieldRecsLoading) {
+                              return (
+                                <span className="text-[#63788f] italic animate-soft-pulse">
+                                  loading latest AI update…
+                                </span>
+                              );
+                            }
+                            // No period plan published. Only meaningful on the UNITS
+                            // tab: TRX and PA take their target from Target
+                            // sheet.xlsx and never needed the HFTPY plan, so telling
+                            // a module row it is "awaiting P08 plan" would point at
+                            // the wrong missing thing entirely.
+                            if (
+                              !yieldPlanStatus.available &&
+                              activeYieldTab === "UNITS"
+                            ) {
+                              return (
+                                <span
+                                  className="text-[#63788f] italic"
+                                  title={`No ${yieldPlanStatus.month ?? ""} sheet in HFTPY Plan.xlsx — add it to get period recommendations.`}
+                                >
+                                  awaiting {yieldPlanStatus.month ?? "period"}{" "}
+                                  plan
+                                </span>
+                              );
+                            }
+                            // No recommendation for this product. The only remaining
+                            // cause is that it has no target on file at any level.
+                            //
+                            // It used to print `row.rec` — the mart's own
+                            // ai_recommendation column, which holds static seeded text.
+                            // That put "Performance within expectations" beside
+                            // SYS_ABIO_Mod.ASPE sitting at 0% yield. Stale placeholder
+                            // prose reads exactly like a live judgement, so it is worse
+                            // than an honest blank.
                             return (
                               <span
                                 className="text-[#63788f] italic"
-                                title={`No ${yieldPlanStatus.month ?? ""} sheet in HFTPY Plan.xlsx — add it to get period recommendations.`}
+                                title={`No target on file for ${row.name}, so no recommendation can be computed. Add it to Target sheet.xlsx.`}
                               >
-                                awaiting {yieldPlanStatus.month ?? "period"}{" "}
-                                plan
+                                no target on file
                               </span>
                             );
                           }
-                          // No recommendation for this product. The only remaining
-                          // cause is that it has no target on file at any level.
-                          //
-                          // It used to print `row.rec` — the mart's own
-                          // ai_recommendation column, which holds static seeded text.
-                          // That put "Performance within expectations" beside
-                          // SYS_ABIO_Mod.ASPE sitting at 0% yield. Stale placeholder
-                          // prose reads exactly like a live judgement, so it is worse
-                          // than an honest blank.
-                          return (
-                            <span
-                              className="text-[#63788f] italic"
-                              title={`No target on file for ${row.name}, so no recommendation can be computed. Add it to Target sheet.xlsx.`}
-                            >
-                              no target on file
-                            </span>
-                          );
-                        }
-                        // The raw-field `payload` object that used to live here is
-                        // gone: it existed only to be JSON-dumped into a tooltip,
-                        // and both tooltips now build a readable sentence from the
-                        // same fields instead.
+                          // The raw-field `payload` object that used to live here is
+                          // gone: it existed only to be JSON-dumped into a tooltip,
+                          // and both tooltips now build a readable sentence from the
+                          // same fields instead.
 
-                        // TRX / PA take a different shape, because they have
-                        // different data behind them. Target sheet.xlsx gives them a
-                        // target percentage and NO planned quantity, so there is no
-                        // remainder to divide by — required_future_yield,
-                        // mathematical_status and achievability all come back null.
-                        // Rendering the unit layout here would show four labels with
-                        // three dashes.
-                        //
-                        // What they get instead needs no plan at all: how many
-                        // consecutive passes would restore target, or how many more
-                        // failures the current margin can absorb.
-                        if (yr.product_level && yr.product_level !== "UNIT") {
-                          const recover = yr.passes_to_recover;
-                          const headroom = yr.failure_headroom;
-                          const onTarget = isNum(headroom);
-                          // A recovery larger than everything already built is
-                          // arithmetically right and practically meaningless —
-                          // AHEGHAPA Z needs 803 passes on 681 tested. Shown as a
-                          // bound rather than a precise figure nobody will act on.
-                          const hopeless =
-                            isNum(recover) && recover > yr.tested_quantity;
-                          const colour = onTarget ? "#22c55e" : "#ff4c4c";
+                          // TRX / PA take a different shape, because they have
+                          // different data behind them. Target sheet.xlsx gives them a
+                          // target percentage and NO planned quantity, so there is no
+                          // remainder to divide by — required_future_yield,
+                          // mathematical_status and achievability all come back null.
+                          // Rendering the unit layout here would show four labels with
+                          // three dashes.
+                          //
+                          // What they get instead needs no plan at all: how many
+                          // consecutive passes would restore target, or how many more
+                          // failures the current margin can absorb.
+                          if (yr.product_level && yr.product_level !== "UNIT") {
+                            const recover = yr.passes_to_recover;
+                            const headroom = yr.failure_headroom;
+                            const onTarget = isNum(headroom);
+                            // A recovery larger than everything already built is
+                            // arithmetically right and practically meaningless —
+                            // AHEGHAPA Z needs 803 passes on 681 tested. Shown as a
+                            // bound rather than a precise figure nobody will act on.
+                            const hopeless =
+                              isNum(recover) && recover > yr.tested_quantity;
+                            const colour = onTarget ? "#22c55e" : "#ff4c4c";
+                            return (
+                              <div
+                                className="flex flex-col gap-[1px] text-[9px] leading-[1.3] min-w-[110px]"
+                                // Deterministic, built from the same fields the cell
+                                // shows, so the two can never disagree. The generated
+                                // prose used to sit here and claimed "No target yield
+                                // available" beside a cell reading 95% — it was
+                                // reporting the absent VERDICT as an absent TARGET.
+                                title={
+                                  onTarget
+                                    ? `${yr.product}: ${yr.tested_quantity.toLocaleString()} tested at ${isNum(yr.current_yield) ? (yr.current_yield * 100).toFixed(1) : "—"}%, above the ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% target. ${headroom.toLocaleString()} further failure(s) can be absorbed before it breaches.`
+                                    : hopeless
+                                      ? `${yr.product}: needs ${recover?.toLocaleString()} consecutive passes to reach the ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% target — more than the ${yr.tested_quantity.toLocaleString()} already built. Not recoverable this period.`
+                                      : `${yr.product}: ${yr.tested_quantity.toLocaleString()} tested at ${isNum(yr.current_yield) ? (yr.current_yield * 100).toFixed(1) : "—"}%, below the ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% target. ${isNum(recover) ? recover.toLocaleString() : "—"} consecutive passes would restore it. No period plan exists for module products, so no feasibility verdict is given.`
+                                }
+                              >
+                                <div className="flex justify-between gap-2">
+                                  <span className="text-[#63788f]">
+                                    Yield / target
+                                  </span>
+                                  <span className="text-[#c8d6e4] font-bold tabular-nums">
+                                    {isNum(yr.current_yield)
+                                      ? `${(yr.current_yield * 100).toFixed(1)}%`
+                                      : "—"}
+                                    <span className="text-[#63788f]"> / </span>
+                                    {isNum(yr.target_yield)
+                                      ? `${(yr.target_yield * 100).toFixed(0)}%`
+                                      : "—"}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-2">
+                                  <span className="text-[#63788f]">Tested</span>
+                                  <span className="text-[#c8d6e4] font-bold tabular-nums">
+                                    {yr.tested_quantity.toLocaleString()}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-2 items-center mt-[1px]">
+                                  <span className="text-[#63788f]">
+                                    {onTarget
+                                      ? "Failures spare"
+                                      : "Passes to recover"}
+                                  </span>
+                                  <span
+                                    className="font-black px-1.5 py-[1px] rounded text-[8.5px] uppercase tracking-wide tabular-nums"
+                                    style={{
+                                      color: colour,
+                                      backgroundColor: `${colour}1a`,
+                                      border: `1px solid ${colour}55`,
+                                    }}
+                                    title={
+                                      hopeless
+                                        ? `Needs ${recover?.toLocaleString()} consecutive passes — more than the ${yr.tested_quantity.toLocaleString()} already built. Not recoverable this period.`
+                                        : undefined
+                                    }
+                                  >
+                                    {onTarget
+                                      ? headroom.toLocaleString()
+                                      : hopeless
+                                        ? `>${yr.tested_quantity.toLocaleString()}`
+                                        : isNum(recover)
+                                          ? recover.toLocaleString()
+                                          : "n/a"}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Four labelled figures, not a paragraph. This column is
+                          // read at a glance by people on the floor; a 50-word
+                          // sentence is slower to parse than a number with a label
+                          // beside it, however well written.
+                          //
+                          // Every value here is deterministic — planned and
+                          // remaining come from the plan, expected yield and the
+                          // verdict from the calculator — so nothing on screen waits
+                          // on Azure. The generated prose is kept on the tooltip for
+                          // whoever wants the reasoning behind the verdict.
+                          // `achievability` is computed server-side and is NOT the
+                          // same as `mathematical_status`. The status only answers
+                          // "is this impossible?", and rendering that as a green
+                          // ACHIEVABLE claimed far more than it proved: AHEC showed
+                          // green while needing 92.5% from a product whose best full
+                          // period on record is 88.1%, directly contradicting the
+                          // figure printed above it.
+                          //
+                          // UNLIKELY is that case — arithmetically open, historically
+                          // unprecedented — and it belongs on the red side.
+                          const verdictLabel =
+                            {
+                              ACHIEVED: "Achieved",
+                              ACHIEVABLE: "Achievable",
+                              UNLIKELY: "Unlikely",
+                              NOT_ACHIEVABLE: "Not achievable",
+                            }[yr.achievability as string] ?? "—";
+                          const achievable =
+                            yr.achievability === "ACHIEVED" ||
+                            yr.achievability === "ACHIEVABLE";
+                          const verdictColor = achievable
+                            ? "#22c55e"
+                            : "#ff4c4c";
+                          const unprecedented = yr.achievability === "UNLIKELY";
+
                           return (
                             <div
                               className="flex flex-col gap-[1px] text-[9px] leading-[1.3] min-w-[110px]"
-                              // Deterministic, built from the same fields the cell
-                              // shows, so the two can never disagree. The generated
-                              // prose used to sit here and claimed "No target yield
-                              // available" beside a cell reading 95% — it was
-                              // reporting the absent VERDICT as an absent TARGET.
+                              // Deterministic, so it cannot contradict the cell. The
+                              // generated prose is off (see AZURE_OPENAI_API_VERSION
+                              // in .env) and a raw JSON dump was never a tooltip
+                              // anyone could read. `recommendation` is still honoured
+                              // first, so re-enabling the AI layer needs no change
+                              // here.
                               title={
-                                onTarget
-                                  ? `${yr.product}: ${yr.tested_quantity.toLocaleString()} tested at ${isNum(yr.current_yield) ? (yr.current_yield * 100).toFixed(1) : "—"}%, above the ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% target. ${headroom.toLocaleString()} further failure(s) can be absorbed before it breaches.`
-                                  : hopeless
-                                    ? `${yr.product}: needs ${recover?.toLocaleString()} consecutive passes to reach the ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% target — more than the ${yr.tested_quantity.toLocaleString()} already built. Not recoverable this period.`
-                                    : `${yr.product}: ${yr.tested_quantity.toLocaleString()} tested at ${isNum(yr.current_yield) ? (yr.current_yield * 100).toFixed(1) : "—"}%, below the ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% target. ${isNum(recover) ? recover.toLocaleString() : "—"} consecutive passes would restore it. No period plan exists for module products, so no feasibility verdict is given.`
+                                yr.recommendation ||
+                                [
+                                  `${yr.product}: ${yr.tested_quantity.toLocaleString()} of ${isNum(yr.planned_quantity) ? yr.planned_quantity.toLocaleString() : "—"} planned units built at ${isNum(yr.current_yield) ? (yr.current_yield * 100).toFixed(1) : "—"}%, against a ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% period target.`,
+                                  isNum(yr.remaining_quantity) &&
+                                  isNum(yr.required_future_yield)
+                                    ? `The remaining ${yr.remaining_quantity.toLocaleString()} units must average ${(yr.required_future_yield * 100).toFixed(1)}%.`
+                                    : "No remaining quantity is known, so no required yield can be computed.",
+                                  unprecedented &&
+                                  isNum(yr.best_historical_yield)
+                                    ? `That is above the best full period on record (${(yr.best_historical_yield * 100).toFixed(1)}%) — unprecedented for this product.`
+                                    : isNum(yr.best_historical_yield)
+                                      ? `Within the best full period on record (${(yr.best_historical_yield * 100).toFixed(1)}%).`
+                                      : "No completed periods on record to compare against.",
+                                  `Maths: ${yr.mathematical_status ?? "n/a"} · History: ${yr.historical_status ?? "n/a"} · Verdict: ${yr.achievability ?? "n/a"}`,
+                                ].join("\n")
                               }
                             >
-                              <div className="flex justify-between gap-2">
-                                <span className="text-[#63788f]">
-                                  Yield / target
-                                </span>
-                                <span className="text-[#c8d6e4] font-bold tabular-nums">
-                                  {isNum(yr.current_yield)
-                                    ? `${(yr.current_yield * 100).toFixed(1)}%`
-                                    : "—"}
-                                  <span className="text-[#63788f]"> / </span>
-                                  {isNum(yr.target_yield)
-                                    ? `${(yr.target_yield * 100).toFixed(0)}%`
-                                    : "—"}
-                                </span>
-                              </div>
-                              <div className="flex justify-between gap-2">
-                                <span className="text-[#63788f]">Tested</span>
-                                <span className="text-[#c8d6e4] font-bold tabular-nums">
-                                  {yr.tested_quantity.toLocaleString()}
-                                </span>
-                              </div>
-                              <div className="flex justify-between gap-2 items-center mt-[1px]">
-                                <span className="text-[#63788f]">
-                                  {onTarget
-                                    ? "Failures spare"
-                                    : "Passes to recover"}
-                                </span>
-                                <span
-                                  className="font-black px-1.5 py-[1px] rounded text-[8.5px] uppercase tracking-wide tabular-nums"
-                                  style={{
-                                    color: colour,
-                                    backgroundColor: `${colour}1a`,
-                                    border: `1px solid ${colour}55`,
-                                  }}
-                                  title={
-                                    hopeless
-                                      ? `Needs ${recover?.toLocaleString()} consecutive passes — more than the ${yr.tested_quantity.toLocaleString()} already built. Not recoverable this period.`
-                                      : undefined
-                                  }
-                                >
-                                  {onTarget
-                                    ? headroom.toLocaleString()
-                                    : hopeless
-                                      ? `>${yr.tested_quantity.toLocaleString()}`
-                                      : isNum(recover)
-                                        ? recover.toLocaleString()
-                                        : "n/a"}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        // Four labelled figures, not a paragraph. This column is
-                        // read at a glance by people on the floor; a 50-word
-                        // sentence is slower to parse than a number with a label
-                        // beside it, however well written.
-                        //
-                        // Every value here is deterministic — planned and
-                        // remaining come from the plan, expected yield and the
-                        // verdict from the calculator — so nothing on screen waits
-                        // on Azure. The generated prose is kept on the tooltip for
-                        // whoever wants the reasoning behind the verdict.
-                        // `achievability` is computed server-side and is NOT the
-                        // same as `mathematical_status`. The status only answers
-                        // "is this impossible?", and rendering that as a green
-                        // ACHIEVABLE claimed far more than it proved: AHEC showed
-                        // green while needing 92.5% from a product whose best full
-                        // period on record is 88.1%, directly contradicting the
-                        // figure printed above it.
-                        //
-                        // UNLIKELY is that case — arithmetically open, historically
-                        // unprecedented — and it belongs on the red side.
-                        const verdictLabel =
-                          {
-                            ACHIEVED: "Achieved",
-                            ACHIEVABLE: "Achievable",
-                            UNLIKELY: "Unlikely",
-                            NOT_ACHIEVABLE: "Not achievable",
-                          }[yr.achievability as string] ?? "—";
-                        const achievable =
-                          yr.achievability === "ACHIEVED" ||
-                          yr.achievability === "ACHIEVABLE";
-                        const verdictColor = achievable ? "#22c55e" : "#ff4c4c";
-                        const unprecedented = yr.achievability === "UNLIKELY";
-
-                        return (
-                          <div
-                            className="flex flex-col gap-[1px] text-[9px] leading-[1.3] min-w-[110px]"
-                            // Deterministic, so it cannot contradict the cell. The
-                            // generated prose is off (see AZURE_OPENAI_API_VERSION
-                            // in .env) and a raw JSON dump was never a tooltip
-                            // anyone could read. `recommendation` is still honoured
-                            // first, so re-enabling the AI layer needs no change
-                            // here.
-                            title={
-                              yr.recommendation ||
-                              [
-                                `${yr.product}: ${yr.tested_quantity.toLocaleString()} of ${isNum(yr.planned_quantity) ? yr.planned_quantity.toLocaleString() : "—"} planned units built at ${isNum(yr.current_yield) ? (yr.current_yield * 100).toFixed(1) : "—"}%, against a ${isNum(yr.target_yield) ? (yr.target_yield * 100).toFixed(0) : "—"}% period target.`,
-                                isNum(yr.remaining_quantity) &&
-                                isNum(yr.required_future_yield)
-                                  ? `The remaining ${yr.remaining_quantity.toLocaleString()} units must average ${(yr.required_future_yield * 100).toFixed(1)}%.`
-                                  : "No remaining quantity is known, so no required yield can be computed.",
-                                unprecedented && isNum(yr.best_historical_yield)
-                                  ? `That is above the best full period on record (${(yr.best_historical_yield * 100).toFixed(1)}%) — unprecedented for this product.`
-                                  : isNum(yr.best_historical_yield)
-                                    ? `Within the best full period on record (${(yr.best_historical_yield * 100).toFixed(1)}%).`
-                                    : "No completed periods on record to compare against.",
-                                `Maths: ${yr.mathematical_status ?? "n/a"} · History: ${yr.historical_status ?? "n/a"} · Verdict: ${yr.achievability ?? "n/a"}`,
-                              ].join("\n")
-                            }
-                          >
-                            {/* <div className="flex justify-between gap-2">
+                              {/* <div className="flex justify-between gap-2">
                               <span className="text-[#63788f]">
                                 Total planned
                               </span>
@@ -4149,22 +4154,22 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                                 )}
                               </span>
                             </div> */}
-                            <div className="flex items-center justify-center mt-[1px]">
-                              <span
-                                className="font-black px-1.5 py-[1px] rounded text-[8.5px] uppercase tracking-wide"
-                                style={{
-                                  color: verdictColor,
-                                  backgroundColor: `${verdictColor}1a`,
-                                  border: `1px solid ${verdictColor}55`,
-                                }}
-                              >
-                                {verdictLabel}
-                              </span>
+                              <div className="flex items-center justify-center mt-[1px]">
+                                <span
+                                  className="font-black px-1.5 py-[1px] rounded text-[8.5px] uppercase tracking-wide"
+                                  style={{
+                                    color: verdictColor,
+                                    backgroundColor: `${verdictColor}1a`,
+                                    border: `1px solid ${verdictColor}55`,
+                                  }}
+                                >
+                                  {verdictLabel}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })()}
-                    </td>
+                          );
+                        })()}
+                      </td>
                     )}
                   </tr>
                 ))}
@@ -4392,7 +4397,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       </main>
 
       {/* Row 4: Bottom Operational KPIs */}
-      <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4 mt-1.5">
+      <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4">
         {/* Card 1: Safety */}
         <div className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
           <div className="flex items-center gap-1.5 border-b border-[#1c3149]/50 pb-1.5 flex-shrink-0">
@@ -4719,6 +4724,47 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
       </section>
 
+      {/* Branding strip — last in-flow row of the dashboard, so it sits under the
+          Safety/Sustainability/CI row rather than over it. Right-aligned to match
+          the rest of the chrome. Drop the logo where marked: at h-[18px] w-auto it
+          aligns with the caption without growing this strip, which is what the
+          gap-3 and pb-2 above were tightened to afford. */}
+      <footer className="flex items-center justify-end gap-2 flex-shrink-0 border-t border-[#1c3149]/60 py-0.5">
+        <span className="text-[9px] font-semibold text-[#63788f] leading-none">
+          Powered by
+        </span>
+        <svg
+          width="66"
+          height="22"
+          viewBox="0 0 94 28"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          xmlnsXlink="http://www.w3.org/1999/xlink"
+        >
+          <rect width="66" height="22" fill="url(#pattern0_15409_74893)" />
+          <defs>
+            <pattern
+              id="pattern0_15409_74893"
+              patternContentUnits="objectBoundingBox"
+              width="1"
+              height="1"
+            >
+              <use
+                xlinkHref="#image0_15409_74893"
+                transform="matrix(0.000992908 0 0 0.00333333 -0.00177305 0)"
+              />
+            </pattern>
+            <image
+              id="image0_15409_74893"
+              width="1000"
+              height="300"
+              preserveAspectRatio="none"
+              xlinkHref="data:image/png;base64,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AhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhCAAAQgAAEIQAACEIAABCAAAQhAAAIQgAAEIAABCEAAAhC4LwL/D2fBbPsIV2HMAAAAAElFTkSuQmCC"
+            />
+          </defs>
+        </svg>
+      </footer>
+
       {/* Per-product breakdown for a clicked Process Performance tile.
           Shift comes from the dashboard's own selector, so the modal opens on the
           same window the tile is reporting — "Full Day" maps to no shift filter,
@@ -4727,7 +4773,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         <ProcessProductsModal
           step={drilldownCard.step}
           title={drilldownCard.title}
-          shift={activeShift.match(/Shift\s+([A-C])/i)?.[1].toUpperCase() ?? null}
+          shift={
+            activeShift.match(/Shift\s+([A-C])/i)?.[1].toUpperCase() ?? null
+          }
           onClose={() => setDrilldownCard(null)}
         />
       )}
@@ -4926,10 +4974,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             role="tooltip"
             className="fixed z-[9999] pointer-events-none w-[300px] max-w-[90vw] -translate-x-1/2 -translate-y-full bg-[#0b1220] border border-[#4338ca]/50 rounded-md p-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.7)]"
             style={{
-              left: Math.min(
-                Math.max(recTip.x, 160),
-                window.innerWidth - 160,
-              ),
+              left: Math.min(Math.max(recTip.x, 160), window.innerWidth - 160),
               top: recTip.y - 8,
             }}
           >

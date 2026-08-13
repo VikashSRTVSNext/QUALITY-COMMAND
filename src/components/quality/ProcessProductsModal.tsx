@@ -492,6 +492,7 @@ export const ProcessProductsModal: React.FC<Props> = ({
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );
