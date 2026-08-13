@@ -3119,24 +3119,21 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     if (!kpiItem) return null;
 
     const displayTitle = customTitle || metricName;
-    const delta = kpiItem.delta_vs_yesterday ?? 0;
+    // Still needed for the "Tgt" caption at the foot of the card.
     const target = (kpiItem as any).target as number | null | undefined;
-    const actual = Number.parseFloat(
-      String(kpiItem.value).replace(/[^\d.-]/g, ""),
-    );
-    const meetsTarget =
-      isNum(target) && Number.isFinite(actual) ? actual >= target : null;
 
-    let trendColor: string;
-    if (meetsTarget !== null) {
-      trendColor = meetsTarget ? "#22c55e" : "#ff4c4c";
-    } else if (delta > 0) {
-      trendColor = "#22c55e";
-    } else if (delta < 0) {
-      trendColor = "#ff4c4c";
-    } else {
-      trendColor = kpiItem.color || "#8fa0b5";
-    }
+    // The same green / amber / red band every other tile is scored on, via the
+    // same helper the medium KPI cards and the heat map use: target met is green,
+    // missed but within 5 points is amber, missed by more is red.
+    //
+    // This card was the last one still on a bare pass-fail, which is why HFTPY at
+    // 66.7 against a target of 71 painted the same red as a card at 40 would —
+    // a 4.3-point near miss reading as an outright failure. Routed through
+    // kpiCardGrade rather than banded here so UNIT-HFTPY cannot end up a
+    // different colour from the identical figure shown elsewhere.
+    const kpiGrade = kpiCardGrade(kpiItem);
+    const trendColor =
+      kpiGrade === "unknown" ? kpiItem.color || "#8fa0b5" : GRADE_CSS[kpiGrade];
 
     const deltaColor = "#8fa0b5";
 
@@ -3488,9 +3485,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               >
                 <StageGroupBar span={4} label="SMT" />
                 <StageGroupBar span={2} label="MFT" />
-                {/* RFM opens here (THERMAL GEL AVI, SCREW DEFECT) and is named on
-                    the band below, so this end stays open. */}
-                <StageGroupBar span={2} endCap={false} />
+                {/* RFM opens here, above THERMAL GEL AVI and SCREW DEFECT, and
+                    carries on into the band below — so this end stays open.
+                    Labelled as well as the band, because a bare line sitting
+                    beside a labelled MFT reads as an unnamed group rather than as
+                    the start of the one named further down. */}
+                <StageGroupBar span={2} label="RFM" endCap={false} />
               </div>
 
               <div
@@ -3721,9 +3721,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
                     FPY %
                   </th>
+                  {/* SPY % — hidden on request. Uncomment together with the
+                      matching cell below (row.spy) and put the empty-state
+                      colSpan back to 9. row.spy is still populated, so nothing
+                      needs refetching to bring it back. */}
+                  {/*
                   <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
                     SPY %
                   </th>
+                  */}
                   <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
                     TARGET YIELD %
                   </th>
@@ -3733,16 +3739,18 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   {/* Header stays plain. The period this column judges against
                       is carried by the cells themselves, which name it in the
                       empty state and in the tooltip. */}
-                  <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
-                    AI RECOMMENDATION
-                  </th>
+                  {activeYieldTab === "UNITS" && (
+                    <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                      AI RECOMMENDATION HFTPY
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1c3149]/45 font-mono text-[11px]">
                 {paginatedYieldData.length === 0 && (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={activeYieldTab === "UNITS" ? 8 : 7}
                       className="py-10 text-center font-sans text-[12px] font-bold tracking-wide"
                     >
                       {yieldFetchState === "loading" ? (
@@ -3816,9 +3824,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         </svg>
                       </span>
                     </td>
+                    {/* SPY % — hidden, pairs with the commented header above. */}
+                    {/*
                     <td className="py-[2.5px] text-center text-white font-bold">
                       {isNum(row.spy) ? `${row.spy.toFixed(1)}%` : "—"}
                     </td>
+                    */}
                     <td className="py-[2.5px] text-center text-white">
                       {isNum(row.target) ? `${row.target}%` : "—"}
                     </td>
@@ -3835,6 +3846,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         {row.status}
                       </span>
                     </td>
+                    {/* AI RECOMMENDATION HFTPY — UNITS tab only.
+                        The recommendation is built from the HFTPY plan, which is
+                        unit-level: TRX and PA take their target from Target
+                        sheet.xlsx and have no planned quantity, so the column has
+                        nothing to say about them. Hidden rather than deleted, and
+                        the 262 lines below are untouched — flip the condition to
+                        `true` to show it on every tab again. */}
+                    {activeYieldTab === "UNITS" && (
                     <td className="py-[2.5px] text-center text-[#c8d6e4] font-sans text-[10px] leading-tight">
                       {(() => {
                         // Raw analysis JSON while the Azure OpenAI layer is
@@ -4097,6 +4116,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         );
                       })()}
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

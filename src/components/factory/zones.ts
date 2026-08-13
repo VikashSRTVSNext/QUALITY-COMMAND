@@ -152,70 +152,79 @@ export interface ZoneOverlay {
 // top-right, adjust the handles, and click "Copy Config" to get the updated JSON.
 // ---------------------------------------------------------------------------
 export const ZONE_OVERLAYS: Record<string, ZoneOverlay> = {
-  // SMT runs along the north-west wall and MFT along the north-east one; they
-  // meet at a single shared vertex, (783, 276), so the two outlines tile rather
-  // than cross. The diamond left bare between them and the north corner is the
-  // entrance lobby, not a production zone.
+  // Calibrated in the browser with the "Edit Overlay" tool and pasted back here
+  // on 2026-08-12, replacing the hand-estimated outlines. This is now the
+  // DEFAULT every browser and every machine starts from.
+  //
+  // Note for future edits: FactoryLayoutOverlay reads
+  // localStorage["custom_zone_overlays"] over this object, so on a machine that
+  // has been used for calibration the saved copy still wins. "Reset" in the
+  // editor clears that key and falls back here.
+  //
+  // The outlines now overlap by design rather than tiling at a shared vertex —
+  // thermalgel runs beneath SMT and RFM wraps around testing, which is what the
+  // floor actually looks like. rfm is a 6-point outline for that reason.
   smt: {
     poly: [
-      [160, 392],
-      [596, 182],
-      [783, 276],
-      [347, 486],
+      [50, 364],
+      [758, 43],
+      [924, 126],
+      [220, 502],
     ],
     anchor: [400, 277],
-    label: [0.08, 0.18],
+    label: [0.087, 0.088],
   },
   mft: {
     poly: [
-      [963, 189],
-      [1272, 345],
-      [1092, 432],
-      [783, 276],
+      [951, 136],
+      [1324, 315],
+      [1126, 456],
+      [761, 255],
     ],
     anchor: [1118, 267],
     label: [0.95, 0.14],
   },
   thermalgel: {
     poly: [
-      [335, 527],
-      [742, 330],
-      [992, 455],
-      [585, 652],
+      [672, 292],
+      [737, 260],
+      [1103, 472],
+      [1050, 525],
     ],
-    anchor: [335, 527],
-    label: [0.05, 0.47],
+    anchor: [854, 361],
+    label: [0, 0.546],
   },
   rfm: {
     poly: [
-      [1060, 500],
-      [1240, 412],
-      [1395, 489],
-      [1215, 577],
+      [267, 562],
+      [674, 331],
+      [1287, 681],
+      [1103, 840],
+      [702, 566],
+      [421, 700],
     ],
-    anchor: [1240, 412],
-    // Pinned to the far right, above the north-east wall: the only clear margin
-    // on this side, and it keeps the box clear of the MFT outline.
-    label: [0.98, 0.34],
+    anchor: [1023, 629],
+    label: [0.961, 0.54],
   },
   testing: {
     poly: [
-      [380, 745],
-      [730, 575],
-      [940, 680],
-      [590, 850],
+      [339, 816],
+      [679, 592],
+      [872, 717],
+      [505, 972],
     ],
-    anchor: [380, 745],
+    anchor: [465, 845],
     label: [0.08, 0.71],
   },
   packaging: {
     poly: [
-      [860, 700],
-      [1100, 580],
-      [1280, 670],
-      [1040, 790],
+      [790, 781],
+      [883, 719],
+      [1122, 868],
+      [1010, 966],
+      [900, 874],
     ],
-    anchor: [1280, 670],
+    anchor: [1028, 863],
     label: [0.96, 0.77],
   },
 };
