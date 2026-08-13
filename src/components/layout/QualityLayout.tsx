@@ -38,6 +38,9 @@ import {
   STATUS_LABEL,
 } from "../factory/zones";
 import FactoryLayoutOverlay from "../factory/FactoryLayoutOverlay";
+import ProcessProductsModal, {
+  DRILLDOWN_STEPS,
+} from "../quality/ProcessProductsModal";
 
 interface QualityLayoutProps {
   header?: React.ReactNode;
@@ -1350,6 +1353,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [liveStatus, setLiveStatus] = useState("OFFLINE");
   const [isTwinModalOpen, setIsTwinModalOpen] = useState(false);
   const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
+  // The Process Performance tile whose per-product breakdown is open, or null.
+  // Holds the mart step (what the endpoint's path takes) alongside the tile label
+  // (what the header shows), because the two differ for several cards — see
+  // API_KEY_BY_TILE.
+  const [drilldownCard, setDrilldownCard] = useState<{
+    step: string;
+    title: string;
+  } | null>(null);
   const [kpiCards, setKpiCards] = useState(
     qualityData.kpiCards.map((card) => {
       const isPercent = [1, 2, 3, 4, 5, 7, 9].includes(card.id);
@@ -2940,11 +2951,49 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       const hasNoProduction =
         procItem.status === "Not Run" || procItem.status === "N/A";
 
+      // Mart step for this tile, resolved through the SAME map the payload lookup
+      // uses. Deriving it from the label instead would send "SMT_DEFECTS_@_MFT"
+      // and "BURN-IN" to the endpoint — the exact mistake API_KEY_BY_TILE exists
+      // to prevent, and here it would 404 rather than render "..." forever.
+      const drillStep =
+        API_KEY_BY_TILE[procItem.name] ??
+        procItem.name.replace(/\s+/g, "_");
+      // A step with no per-product breakdown, or one that produced nothing, is
+      // left inert: opening a modal onto "No production" is a dead end, and a
+      // pointer cursor on a tile that does nothing is worse than no affordance.
+      const canDrill =
+        Boolean(DRILLDOWN_STEPS[drillStep]) && !hasNoProduction;
+      const openDrilldown = () =>
+        setDrilldownCard({ step: drillStep, title: displayTitle });
+
       return (
         <div
           className={`relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[112px] 2xl:h-[131px] transition-all duration-300 flex-1 min-w-0 ${
             cardIsRed ? "animate-border-pulse-critical" : ""
+          } ${
+            canDrill
+              ? "cursor-pointer hover:brightness-125 focus-visible:outline-2 focus-visible:outline-[#3b82f6]"
+              : ""
           }`}
+          onClick={canDrill ? openDrilldown : undefined}
+          // Keyboard parity with the mouse: the strip is on a wall display driven
+          // by a keyboard as often as a mouse, and a div with onClick alone is
+          // unreachable without one.
+          role={canDrill ? "button" : undefined}
+          tabIndex={canDrill ? 0 : undefined}
+          aria-label={
+            canDrill ? `${displayTitle} — view yield by product` : undefined
+          }
+          onKeyDown={
+            canDrill
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openDrilldown();
+                  }
+                }
+              : undefined
+          }
           style={{
             background: `linear-gradient(180deg, ${cardColor}1f 0%, ${cardColor}0a 100%), #101c2b`,
             borderColor: cardIsRed ? undefined : `${cardColor}40`,
@@ -4670,6 +4719,19 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
       </section>
 
+      {/* Per-product breakdown for a clicked Process Performance tile.
+          Shift comes from the dashboard's own selector, so the modal opens on the
+          same window the tile is reporting — "Full Day" maps to no shift filter,
+          which is the whole production day. */}
+      {drilldownCard && (
+        <ProcessProductsModal
+          step={drilldownCard.step}
+          title={drilldownCard.title}
+          shift={activeShift.match(/Shift\s+([A-C])/i)?.[1].toUpperCase() ?? null}
+          onClose={() => setDrilldownCard(null)}
+        />
+      )}
+
       {/* 3D Digital Twin Fullscreen Modal */}
       {isTwinModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 lg:p-8 transition-all duration-300">
@@ -4716,12 +4778,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           the full set as a table, which scans far better at this row count and
           fits each alert on a single row. */}
       {isAlertsModalOpen && (
+        // Frosted glass, matching the Process Performance drill-down. The old
+        // bg-black/85 blacked the dashboard out and read as a dark slab; a light
+        // tint over a small blur keeps the strip visible behind as context. The
+        // panel below gains the brighter border and deeper shadow that the heavy
+        // dim used to provide.
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 lg:p-8"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#030810]/30 backdrop-blur-sm p-4 lg:p-8"
           onClick={() => setIsAlertsModalOpen(false)}
         >
           <div
-            className="relative w-full max-w-[1200px] max-h-[85vh] bg-[#101c2b] border border-[#1c3149] rounded-2xl overflow-hidden flex flex-col shadow-2xl"
+            className="relative w-full max-w-[1200px] max-h-[85vh] bg-[#101c2b]/95 border border-[#3a5a7d] rounded-2xl overflow-hidden flex flex-col shadow-[0_24px_70px_rgba(0,0,0,0.75)]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
