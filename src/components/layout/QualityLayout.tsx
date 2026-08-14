@@ -60,25 +60,9 @@ interface EriData {
   status: string;
 }
 
-// One CI gauge, fully described by the API. `max` is the arc's upper bound: the
-// site's best month over the trailing year, because no target is agreed for
-// either metric. `targetLabel` is empty until one is, and the card says so
-// rather than showing an invented figure.
-interface CiMetricView {
-  value: number;
-  max: number;
-  centerLabel: string;
-  achievedLabel: string;
-  targetLabel: string;
-}
-
-const EMPTY_CI_METRIC: CiMetricView = {
-  value: 0,
-  max: 0,
-  centerLabel: "...",
-  achievedLabel: "...",
-  targetLabel: "",
-};
+// CiMetricView / EMPTY_CI_METRIC removed with the semi-circle gauges they
+// described. The CI card is two month-wise lines with year-to-date headlines now:
+// it needs no arc maximum, and no view model beyond the `months` series itself.
 
 const ScrewIcon = ({
   size = 24,
@@ -657,22 +641,27 @@ const SafetyChart = ({
         {hoveredIdx !== null && hasPoints && (
           <g>
             {(() => {
+              // Only x is needed: the tooltip is pinned to the top of the plot,
+              // so the point's y no longer positions anything.
               const x =
                 paddingLeft + (hoveredIdx / (points.length - 1)) * chartWidth;
-              const y =
-                paddingTop +
-                chartHeight -
-                ((points[hoveredIdx] - minVal) / range) * chartHeight;
 
               const tooltipWidth = 36;
               const tooltipHeight = 18;
               let tx = x - tooltipWidth / 2;
-              let ty = y - tooltipHeight - 4;
 
-              // Bound adjustments
               if (tx < 2) tx = 2;
               if (tx + tooltipWidth > width - 2) tx = width - tooltipWidth - 2;
-              if (ty < 2) ty = y + 4; // Display below if too high
+
+              // Pinned to the TOP of the plot, not floated above the hovered
+              // point. It used to track the point's y and flip BELOW it when
+              // there was no room above — and below the point is under the
+              // cursor, so the mouse covered the reading for the highest value
+              // on the chart, which is usually the one being inspected.
+              //
+              // x still tracks the point, and the vertical guide line already
+              // says which one is selected, so a fixed y loses nothing.
+              const ty = 2;
 
               return (
                 <g style={{ pointerEvents: "none" }}>
@@ -1021,32 +1010,20 @@ const monthPeriodLabel = (m: any): string => {
     : (m?.label ?? "");
 };
 
-// Compact money/count for the CI gauges: 653520 -> "654K", 2360000 -> "2.4M".
+// Compact money for the CI headline: 653520 -> "654K", 3047220 -> "3.047M".
+//
+// Three decimals at the million mark, not one. The figure is a year-to-date sum
+// of the month values the chart plots beside it, so it has to be precise enough
+// to reconcile against them: at one decimal 33.7 + 653.52 + 2360 K€ reads "3.0M",
+// which cannot be checked against any of its parts.
 // The API sends savings in euros (the sheet holds thousands and the backend
 // scales them), so this is the only place the magnitude is shortened.
 const fmtCompact = (v: any, fallback = "...") => {
   if (!isNum(v)) return fallback;
   const abs = Math.abs(v);
-  if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(3)}M`;
   if (abs >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
   return `${Math.round(v * 100) / 100}`;
-};
-
-// Build a CI gauge's view model from one metrics entry of the `ci` payload.
-const toCiMetric = (m: any, unit: string): CiMetricView => {
-  const value = isNum(m?.achieved) ? m.achieved : 0;
-  const suffix = unit ? ` ${unit}` : "";
-  return {
-    value,
-    // Fall back to the value itself so a lone data point still fills the arc
-    // instead of dividing by a zero range.
-    max: isNum(m?.scale_max) && m.scale_max > 0 ? m.scale_max : value,
-    centerLabel: `${fmtCompact(value)}${suffix}`,
-    achievedLabel: isNum(m?.achieved) ? `${fmtCompact(value)}${suffix}` : "—",
-    targetLabel: isNum(m?.target)
-      ? `Target ${fmtCompact(m.target)}${suffix}`
-      : "",
-  };
 };
 
 const fmtCount = (v: any, fallback = "...") =>
@@ -1482,9 +1459,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   // nothing about this card is a literal in the markup, including the targets and
   // the gauge range, which is why they are state and not JSX text.
   const [ciMonthLabel] = useState("");
-  const [ciLeanSavings, setCiLeanSavings] =
-    useState<CiMetricView>(EMPTY_CI_METRIC);
-  const [ciKaizen, setCiKaizen] = useState<CiMetricView>(EMPTY_CI_METRIC);
+  // No state for the payload's single-month `metrics` block: both headlines are
+  // now year-to-date totals summed from `months` (see ciTotals), so the newest
+  // completed month on its own is no longer displayed anywhere on this card.
   // Month-by-month CI figures, January to the newest completed month. Drives the
   // savings line chart that replaced the two semi-circle gauges.
   const [ciMonths, setCiMonths] = useState<
@@ -2031,30 +2008,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         }
       }
 
-      // 10. CI — Lean Savings + No. of Kaizen for the last completed month.
-      // Both gauges plot the absolute figure on a 0..best-month arc rather than a
-      // percentage: no target for either metric exists in any Nokia workbook, so
-      // there is nothing to take a percentage of. The moment targets are agreed
-      // and set in the backend env, `target` arrives non-null and targetLabel
-      // starts rendering — no change needed here.
-      if (data.ci) {
-        const metrics = data.ci.metrics || data.ci;
-        // if (data.ci.month_label) setCiMonthLabel(data.ci.month_label);
-        if (metrics.lean_savings) {
-          setCiLeanSavings(
-            toCiMetric(
-              metrics.lean_savings,
-              metrics.lean_savings.currency === "EUR" ? "€" : "",
-            ),
-          );
-        }
-        if (metrics.kaizen) {
-          setCiKaizen(toCiMetric(metrics.kaizen, ""));
-        }
-        // Month-by-month series for the savings line chart.
-        if (Array.isArray(data.ci.months)) {
-          setCiMonths(data.ci.months);
-        }
+      // 10. CI — Lean Savings + No. of Kaizen, month by month.
+      //
+      // Only `months` is read. The payload's `metrics` block describes the single
+      // newest completed month and is what the card used to headline; both figures
+      // are now year-to-date totals summed from this series instead, so the block
+      // (and its target/scale_max fields, which no workbook fills anyway) has no
+      // consumer left. It is still published — nothing here needs to change if a
+      // future card wants the single-month view back.
+      if (data.ci && Array.isArray(data.ci.months)) {
+        setCiMonths(data.ci.months);
       }
     };
 
@@ -3253,6 +3216,25 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     const step = Math.max(50, Math.ceil(max / 3 / 50) * 50);
     return [3, 2, 1, 0].map((i) => i * step);
   }, [ciKaizenPoints]);
+
+  // Year-to-date totals — P01 to the newest reported period, summed off the same
+  // series the two charts plot, so the headline is the total of the line beside it.
+  //
+  // The headlines used to be the newest COMPLETED month alone (the payload's
+  // `metrics.*.achieved`). CI is a cumulative achievement: a month's savings do
+  // not stop counting when the month ends, so one month understated the year.
+  //
+  // null, not 0, when nothing is reported. A zero here would claim the factory
+  // implemented nothing all year when the truth is that no month has loaded.
+  const ciTotals = React.useMemo(() => {
+    const total = (key: "lean_savings" | "kaizen") => {
+      const vals = ciMonths
+        .map((m) => m[key])
+        .filter((v): v is number => isNum(v));
+      return vals.length ? vals.reduce((t, v) => t + v, 0) : null;
+    };
+    return { leanSavings: total("lean_savings"), kaizen: total("kaizen") };
+  }, [ciMonths]);
   // Green when at or under target, red when over. Safety was hardcoded red, so a
   // clean period rendered a red "0" and a red trend line — the card looked like
   // an alarm for the best possible result. The headline and its chart take the
@@ -4582,11 +4564,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               asked. The lines show the same figures without inventing a reference
               point, which is also why neither carries a target line.
 
-              Value-over-caption layout matches the Safety card, so the two read
-              the same way. "Last Month" rather than Safety's "This Month" because
-              CI genuinely reports the last COMPLETED month: ideas are marked
-              implemented throughout a month, so the running one would collapse to
-              near-zero every 1st. */}
+              Both headlines are YEAR-TO-DATE totals (see ciTotals) — the sum of
+              the line drawn beneath them, P01 to the newest reported period. They
+              were the last completed month alone, which understated the year: a
+              month's savings and Kaizens keep counting after the month closes.
+              The series itself still ends at the last COMPLETED month, because
+              ideas are marked implemented throughout a month and the running one
+              would collapse to near-zero every 1st. */}
           <div className="flex-1 grid grid-cols-2 gap-3 min-h-0 pt-2">
             <div className="flex flex-col h-full min-h-0">
               <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
@@ -4597,10 +4581,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               </span>
               <div className="flex items-baseline gap-1.5 mt-1 mb-3">
                 <span className="text-[#22c55e] text-[24px] font-black leading-none font-mono">
-                  {fmtCompact(ciLeanSavings.value, "—")}
-                </span>
-                <span className="text-[#63788f] text-[10px] font-bold">
-                  Last Month
+                  {fmtCompact(ciTotals.leanSavings, "—")}
                 </span>
               </div>
               <div className="flex-1 min-h-[44px] flex items-center justify-center mt-1">
@@ -4620,11 +4601,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 No. of Kaizen
               </span>
               <div className="flex items-baseline gap-1.5 mt-1 mb-3">
+                {/* Exact rather than compacted: a Kaizen count runs to a few
+                    hundred a year, where fmtCompact would round it to "1K". */}
                 <span className="text-[#22c55e] text-[24px] font-black leading-none font-mono">
-                  {ciKaizen.achievedLabel}
-                </span>
-                <span className="text-[#63788f] text-[10px] font-bold">
-                  Last Month
+                  {fmtCount(ciTotals.kaizen, "—")}
                 </span>
               </div>
               <div className="flex-1 min-h-[44px] flex items-center justify-center mt-1">
