@@ -6,6 +6,7 @@ import {
   STATUS_LABEL,
   ZONE_OVERLAYS,
   ZoneDef,
+  ZoneOverlay,
 } from "./zones";
 
 import qualityOgLayout from "../../assets/Quality-OG-Layout.png";
@@ -58,6 +59,37 @@ const centroid = (pts: [number, number][]): [number, number] => [
   pts.reduce((s, p) => s + p[0], 0) / pts.length,
   pts.reduce((s, p) => s + p[1], 0) / pts.length,
 ];
+
+// Ray casting. Needed because `centroid` averages the VERTICES, which only lands
+// inside the shape while the shape is convex — and rfm is not: it is a 6-point
+// band that wraps around testing, so its vertex average falls in the notch, well
+// outside the room it is meant to label.
+const pointInPoly = (
+  [x, y]: [number, number],
+  poly: [number, number][],
+): boolean => {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (
+      yi > y !== yj > y &&
+      x < ((xj - xi) * (y - yi)) / (yj - yi) + xi
+    ) {
+      hit = !hit;
+    }
+  }
+  return hit;
+};
+
+// Where a compact-mode label sits. The centroid is right for the five convex
+// rooms, so it stays the default and their labels do not move. When it falls
+// outside the outline (rfm) the anchor takes over: it is calibrated as the point
+// the callout's leader line meets the room, so it is inside by construction.
+const compactLabelPoint = (overlay: ZoneOverlay): [number, number] => {
+  const c = centroid(overlay.poly);
+  return pointInPoly(c, overlay.poly) ? c : overlay.anchor;
+};
 
 export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
   zones,
@@ -803,7 +835,7 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
 
         {drawn.map(({ zone, overlay }) => {
           const color = STATUS_CSS[zone.status];
-          const [cx, cy] = centroid(overlay.poly);
+          const [cx, cy] = compactLabelPoint(overlay);
           const [lx, ly] = isFull ? overlay.label : [cx / W, cy / H];
 
           // A callout's width is screen px while `label` is a fraction of the

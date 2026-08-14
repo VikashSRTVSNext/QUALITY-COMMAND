@@ -172,7 +172,6 @@ const Sparkline = ({
   color,
   target,
   targetDirection,
-  synthetic = false,
 }: {
   // Nulls are hours the line has no value for — an hour in which nothing ran, or
   // one the day has not reached yet. They keep their slot on the x-axis so the
@@ -185,9 +184,6 @@ const Sparkline = ({
   color: string;
   target?: number | null;
   targetDirection?: string | null;
-  // True when the series is an illustrative placeholder rather than measured
-  // data (SPI only). Draws dashed and relabels the hover readout.
-  synthetic?: boolean;
 }) => {
   const width = 100;
   const height = 24;
@@ -352,9 +348,9 @@ const Sparkline = ({
           />
         )}
 
-        {/* Main line. Dashed and dimmed when the series is illustrative, so it
-            is distinguishable at a glance from the measured lines on the same
-            strip without needing a legend. */}
+        {/* Main line. Always solid: every series on this strip is measured now
+            that SPI's synthesised placeholder is gone, so there is nothing left
+            for a dashed variant to distinguish. */}
         <path
           d={path}
           fill="none"
@@ -362,8 +358,6 @@ const Sparkline = ({
           strokeWidth="1.8"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeDasharray={synthetic ? "3 2.5" : undefined}
-          opacity={synthetic ? 0.7 : 1}
         />
 
         {/* Hovered point */}
@@ -397,7 +391,7 @@ const Sparkline = ({
           }}
         >
           <span className="text-[#8fa0b5] text-[8.5px] font-bold uppercase mr-1">
-            {synthetic ? "est" : "hr"}
+            hr
           </span>
           <span className="text-white text-[9.5px] font-mono font-bold">
             {hovered.toFixed(2)}
@@ -417,64 +411,6 @@ const Sparkline = ({
     </div>
   );
 };
-
-// ---------------------------------------------------------------------------
-// ILLUSTRATIVE SERIES — SPI ONLY.
-//
-// SPI has no hourly source. mart_process_interval carries a row per step per
-// hour for every other card on this strip, but the SPI figure arrives already
-// aggregated, so there is genuinely nothing to plot and the card rendered with
-// an empty slot where its neighbours have a line.
-//
-// This fills that slot with a line SHAPED around the real day figure the API
-// sent — the mean is the actual value, the wiggle is invented. It is a visual
-// placeholder, and the two properties below are what keep it from being taken
-// for a measurement:
-//
-//   1. It is drawn DASHED and at reduced opacity, and its hover readout says
-//      "est" where a real one says "hr". Every measured line on this strip is
-//      solid, so dashed reads as "not measured" without needing a legend.
-//   2. The seed is a CONSTANT, not the clock and not Math.random. The shape is
-//      therefore identical on every render, every reload and every screen — so
-//      it can never appear to move, and a moving line can never be mistaken for
-//      fresh data. It also means two people comparing screenshots see the same
-//      picture.
-//
-// Remove this whole block the moment SPI gains an hourly source; nothing else
-// depends on it.
-const SPI_SAMPLE_DEVIATION_PP = 0.6; // percentage points either side of actual
-const SPI_SAMPLE_SEED = 0x5b1f;
-
-/** Deterministic value in [0,1) from an integer seed (xorshift32). */
-const seededUnit = (seed: number): number => {
-  let x = (seed ^ 0x9e3779b9) >>> 0;
-  x = (x ^ (x << 13)) >>> 0;
-  x = x ^ (x >>> 17);
-  x = (x ^ (x << 5)) >>> 0;
-  return x / 0x100000000;
-};
-
-/** `count` points scattered around `value`, clamped to a legal yield.
- *
- *  Only the first `elapsed` are filled; the rest come back null. A placeholder
- *  that ran to the end of the axis claimed the day was over — the line reached
- *  midnight while shift A was still running, which is a worse lie than having no
- *  line at all. Nulls keep their slot so the axis stays a fixed 24 (or 8) wide.
- */
-const synthesiseSampleTrend = (
-  value: number,
-  count: number,
-  elapsed: number,
-): (number | null)[] =>
-  Array.from({ length: count }, (_, i) => {
-    if (i >= elapsed) return null;
-    // 977 is just an odd stride, so neighbouring buckets draw from distant
-    // points of the sequence rather than adjacent ones — otherwise the walk
-    // trends in one direction and looks like a real drift.
-    const dev =
-      (seededUnit(SPI_SAMPLE_SEED + i * 977) * 2 - 1) * SPI_SAMPLE_DEVIATION_PP;
-    return Math.min(100, Math.max(0, value + dev));
-  });
 
 // Hourly trend for one Process Performance card, straight from the API's
 // `trend.buckets` — 24 buckets of one hour, anchored to the 06:15 factory day.
@@ -1185,6 +1121,40 @@ const GRADE_CSS: Record<MetricGrade, string> = {
   unknown: "#0091ff",
 };
 
+// One tone per Product Yield row. The badge, the FPY figure and its glyph all
+// read from this, so they cannot disagree — they used to decide separately, the
+// badge from the mart's status string and the figure from its own `fpy >= target`
+// comparison, which only matched while both were binary.
+//
+// Keyed off the row's status because the mart has already made that comparison
+// against the target it filed; re-deriving it here would be a second opinion on
+// data this table does not own. Anything not listed is the breach case, red.
+const YIELD_STATUS_CSS: Record<string, string> = {
+  Healthy: GRADE_CSS.green,
+  Warning: GRADE_CSS.yellow,
+  "No Target": "#8fa0b5",
+};
+const yieldRowTone = (status: string) =>
+  YIELD_STATUS_CSS[status] ?? GRADE_CSS.red;
+
+// ERI arrives already graded — the backend scores it against the period target
+// and a hard 2.5% ceiling (publish_dashboard._status_eri) rather than the panel
+// re-deriving it, because the target is per-period workbook data the panel does
+// not otherwise hold.
+//
+// Reads its greens and ambers from GRADE_CSS so ERI cannot drift from the rest of
+// the dashboard. Anything unrecognised — including a period the workbook filed no
+// target for, which the backend reports as null — keeps the violet this card has
+// always used for "not graded", NOT a green it has not earned.
+const ERI_STATUS_CSS: Record<string, string> = {
+  healthy: GRADE_CSS.green,
+  at_risk: GRADE_CSS.yellow,
+  critical: GRADE_CSS.red,
+};
+const ERI_UNGRADED_CSS = "#a855f7";
+const eriStatusColor = (status?: string | null) =>
+  (status && ERI_STATUS_CSS[status]) || ERI_UNGRADED_CSS;
+
 // THE grade for one process card. Both the tile's own colour and its zone's
 // colour come from this, so a zone can never disagree with the cards inside it —
 // and a single-card zone (thermalgel) is exactly the colour of its one card.
@@ -1677,23 +1647,24 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             fpy: row.fpy,
             spy: row.spy,
             target: row.target_yield,
-            // The mart emits healthy | warning | critical | no_target, and the
-            // table shows only two verdicts: on target or not.
+            // The mart emits healthy | warning | critical | no_target and the
+            // table now carries all four, so a product half a point under target
+            // no longer reads the same as one five points under. 'warning' is the
+            // mart's "within 5 points below target" — the same band the process
+            // cards and heat-map zones grade on, so one shortfall reports the same
+            // way everywhere on the dashboard.
             //
-            // 'warning' (the mart's "within 5 points below target") is folded into
-            // Critical — being under the agreed yield is a miss whether it is by
-            // half a point or five, and the amber middle state made a genuine
-            // shortfall read as acceptable.
-            //
-            // 'no_target' stays its own neutral state. It is not a breach: no
-            // target has been filed for that product, which is a data gap to fix
-            // in the target sheet rather than a yield problem on the line.
+            // 'no_target' is its own neutral state. It is not a breach: no target
+            // has been filed for that product, which is a data gap to fix in the
+            // target sheet rather than a yield problem on the line.
             status:
               row.status === "healthy"
                 ? "Healthy"
-                : row.status === "no_target"
-                  ? "No Target"
-                  : "Critical",
+                : row.status === "warning"
+                  ? "Warning"
+                  : row.status === "no_target"
+                    ? "No Target"
+                    : "Critical",
             rec: row.ai_recommendation,
             shift: row.shift,
             sub_module: row.sub_module,
@@ -2875,29 +2846,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     }
   };
 
-  // How far into the selected window production has actually reached, measured
-  // from the DATA rather than the clock: the highest bucket any real card has a
-  // value for, plus one.
-  //
-  // Deliberately not `new Date()`. That would need the 06:15 IST day anchor
-  // replicated in the browser's timezone, and it would keep drawing through an
-  // hour in which the plant produced nothing. Reading it off the cards that do
-  // have a source means the placeholder stops exactly where the measured lines
-  // stop, which is the only way the two can look consistent side by side.
-  const elapsedBucketCount = React.useMemo(() => {
-    let last = -1;
-    for (const card of processPerformance) {
-      const { points } = getProcessTrendData((card as any).trend, activeShift);
-      for (let i = points.length - 1; i >= 0; i--) {
-        if (isNum(points[i])) {
-          if (i > last) last = i;
-          break;
-        }
-      }
-    }
-    return last + 1;
-  }, [processPerformance, activeShift]);
-
   const renderRedesignedCard = (metricName: string, customTitle?: string) => {
     const procItem = processPerformance.find(
       (p) =>
@@ -2917,25 +2865,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       const { color: cardColor, red: cardIsRed } = cardVerdict(procItem);
       const { points } = getProcessTrendData(procItem.trend, activeShift);
 
-      // SPI ONLY. Its payload carries the 24-bucket scaffold but no values,
-      // because there is no hourly source behind it — so this is the one card on
-      // the strip with an empty plot area. Fill it with an illustrative line
-      // centred on the real day figure the API sent.
-      //
-      // Gated on there being fewer than two real points, so the moment a genuine
-      // hourly series appears for SPI the measured line wins automatically and
-      // this stops running without anyone having to remember to remove it.
-      const useSample =
-        procItem.name === "SPI" &&
-        points.filter((v) => isNum(v)).length < 2 &&
-        isNum((procItem as any).actual);
-      const plotPoints = useSample
-        ? synthesiseSampleTrend(
-            (procItem as any).actual as number,
-            points.length || 24,
-            elapsedBucketCount,
-          )
-        : points;
+      // Every card plots the series the API sent, SPI included. SPI used to be
+      // special-cased here: its payload carries the 24-bucket scaffold with no
+      // values, and the card drew an illustrative line synthesised from the day
+      // figure instead. That is gone — the backend deliberately publishes SPI's
+      // trend empty ("Empty rather than invented", publish_dashboard.py), so the
+      // card now shows an empty plot area until a real hourly source exists.
+      const plotPoints = points;
 
       // The step produced nothing in the selected window. Two ways that happens,
       // and both are normal rather than a fault:
@@ -3051,7 +2987,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               color={cardColor}
               target={procItem.target}
               targetDirection={procItem.targetDirection}
-              synthetic={useSample}
             />
           </div>
 
@@ -3550,7 +3485,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               >
                 {renderRedesignedCard("SPI")}
                 {renderRedesignedCard("DPMOI")}
-                {renderRedesignedCard("AXI", "AXI")}
+                {renderRedesignedCard("AXI", "AXI-S")}
                 {renderRedesignedCard("SMT DEFECTS @ MFT")}
                 {renderRedesignedCard("FPY MODULE", "FPY MODULE")}
                 {renderRedesignedCard("SPY MODULE", "SPY MODULE")}
@@ -3579,8 +3514,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               {renderRedesignedCard("SPY UNIT", "SPY UNIT")}
               {renderRedesignedCard("OTA")}
               {renderRedesignedCard("RTWP")}
-              {renderRedesignedCard("BURN-IN", "BURN-IN")}
-              {renderRedesignedCard("LBTS", "LBTS")}
+              {renderRedesignedCard("BURN-IN", "BURN-IN-S")}
+              {renderRedesignedCard("LBTS", "LBTS-S")}
               {renderRedesignedCard("IP")}
               {renderRedesignedCard("AUTO OGI")}
             </div>
@@ -3599,8 +3534,18 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
       </section>
 
-      {/* Row 3: Middle Analysis Hub */}
-      <main className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.8fr)_minmax(0,5fr)_minmax(0,2.5fr)] gap-4">
+      {/* Row 3: Middle Analysis Hub
+          The outer two columns are pinned to calc(25% - 12px) rather than left as
+          fr shares, so their edges land exactly on the 4-column grid the rows
+          above and below use: the heat map ends where SAFETY ends, and the
+          Attention Center starts where the KPI panel starts. The old 2.8/5/2.5 fr
+          split drifted, and by a margin that grew with the viewport — the heat map
+          ran 32px past SAFETY at 1440 and 54px past it at 2560.
+          25% minus 12px because this row's two 16px gaps take 32px off the
+          columns' share, while a 4-column row's three gaps take 48px; that makes
+          a quarter column 25% - 12px in both. Product Yield takes what is left,
+          which is exactly the two middle cards plus the gap between them. */}
+      <main className="grid grid-cols-1 lg:grid-cols-[calc(25%_-_12px)_minmax(0,1fr)_calc(25%_-_12px)] gap-4">
         {/* Section 1: Factory Quality Twin */}
         <section className="bg-[#101c2b] border border-white/20 rounded-xl p-4 flex flex-col h-[380px]">
           <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-3 flex-shrink-0">
@@ -3831,21 +3776,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       {row.failed}
                     </td>
                     <td className="py-[2.5px] text-center font-bold">
-                      <span
-                        className={
-                          // No target filed: neutral. Colouring it against a
-                          // null target read as "below target" for every product
-                          // whose target had not loaded.
-                          // Green or red only — below target is a miss, not a
-                          // warning. Amber made a product sitting under its agreed
-                          // yield look tolerable.
-                          !isNum(row.target)
-                            ? "text-[#8fa0b5]"
-                            : row.fpy >= row.target
-                              ? "text-[#22c55e]"
-                              : "text-[#ff4c4c]"
-                        }
-                      >
+                      {/* Tone comes from the row's status (see yieldRowTone), so
+                          the figure, the glyph and the badge in the next cell all
+                          say the same thing — including the new amber band. */}
+                      <span style={{ color: yieldRowTone(row.status) }}>
                         {row.fpy}%
                       </span>
                       {/* Sparkline icon next to it */}
@@ -3853,21 +3787,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         <svg viewBox="0 0 20 10" className="w-full h-full">
                           <polyline
                             fill="none"
-                            stroke={
-                              !isNum(row.target)
-                                ? "#8fa0b5"
-                                : row.fpy >= row.target
-                                  ? "#22c55e"
-                                  : "#ff4c4c"
-                            }
+                            stroke={yieldRowTone(row.status)}
                             strokeWidth="1.5"
                             points={
                               // Flat when there is no target to compare against,
                               // rather than the falling shape a null comparison
-                              // would otherwise select.
-                              !isNum(row.target)
+                              // would otherwise select. Warning falls with
+                              // Critical: both are under the agreed yield.
+                              row.status === "No Target"
                                 ? "0,6 5,6 10,6 15,6 20,6"
-                                : row.fpy >= row.target
+                                : row.status === "Healthy"
                                   ? "0,10 5,5 10,8 15,2 20,4"
                                   : "0,2 5,8 10,4 15,10 20,6"
                             }
@@ -3885,14 +3814,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       {isNum(row.target) ? `${row.target}%` : "—"}
                     </td>
                     <td className="py-[2.5px] text-center">
+                      {/* Inline rather than Tailwind tone classes: the four states
+                          share one tone lookup with the FPY figure, and the /10
+                          background is that same tone at 1a alpha. */}
                       <span
-                        className={`text-[9.5px] font-black px-1.5 py-0.5 rounded border border-[#1c3149]/50 ${
-                          row.status === "Healthy"
-                            ? "bg-[#22c55e]/10 text-[#22c55e]"
-                            : row.status === "No Target"
-                              ? "bg-[#8fa0b5]/10 text-[#8fa0b5]"
-                              : "bg-[#ff4c4c]/10 text-[#ff4c4c]"
-                        }`}
+                        className="text-[9.5px] font-black px-1.5 py-0.5 rounded border border-[#1c3149]/50"
+                        style={{
+                          color: yieldRowTone(row.status),
+                          backgroundColor: `${yieldRowTone(row.status)}1a`,
+                        }}
                       >
                         {row.status}
                       </span>
@@ -4419,9 +4349,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   >
                     {safetyAccident}
                   </span>
-                  <span className="text-[#63788f] text-[10px] font-bold">
+                  {/* <span className="text-[#63788f] text-[10px] font-bold">
                     This Month
-                  </span>
+                  </span> */}
                 </div>
               </div>
               <div className="flex-1 flex flex-col justify-end">
@@ -4446,9 +4376,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   >
                     {safetyNearMiss}
                   </span>
-                  <span className="text-[#63788f] text-[10px] font-bold">
+                  {/* <span className="text-[#63788f] text-[10px] font-bold">
                     This Month
-                  </span>
+                  </span> */}
                 </div>
               </div>
               <div className="flex-1 flex flex-col justify-end">
@@ -4553,13 +4483,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   <span className="text-[#22c55e] text-[24px] font-black leading-none font-mono">
                     {customerComplaintsCount}
                   </span>
-                  {/* "Overall", not "This Month". The figure is the payload's
-                      `total` — the year-to-date sum across every reported month
-                      (Jan-Aug = 12) — while this month is 1. The old label named
-                      a different window from the number beside it. */}
-                  <span className="text-[#63788f] text-[10px] font-bold font-sans">
+                  {/* Caption hidden. Note if it comes back it must say "Overall",
+                      not "This Month": the figure is the payload's `total` — the
+                      year-to-date sum across every reported month (Jan-Aug = 12) —
+                      while this month is 1. The old label named a different window
+                      from the number beside it. */}
+                  {/* <span className="text-[#63788f] text-[10px] font-bold font-sans">
                     Overall
-                  </span>
+                  </span> */}
                 </div>
               </div>
               <div className="flex-1 flex flex-col justify-end pb-1.5">
@@ -4591,14 +4522,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 <div className="flex items-baseline justify-between mt-1">
                   <span
                     className="text-[24px] font-black leading-none font-mono"
-                    style={{
-                      color:
-                        eriData?.status === "healthy"
-                          ? "#22c55e"
-                          : eriData?.status === "critical"
-                            ? "#ff4c4c"
-                            : "#a855f7",
-                    }}
+                    style={{ color: eriStatusColor(eriData?.status) }}
                   >
                     {customerEri}%
                   </span>
@@ -4619,13 +4543,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   max={Math.max(5, (eriData?.target_pct || 0) * 1.5)}
                   labelMin="0%"
                   labelMax={`${Math.max(5, (eriData?.target_pct || 0) * 1.5).toFixed(0)}%`}
-                  color={
-                    eriData?.status === "healthy"
-                      ? "#22c55e"
-                      : eriData?.status === "critical"
-                        ? "#ff4c4c"
-                        : "#a855f7"
-                  }
+                  color={eriStatusColor(eriData?.status)}
                   icon={CustomEriIcon}
                   showValueInCenter={false}
                 />
