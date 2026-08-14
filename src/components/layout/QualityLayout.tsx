@@ -641,27 +641,41 @@ const SafetyChart = ({
         {hoveredIdx !== null && hasPoints && (
           <g>
             {(() => {
-              // Only x is needed: the tooltip is pinned to the top of the plot,
-              // so the point's y no longer positions anything.
               const x =
                 paddingLeft + (hoveredIdx / (points.length - 1)) * chartWidth;
+              const y =
+                paddingTop +
+                chartHeight -
+                ((points[hoveredIdx] - minVal) / range) * chartHeight;
 
               const tooltipWidth = 36;
               const tooltipHeight = 18;
-              let tx = x - tooltipWidth / 2;
+
+              // Always at the top of the plot. Never moved to the bottom: that
+              // band holds the x-axis labels, so a tooltip there covers the very
+              // period name it is reporting.
+              const ty = 2;
+
+              // Hover is triggered by a circle centred on the point, so the cursor
+              // always sits AT the point — and for a point high enough to fall
+              // inside the tooltip's own band, that means the cursor lands on top
+              // of the box. Those step SIDEWAYS instead, keeping the tooltip at
+              // the top while clearing the pointer. Everything lower stays
+              // centred, since the cursor is already well below the box.
+              const clearsCursor = y > ty + tooltipHeight + 2;
+              let tx: number;
+              if (clearsCursor) {
+                tx = x - tooltipWidth / 2;
+              } else {
+                // Prefer the right of the point; fall back to its left when the
+                // point is too near the right edge to fit.
+                const gap = 5;
+                tx = x + gap;
+                if (tx + tooltipWidth > width - 2) tx = x - tooltipWidth - gap;
+              }
 
               if (tx < 2) tx = 2;
               if (tx + tooltipWidth > width - 2) tx = width - tooltipWidth - 2;
-
-              // Pinned to the TOP of the plot, not floated above the hovered
-              // point. It used to track the point's y and flip BELOW it when
-              // there was no room above — and below the point is under the
-              // cursor, so the mouse covered the reading for the highest value
-              // on the chart, which is usually the one being inspected.
-              //
-              // x still tracks the point, and the vertical guide line already
-              // says which one is selected, so a fixed y loses nothing.
-              const ty = 2;
 
               return (
                 <g style={{ pointerEvents: "none" }}>
