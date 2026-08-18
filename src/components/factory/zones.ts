@@ -1,6 +1,6 @@
-// Shared zone data model for the Factory Quality Twin.
-// Consumed by both the R3F scene (FactoryScene) and the HTML overlay
-// (labels / detail card) so there is a single source of truth.
+// Shared zone data model for the factory quality views.
+// Consumed by the 2D plant-layout overlay (FactoryLayoutOverlay) and the
+// quality dashboard so there is a single source of truth.
 
 export type ZoneStatus = "healthy" | "warning" | "critical" | "unknown";
 
@@ -10,23 +10,9 @@ export interface ZoneDef {
   status: ZoneStatus;
   score: number;
   detail: string;
-  /** Footprint on the platform (center x/z, size w/d) in world units. */
-  x: number;
-  z: number;
-  w: number;
-  d: number;
-  /** Which machine arrangement to render inside the cell. */
-  kind: "smt" | "mft" | "thermalgel" | "rfm" | "testing" | "packaging";
 }
 
-// Status → hex (numbers for three.js, strings for DOM). Green / red / grey only.
-export const STATUS_HEX: Record<ZoneStatus, number> = {
-  healthy:  0x2fe0a0,
-  warning:  0xf59e0b,
-  critical: 0xf24b5c,
-  unknown:  0x64748b,
-};
-
+// Status → CSS colour. Green / amber / red / grey only.
 export const STATUS_CSS: Record<ZoneStatus, string> = {
   healthy:  "#2fe0a0",
   warning:  "#f59e0b",
@@ -41,19 +27,13 @@ export const STATUS_LABEL: Record<ZoneStatus, string> = {
   unknown:  "Unknown",
 };
 
-// Compact 2-column × 3-row grid so the cells read as one cohesive plant floor.
-// (cell 14×11, ~1.5u aisles)
+// The six process areas of the plant, in flow order.
 export const ZONES: ZoneDef[] = [
   {
     id: "smt",
     name: "SMT",
     status: "healthy",
     score: 100,
-    kind: "smt",
-    x: -7.75,
-    z: -12.5,
-    w: 14,
-    d: 11,
     detail: "SMT placement lines 1–4 · Healthy",
   },
   {
@@ -61,11 +41,6 @@ export const ZONES: ZoneDef[] = [
     name: "MFT",
     status: "healthy",
     score: 100,
-    kind: "mft",
-    x: 7.75,
-    z: -12.5,
-    w: 14,
-    d: 11,
     detail: "Module function test · Healthy",
   },
   {
@@ -73,11 +48,6 @@ export const ZONES: ZoneDef[] = [
     name: "THERMAL GEL",
     status: "healthy",
     score: 100,
-    kind: "thermalgel",
-    x: -7.75,
-    z: 0,
-    w: 14,
-    d: 11,
     detail: "Thermal gel dispense · Healthy",
   },
   {
@@ -85,11 +55,6 @@ export const ZONES: ZoneDef[] = [
     name: "RFM",
     status: "healthy",
     score: 100,
-    kind: "rfm",
-    x: 7.75,
-    z: 0,
-    w: 14,
-    d: 11,
     detail: "RF module calibration · Healthy",
   },
   {
@@ -97,11 +62,6 @@ export const ZONES: ZoneDef[] = [
     name: "TESTING",
     status: "healthy",
     score: 100,
-    kind: "testing",
-    x: -7.75,
-    z: 12.5,
-    w: 14,
-    d: 11,
     detail: "Functional test · Healthy",
   },
   {
@@ -109,11 +69,6 @@ export const ZONES: ZoneDef[] = [
     name: "PACKAGING",
     status: "healthy",
     score: 100,
-    kind: "packaging",
-    x: 7.75,
-    z: 12.5,
-    w: 14,
-    d: 11,
     detail: "Final pack & label · Healthy",
   },
 ];
@@ -228,26 +183,3 @@ export const ZONE_OVERLAYS: Record<string, ZoneOverlay> = {
     label: [0.96, 0.77],
   },
 };
-
-// Platform bounds derived from the zones (+ margin) — used by FactoryPlatform.
-export const PLATFORM = (() => {
-  const b = {
-    minX: Infinity,
-    maxX: -Infinity,
-    minZ: Infinity,
-    maxZ: -Infinity,
-  };
-  for (const z of ZONES) {
-    b.minX = Math.min(b.minX, z.x - z.w / 2);
-    b.maxX = Math.max(b.maxX, z.x + z.w / 2);
-    b.minZ = Math.min(b.minZ, z.z - z.d / 2);
-    b.maxZ = Math.max(b.maxZ, z.z + z.d / 2);
-  }
-  const margin = 4;
-  return {
-    w: b.maxX - b.minX + margin * 2,
-    d: b.maxZ - b.minZ + margin * 2,
-    cx: (b.minX + b.maxX) / 2,
-    cz: (b.minZ + b.maxZ) / 2,
-  };
-})();

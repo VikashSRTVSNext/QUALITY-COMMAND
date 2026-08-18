@@ -566,11 +566,6 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
       status: "unknown",
       score: 0,
       detail: "Custom zone",
-      x: 0,
-      z: 0,
-      w: 10,
-      d: 10,
-      kind: "smt",
     };
     return { zone, overlay };
   });
