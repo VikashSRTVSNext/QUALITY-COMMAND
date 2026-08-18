@@ -60,10 +60,6 @@ interface EriData {
   status: string;
 }
 
-// CiMetricView / EMPTY_CI_METRIC removed with the semi-circle gauges they
-// described. The CI card is two month-wise lines with year-to-date headlines now:
-// it needs no arc maximum, and no view model beyond the `months` series itself.
-
 const ScrewIcon = ({
   size = 24,
   ...props
@@ -3261,19 +3257,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const customerComplaintsYTicks = getYTicks(customerComplaintsPoints, 4);
 
   return (
-    // gap-3 not gap-4, and a shorter pb, to free the ~20px the branding strip at
-    // the bottom needs. The strip is an in-flow child rather than position-fixed:
-    // the CI and Safety charts already sit flush against the viewport edge, so a
-    // fixed strip would float over their axis labels instead of making room.
     <div className="w-full min-h-screen bg-[#030810] text-[#f8fafc] flex flex-col px-4 pt-4 pb-2 box-border gap-3 font-sans select-none">
       {/* Top Branding & SubHeader Row */}
       <header className="flex flex-col lg:flex-row justify-between items-center bg-[#101c2b] border border-[#1c3149] rounded-xl px-3.5 py-1.5 gap-3">
-        {/* Left Side Branding.
-            shrink-0: this is a fixed-width identity block, and without it the
-            flex row squeezed it at laptop widths until the title wrapped. The
-            telemetry side already carries flex-wrap, so that is what gives way
-            when the header runs out of room — a widget dropping to a second line
-            is far less jarring than the site name splitting in two. */}
         <div className="flex items-center gap-3 shrink-0">
           {/* Nokia SVG Wordmark (White) */}
           <svg
@@ -3291,18 +3277,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
           {/* Vertical Separator Line */}
           <div className="h-8 w-[1px] bg-[#26405a] mx-1.5 self-center" />
-
-          {/* One line, two weights. 'CHENNAI FACTORY' keeps the cyan the second
-              line used to carry, so the site still reads as distinct from the
-              product name without costing a row of header height.
-
-              NO flex-wrap, and whitespace-nowrap on both: this is one title and
-              it must never break. It was wrapping on 1366px laptops, which put
-              'CHENNAI FACTORY' on its own line and reintroduced exactly the
-              two-row header the single line was meant to replace.
-
-              Sizes step down below xl so the whole thing fits a 1366px viewport
-              without relying on the wrap it no longer has. */}
           <div className="flex items-baseline gap-2">
             <span className="text-[15px] xl:text-[17px] font-black text-white leading-none tracking-wide whitespace-nowrap">
               QUALITY EXCELLENCE CENTER
@@ -3312,25 +3286,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </span>
           </div>
         </div>
-
-        {/* Right Side Widgets / Telemetry.
-            min-w-0 + justify-end: this is the side that absorbs a narrow header.
-            Without min-w-0 a flex child refuses to shrink below its content, so
-            the pressure went back onto the branding block and the title wrapped
-            anyway despite its shrink-0. */}
-        {/* flex-NOWRAP, not flex-wrap. Wrapping is what put the shift selector on
-            a second row: the header is one strip and it must stay one strip, so
-            width is reclaimed by hiding the least valuable items rather than by
-            spilling onto a new line.
-
-            What gets hidden, in order of what is least missed:
-              * temp and humidity below 2xl — they are DUPLICATES of the SHOP
-                FLOOR CONDITIONS card in the KPI row directly below, so nothing is
-                actually lost;
-              * the date below xl — the time stays, and nobody checks the year
-                mid-shift.
-            Each separator carries the same breakpoint as the item beside it, or
-            it would leave a stray divider behind. */}
         <div className="flex items-center justify-end gap-2 xl:gap-3.5 flex-nowrap min-w-0 text-[#8fa0b5] font-mono text-[13px] xl:text-[14px]">
           <span className="hidden xl:inline text-[#63788f] whitespace-nowrap">
             {dateStr}
