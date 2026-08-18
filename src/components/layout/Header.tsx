@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
 import { RefreshCw, Calendar, Clock, Menu, ChevronDown } from "lucide-react";
 
 interface HeaderProps {
@@ -9,15 +8,11 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
   const [time, setTime] = useState(new Date());
   const [currentShift, setCurrentShift] = useState<"A" | "B" | "C">("A");
-  const navigate = useNavigate();
-  const { pathname: currentPath } = useLocation();
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
-
-  const navigateTo = (path: string) => navigate(path);
 
   const shiftInfo = {
     A: { label: "SHIFT A", time: "6:15 AM – 14:15 PM" },
@@ -59,27 +54,9 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
             FACTORY COMMAND CENTER
           </span>
           <div className="flex items-center gap-1.5 ml-1">
-            <button
-              onClick={() => navigateTo("/production")}
-              className={`text-[13px] lg:text-[15px] 2xl:text-[17px] font-bold tracking-wider whitespace-nowrap cursor-pointer transition-all border-none bg-transparent outline-none ${
-                currentPath !== "/quality" 
-                  ? "text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]" 
-                  : "text-[#63788f] hover:text-[#8fa0b5]"
-              }`}
-            >
-              PLANT OVERVIEW
-            </button>
-            <span className="text-[#1c3149] text-[12px] font-bold">|</span>
-            <button
-              onClick={() => navigateTo("/quality")}
-              className={`text-[13px] lg:text-[15px] 2xl:text-[17px] font-bold tracking-wider whitespace-nowrap cursor-pointer transition-all border-none bg-transparent outline-none ${
-                currentPath === "/quality" 
-                  ? "text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]" 
-                  : "text-[#63788f] hover:text-[#8fa0b5]"
-              }`}
-            >
+            <span className="text-[13px] lg:text-[15px] 2xl:text-[17px] font-bold tracking-wider whitespace-nowrap text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">
               QUALITY CENTER
-            </button>
+            </span>
           </div>
           <span className="bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/25 text-[10px] lg:text-[12px] 2xl:text-[14px] font-black px-1.5 py-0.5 rounded flex items-center gap-1 ml-1 2xl:ml-2">
             <span className="w-1 lg:w-1.5 h-1 lg:h-1.5 rounded-full bg-[#22c55e] animate-soft-pulse" />

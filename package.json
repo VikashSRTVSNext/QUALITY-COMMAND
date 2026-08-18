@@ -12,13 +12,11 @@
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
     "axios": "^1.7.2",
-    "echarts": "^6.1.0",
     "framer-motion": "^11.3.8",
     "lucide-react": "^0.408.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^6.30.4",
-    "zustand": "^4.5.4"
+    "react-router-dom": "^6.30.4"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",

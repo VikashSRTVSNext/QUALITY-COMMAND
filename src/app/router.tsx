@@ -2,15 +2,12 @@ import React, { Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AppShell from './AppShell';
 import { dashboardRegistry } from '../core/registry/dashboards';
-import { productionDashboard } from '../dashboards/production/config';
 import { qualityDashboard } from '../dashboards/quality/config';
 
 // Drill-down pages are lazily loaded like the dashboards.
-const LineDetailPage = React.lazy(() => import('../dashboards/production/LineDetailPage'));
 const DefectDetailPage = React.lazy(() => import('../dashboards/quality/DefectDetailPage'));
 
 // Register dashboards once. New dashboards: add a config + register here.
-dashboardRegistry.register(productionDashboard);
 dashboardRegistry.register(qualityDashboard);
 
 const Loading = () => (
@@ -35,7 +32,6 @@ export const router = createBrowserRouter(
       children: [
         { path: '/', element: <Navigate to="/quality" replace /> },
         ...dashboardRoutes,
-        { path: '/production/line/:lineId', element: lazy(<LineDetailPage />) },
         { path: '/quality/defect/:defectCode', element: lazy(<DefectDetailPage />) },
         { path: '*', element: <Navigate to="/quality" replace /> },
       ],
