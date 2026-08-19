@@ -6,6 +6,7 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import { apiUrl } from "../../core/api/config";
+import { palette } from "../../theme/palette";
 
 // Per-product drill-down behind a Process Performance card.
 //
@@ -226,7 +227,7 @@ export const ProcessProductsModal: React.FC<Props> = ({
   // Opaque, because a sticky header has to OCCLUDE the rows scrolling under it —
   // a translucent one lets them ghost through as they pass.
   const th =
-    "pb-2 pt-1 font-black sticky top-0 bg-[#101c2b] border-b border-[#2b4463] z-10 select-none";
+    "pb-2 pt-1 font-black sticky top-0 bg-panel border-b border-line-modal z-10 select-none";
   const sortable = "cursor-pointer hover:text-white transition-colors";
   const caret = (key: string) => (activeSort === key ? " ▾" : "");
 
@@ -237,7 +238,7 @@ export const ProcessProductsModal: React.FC<Props> = ({
   // and the effect reads as a plain dim.
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-8 bg-[#030810]/30 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-8 bg-page/30 backdrop-blur-sm"
       onClick={onClose}
     >
       {/* The panel stays near-opaque on top of the frosted layer. Blurring it too
@@ -245,27 +246,27 @@ export const ProcessProductsModal: React.FC<Props> = ({
           table its legibility — the glass is the backdrop's job, and the panel's
           job is to be readable against it. */}
       <div
-        className="relative w-full max-w-[1100px] max-h-[85vh] bg-[#101c2b]/95 border border-[#3a5a7d] rounded-2xl overflow-hidden flex flex-col shadow-[0_24px_70px_rgba(0,0,0,0.75)]"
+        className="relative w-full max-w-[1100px] max-h-[85vh] bg-panel/95 border border-line-soft rounded-2xl overflow-hidden flex flex-col shadow-[0_24px_70px_rgba(0,0,0,0.75)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header — the card that was clicked, and its own figure */}
         {/* Bands use a white wash rather than a fill of the panel colour: an
             opaque #101c2b strip on a translucent panel reads as a separate solid
             card sitting on top of the glass. */}
-        <div className="flex justify-between items-center bg-white/[0.04] px-6 py-4 border-b border-[#2b4463] flex-shrink-0">
+        <div className="flex justify-between items-center bg-white/[0.04] px-6 py-4 border-b border-line-modal flex-shrink-0">
           <div className="flex items-center gap-3">
             <span className="text-[16px] font-black text-white uppercase tracking-wider">
               {title}
             </span>
-            <span className="text-[11px] font-bold text-[#63788f] uppercase tracking-wider">
+            <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider">
               By Product
             </span>
             {isNum(cardValue) && (
-              <span className="flex items-center gap-1.5 text-[11px] font-bold text-[#8fa0b5]">
-                <span className="w-1 h-1 rounded-full bg-[#63788f]" />
+              <span className="flex items-center gap-1.5 text-[11px] font-bold text-ink-muted">
+                <span className="w-1 h-1 rounded-full bg-ink-dim" />
                 Card {fmtPct(cardValue)}
                 {isNum(data?.target) && (
-                  <span className="text-[#63788f]">
+                  <span className="text-ink-dim">
                     {" "}
                     / Tgt {data!.target}
                     {data!.target_unit === "percent" ? "%" : ""}
@@ -275,13 +276,13 @@ export const ProcessProductsModal: React.FC<Props> = ({
             )}
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] font-bold text-[#63788f]">
+            <span className="text-[11px] font-bold text-ink-dim">
               {data?.business_date ?? ""}
               {shift ? ` · Shift ${shift}` : " · Full Day"}
             </span>
             <button
               onClick={onClose}
-              className="bg-[#16253a] hover:bg-[#ff4c4c] text-[#8fa0b5] hover:text-white border border-[#26405a] rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
+              className="bg-raised hover:bg-critical text-ink-muted hover:text-white border border-line-strong rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
             >
               ✕ Close
             </button>
@@ -290,14 +291,14 @@ export const ProcessProductsModal: React.FC<Props> = ({
 
         {/* Sub-header: what "this step" means, so it is visible that the
             breakdown covers the test operation and not its rework counterpart. */}
-        <div className="flex items-center justify-between px-6 py-2 border-b border-[#2b4463]/50 flex-shrink-0">
-          <span className="text-[10px] font-bold text-[#63788f] uppercase tracking-wider">
+        <div className="flex items-center justify-between px-6 py-2 border-b border-line-modal/50 flex-shrink-0">
+          <span className="text-[10px] font-bold text-ink-dim uppercase tracking-wider">
             {data?.operations?.like
               ? `Operations like ${data.operations.like}`
               : (data?.operations?.in ?? []).join(", ")}
             <span className="text-[#4a5c72]"> · first attempts only</span>
           </span>
-          <span className="text-[11px] font-bold text-[#63788f]">
+          <span className="text-[11px] font-bold text-ink-dim">
             {totalProducts} {totalProducts === 1 ? "product" : "products"}
           </span>
         </div>
@@ -305,20 +306,20 @@ export const ProcessProductsModal: React.FC<Props> = ({
         {/* Table */}
         <div className="flex-1 min-h-0 overflow-auto custom-scrollbar px-6 py-3">
           {state === "loading" && !data ? (
-            <div className="flex items-center justify-center py-16 text-[12px] font-bold text-[#63788f]">
+            <div className="flex items-center justify-center py-16 text-[12px] font-bold text-ink-dim">
               Loading…
             </div>
           ) : state === "error" ? (
-            <div className="flex items-center justify-center py-16 text-[12px] font-bold text-[#ff4c4c]">
+            <div className="flex items-center justify-center py-16 text-[12px] font-bold text-critical">
               Could not load the product breakdown
             </div>
           ) : (data?.rows ?? []).length === 0 ? (
-            <div className="flex items-center justify-center py-16 text-[12px] font-bold text-[#63788f]">
+            <div className="flex items-center justify-center py-16 text-[12px] font-bold text-ink-dim">
               No production for this step in the selected window
             </div>
           ) : (
             <table className="w-full text-left border-collapse">
-              <thead className="text-[10px] text-[#63788f] uppercase tracking-wider">
+              <thead className="text-[10px] text-ink-dim uppercase tracking-wider">
                 <tr>
                   <th
                     className={`${th} ${sortable}`}
@@ -363,10 +364,10 @@ export const ProcessProductsModal: React.FC<Props> = ({
                   // figure must not read as a breach.
                   const valueColor =
                     row.meets_target === null
-                      ? "#8fa0b5"
+                      ? palette.inkMuted
                       : row.meets_target
-                        ? "#22c55e"
-                        : "#ff4c4c";
+                        ? palette.healthy
+                        : palette.critical;
                   return (
                     <tr key={row.item} className="hover:bg-white/[0.05]">
                       {/* Product name leads, item code beneath it. The code is
@@ -381,7 +382,7 @@ export const ProcessProductsModal: React.FC<Props> = ({
                             <div className="text-[12px] font-bold text-white leading-tight">
                               {row.product_name}
                             </div>
-                            <div className="text-[10px] text-[#63788f] font-mono leading-tight">
+                            <div className="text-[10px] text-ink-dim font-mono leading-tight">
                               {row.item}
                             </div>
                           </>
@@ -392,14 +393,14 @@ export const ProcessProductsModal: React.FC<Props> = ({
                         )}
                       </td>
                       {/* Boards cell — hidden with its header above.
-                      <td className="py-2 text-[12px] text-right text-[#8fa0b5] font-mono">
+                      <td className="py-2 text-[12px] text-right text-ink-muted font-mono">
                         {fmtCount(row.boards)}
                       </td>
                       */}
-                      <td className="py-2 text-[12px] text-right text-[#8fa0b5] font-mono">
+                      <td className="py-2 text-[12px] text-right text-ink-muted font-mono">
                         {fmtCount(row.done)}
                       </td>
-                      <td className="py-2 text-[12px] text-right text-[#8fa0b5] font-mono">
+                      <td className="py-2 text-[12px] text-right text-ink-muted font-mono">
                         {fmtCount(row.ok)}
                       </td>
                       <td className="py-2 text-[12px] text-right font-mono font-bold text-[#e0e7ef]">
@@ -420,8 +421,8 @@ export const ProcessProductsModal: React.FC<Props> = ({
         </div>
 
         {/* Footer: totals over EVERY product (not this page), then pagination */}
-        <div className="flex justify-between items-center px-6 py-3 border-t border-[#2b4463] flex-shrink-0 gap-4">
-          <div className="flex items-center gap-4 text-[11px] font-bold text-[#8fa0b5] min-w-0">
+        <div className="flex justify-between items-center px-6 py-3 border-t border-line-modal flex-shrink-0 gap-4">
+          <div className="flex items-center gap-4 text-[11px] font-bold text-ink-muted min-w-0">
             <span>
               Total{" "}
               <span className="text-white font-mono">
@@ -445,7 +446,7 @@ export const ProcessProductsModal: React.FC<Props> = ({
                 would visibly fail to sum to the footer with no explanation. */}
             {data?.unattributed && (
               <span
-                className="text-[#63788f] truncate"
+                className="text-ink-dim truncate"
                 title="Production the source did not attribute to a product. Counted in the total and in the card, but it has no item code to list."
               >
                 + {fmtCount(data.unattributed.done)} unattributed
@@ -454,38 +455,38 @@ export const ProcessProductsModal: React.FC<Props> = ({
           </div>
 
           <div className="flex items-center gap-3 text-[11px] text-white flex-shrink-0">
-            <span className="text-[#8fa0b5] font-bold">
+            <span className="text-ink-muted font-bold">
               {first} - {last} of {totalProducts}
             </span>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setPage(1)}
                 disabled={page === 1}
-                className={`p-1 transition-colors ${page === 1 ? "text-[#63788f]/50 cursor-not-allowed" : "text-[#63788f] hover:text-white"}`}
+                className={`p-1 transition-colors ${page === 1 ? "text-ink-dim/50 cursor-not-allowed" : "text-ink-dim hover:text-white"}`}
               >
                 <ChevronsLeft size={13} />
               </button>
               <button
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
-                className={`p-1 transition-colors ${page === 1 ? "text-[#63788f]/50 cursor-not-allowed" : "text-[#63788f] hover:text-white"}`}
+                className={`p-1 transition-colors ${page === 1 ? "text-ink-dim/50 cursor-not-allowed" : "text-ink-dim hover:text-white"}`}
               >
                 <ChevronLeft size={13} />
               </button>
-              <button className="bg-[#1c3149] text-white font-bold w-4.5 h-4.5 rounded flex items-center justify-center text-[10px]">
+              <button className="bg-line text-white font-bold w-4.5 h-4.5 rounded flex items-center justify-center text-[10px]">
                 {page}
               </button>
               <button
                 onClick={() => setPage(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
-                className={`p-1 transition-colors ${page >= totalPages ? "text-[#63788f]/50 cursor-not-allowed" : "text-[#63788f] hover:text-white"}`}
+                className={`p-1 transition-colors ${page >= totalPages ? "text-ink-dim/50 cursor-not-allowed" : "text-ink-dim hover:text-white"}`}
               >
                 <ChevronRight size={13} />
               </button>
               <button
                 onClick={() => setPage(totalPages)}
                 disabled={page >= totalPages}
-                className={`p-1 transition-colors ${page >= totalPages ? "text-[#63788f]/50 cursor-not-allowed" : "text-[#63788f] hover:text-white"}`}
+                className={`p-1 transition-colors ${page >= totalPages ? "text-ink-dim/50 cursor-not-allowed" : "text-ink-dim hover:text-white"}`}
               >
                 <ChevronsRight size={13} />
               </button>

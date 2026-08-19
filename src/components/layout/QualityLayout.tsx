@@ -41,6 +41,7 @@ import FactoryLayoutOverlay from "../factory/FactoryLayoutOverlay";
 import ProcessProductsModal, {
   DRILLDOWN_STEPS,
 } from "../quality/ProcessProductsModal";
+import { palette, toolPalette } from "../../theme/palette";
 
 interface QualityLayoutProps {
   header?: React.ReactNode;
@@ -309,7 +310,7 @@ const Sparkline = ({
             y1={targetY}
             x2={width}
             y2={targetY}
-            stroke="#ffffff"
+            stroke={palette.white}
             strokeWidth="0.8"
             strokeDasharray="2 2"
             opacity="0.35"
@@ -321,7 +322,7 @@ const Sparkline = ({
             y1={paddingY}
             x2={width}
             y2={paddingY}
-            stroke="#ffffff"
+            stroke={palette.white}
             strokeWidth="0.8"
             strokeDasharray="2 2"
             opacity="0.2"
@@ -348,7 +349,7 @@ const Sparkline = ({
               y1={paddingY}
               x2={hoverX}
               y2={height - paddingY}
-              stroke="#ffffff"
+              stroke={palette.white}
               strokeWidth="0.5"
               opacity="0.35"
             />
@@ -364,13 +365,13 @@ const Sparkline = ({
           from summed counts rather than averaging the hourly percentages. */}
       {hovered !== null && (
         <div
-          className="absolute -top-7 z-20 px-1.5 py-0.5 rounded bg-[#101c2b] border border-[#1c3149] whitespace-nowrap pointer-events-none"
+          className="absolute -top-7 z-20 px-1.5 py-0.5 rounded bg-panel border border-line whitespace-nowrap pointer-events-none"
           style={{
             left: `${Math.min(Math.max(hoverX, 16), width - 16)}%`,
             transform: "translateX(-50%)",
           }}
         >
-          <span className="text-[#8fa0b5] text-[8.5px] font-bold uppercase mr-1">
+          <span className="text-ink-muted text-[8.5px] font-bold uppercase mr-1">
             hr
           </span>
           <span className="text-white text-[9.5px] font-mono font-bold">
@@ -380,7 +381,7 @@ const Sparkline = ({
           {deviation !== null && (
             <span
               className="text-[9.5px] font-mono font-bold ml-1"
-              style={{ color: deviation >= 0 ? "#22c55e" : "#ff4c4c" }}
+              style={{ color: deviation >= 0 ? palette.healthy : palette.critical }}
             >
               {deviation >= 0 ? "+" : ""}
               {deviation.toFixed(2)}
@@ -441,7 +442,7 @@ const SafetyChart = ({
   points,
   yTicks,
   xTicks,
-  color = "#ff4c4c",
+  color = palette.critical,
 }: {
   points: number[];
   yTicks: number[];
@@ -543,7 +544,7 @@ const SafetyChart = ({
               <text
                 x={paddingLeft - 4}
                 y={y + 2}
-                fill="#8fa0b5"
+                fill={palette.inkMuted}
                 fontSize="8"
                 fontWeight="bold"
                 textAnchor="end"
@@ -555,7 +556,7 @@ const SafetyChart = ({
                 y1={y}
                 x2={width - paddingRight}
                 y2={y}
-                stroke="#1c3149"
+                stroke={palette.line}
                 strokeWidth="0.5"
                 strokeDasharray="2,2"
               />
@@ -604,7 +605,7 @@ const SafetyChart = ({
                 cy={y}
                 r={isHovered ? "2.5" : "1.8"}
                 fill={color}
-                stroke={isHovered ? "#ffffff" : "#050b12"}
+                stroke={isHovered ? palette.white : "#050b12"}
                 strokeWidth="0.4"
                 style={{
                   transition: "all 0.1s ease-in-out",
@@ -690,7 +691,7 @@ const SafetyChart = ({
                   <text
                     x={tx + tooltipWidth / 2}
                     y={ty + 6.5}
-                    fill="#8fa0b5"
+                    fill={palette.inkMuted}
                     fontSize="5"
                     fontWeight="bold"
                     textAnchor="middle"
@@ -701,7 +702,7 @@ const SafetyChart = ({
                   <text
                     x={tx + tooltipWidth / 2}
                     y={ty + 14}
-                    fill="#ffffff"
+                    fill={palette.white}
                     fontSize="7"
                     fontWeight="black"
                     textAnchor="middle"
@@ -728,7 +729,7 @@ const SafetyChart = ({
               key={i}
               x={x}
               y={height - 2}
-              fill="#8fa0b5"
+              fill={palette.inkMuted}
               fontSize="7.5"
               fontWeight="bold"
               textAnchor={anchor}
@@ -749,7 +750,7 @@ const SemiCircleGauge = ({
   max = 100,
   labelMin,
   labelMax,
-  color = "#3b82f6",
+  color = palette.tabBorder,
   icon: Icon,
   showValueInCenter = false,
   // Absolute-value gauges (CI) pass a pre-formatted centre label such as
@@ -784,7 +785,7 @@ const SemiCircleGauge = ({
         <path
           d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
           fill="none"
-          stroke="#101c2b"
+          stroke={palette.panel}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
@@ -804,7 +805,7 @@ const SemiCircleGauge = ({
         <text
           x={cx - radius}
           y={cy + 12}
-          fill="#63788f"
+          fill={palette.inkDim}
           fontSize="9.5"
           fontWeight="bold"
           textAnchor="middle"
@@ -816,7 +817,7 @@ const SemiCircleGauge = ({
         <text
           x={cx + radius}
           y={cy + 12}
-          fill="#63788f"
+          fill={palette.inkDim}
           fontSize="9.5"
           fontWeight="bold"
           textAnchor="middle"
@@ -829,7 +830,7 @@ const SemiCircleGauge = ({
           <text
             x={cx}
             y={cy - 1}
-            fill="#ffffff"
+            fill={palette.white}
             fontSize="11"
             fontWeight="900"
             fontFamily="monospace"
@@ -843,7 +844,7 @@ const SemiCircleGauge = ({
         {!showValueInCenter && Icon && (
           <g
             transform={`translate(${cx - 10}, ${iconY - 10})`}
-            className="text-[#8fa0b5] opacity-90"
+            className="text-ink-muted opacity-90"
           >
             <Icon size={20} />
           </g>
@@ -878,7 +879,7 @@ const processPerformanceData = [
     type: "yield",
     data: { done: "12,450", ok: "12,221", yield: "98.16%" },
     status: "Healthy",
-    color: "#22c55e",
+    color: palette.healthy,
   },
   {
     name: "DPMOI",
@@ -887,7 +888,7 @@ const processPerformanceData = [
     type: "dpmo",
     data: { defects: "...", opportunities: "...", index: "..." },
     status: "...",
-    color: "#16253a",
+    color: palette.raised,
   },
   {
     name: "AXI - S",
@@ -896,7 +897,7 @@ const processPerformanceData = [
     type: "yield",
     data: { done: "11,180", ok: "11,001", yield: "98.40%" },
     status: "Healthy",
-    color: "#22c55e",
+    color: palette.healthy,
   },
   {
     name: "SMT DEFECTS @ MFT",
@@ -905,7 +906,7 @@ const processPerformanceData = [
     type: "failure",
     data: { failure: "..." },
     status: "Healthy",
-    color: "#22c55e",
+    color: palette.healthy,
   },
   {
     name: "THERMAL AVI",
@@ -914,7 +915,7 @@ const processPerformanceData = [
     type: "yield",
     data: { done: "980", ok: "955", yield: "97.45%" },
     status: "At Risk",
-    color: "#eab308",
+    color: palette.warning,
   },
   {
     name: "SCREW DEFECTS",
@@ -923,7 +924,7 @@ const processPerformanceData = [
     type: "failure",
     data: { failure: "1.6%" },
     status: "Critical",
-    color: "#ff4c4c",
+    color: palette.critical,
   },
   {
     name: "OTA",
@@ -932,7 +933,7 @@ const processPerformanceData = [
     type: "yield",
     data: { done: "540", ok: "531", yield: "98.33%" },
     status: "Healthy",
-    color: "#22c55e",
+    color: palette.healthy,
   },
   {
     name: "RTWP",
@@ -941,7 +942,7 @@ const processPerformanceData = [
     type: "yield",
     data: { done: "520", ok: "512", yield: "98.46%" },
     status: "Healthy",
-    color: "#22c55e",
+    color: palette.healthy,
   },
   {
     name: "BURN-IN - S",
@@ -950,7 +951,7 @@ const processPerformanceData = [
     type: "yield",
     data: { done: "6", ok: "6", yield: "100.00%" },
     status: "Healthy",
-    color: "#22c55e",
+    color: palette.healthy,
   },
   {
     name: "LBTS - S",
@@ -959,7 +960,7 @@ const processPerformanceData = [
     type: "yield",
     data: { done: "610", ok: "602", yield: "98.69%" },
     status: "Healthy",
-    color: "#22c55e",
+    color: palette.healthy,
   },
   {
     name: "IP",
@@ -968,7 +969,7 @@ const processPerformanceData = [
     type: "yield",
     data: { done: "510", ok: "502", yield: "98.43%" },
     status: "Healthy",
-    color: "#22c55e",
+    color: palette.healthy,
   },
   {
     name: "AUTO OGI",
@@ -977,7 +978,7 @@ const processPerformanceData = [
     type: "yield",
     data: { done: "840", ok: "832", yield: "98.05%" },
     status: "Healthy",
-    color: "#22c55e",
+    color: palette.healthy,
   },
 ];
 
@@ -1102,10 +1103,10 @@ const gradeAgainstTarget = (card: any): MetricGrade => {
 // The one place a grade turns into a colour. Cards and heat-map zones both read
 // from here, so a tile and its zone can never disagree about what amber means.
 const GRADE_CSS: Record<MetricGrade, string> = {
-  green: "#22c55e",
-  yellow: "#eab308",
-  red: "#ff4c4c",
-  unknown: "#0091ff",
+  green: palette.healthy,
+  yellow: palette.warning,
+  red: palette.critical,
+  unknown: palette.accentRail,
 };
 
 // One tone per Product Yield row. The badge, the FPY figure and its glyph all
@@ -1119,7 +1120,7 @@ const GRADE_CSS: Record<MetricGrade, string> = {
 const YIELD_STATUS_CSS: Record<string, string> = {
   Healthy: GRADE_CSS.green,
   Warning: GRADE_CSS.yellow,
-  "No Target": "#8fa0b5",
+  "No Target": palette.inkMuted,
 };
 const yieldRowTone = (status: string) =>
   YIELD_STATUS_CSS[status] ?? GRADE_CSS.red;
@@ -1138,7 +1139,7 @@ const ERI_STATUS_CSS: Record<string, string> = {
   at_risk: GRADE_CSS.yellow,
   critical: GRADE_CSS.red,
 };
-const ERI_UNGRADED_CSS = "#a855f7";
+const ERI_UNGRADED_CSS = toolPalette.purple500;
 const eriStatusColor = (status?: string | null) =>
   (status && ERI_STATUS_CSS[status]) || ERI_UNGRADED_CSS;
 
@@ -1216,7 +1217,7 @@ const PROCESS_CARD_GAP = 10;
 // Every stage group uses the one blue. Kept as a constant because RFM is drawn
 // as two separate segments (row 1 tail, then the band below) and they must stay
 // the same colour to read as one group.
-const STAGE_GROUP_COLOR = "#0091ff";
+const STAGE_GROUP_COLOR = palette.accentRail;
 
 // One cell of the stage-group bar, sized to sit exactly above `span` cards.
 //
@@ -1375,7 +1376,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           ? { done: "...", ok: "...", yield: "..." }
           : { failure: "..." },
       status: "...",
-      color: "#16253a",
+      color: palette.raised,
     })),
   );
   const [productYield, setProductYield] = useState<any[]>([]);
@@ -2286,7 +2287,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     ? { defects: "0", opportunities: "0", index: "—" }
                     : { failure: "—" },
               status: "Not Run",
-              color: "#0091ff",
+              color: palette.accentRail,
               target,
               targetUnit,
               targetDirection,
@@ -2310,7 +2311,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             const passing =
               meets !== null ? meets : isNum(actual) && actual <= 10;
             const statusMapped = passing ? "Healthy" : "Critical";
-            const colorMapped = passing ? "#22c55e" : "#ff4c4c";
+            const colorMapped = passing ? palette.healthy : palette.critical;
 
             return {
               ...item,
@@ -2368,7 +2369,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             const passing =
               meets !== null ? meets : targetData.status === "healthy";
             const statusMapped = passing ? "Healthy" : "Critical";
-            const colorMapped = passing ? "#22c55e" : "#ff4c4c";
+            const colorMapped = passing ? palette.healthy : palette.critical;
 
             if (isNum(targetData.failure_pct)) {
               return {
@@ -2410,7 +2411,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   ? { done: "0", ok: "0", yield: "0.00%" }
                   : { failure: "0.0%" },
               status: "N/A",
-              color: "#0091ff",
+              color: palette.accentRail,
               target,
               targetUnit,
               targetDirection,
@@ -2427,7 +2428,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   ? { defects: "...", opportunities: "...", index: "..." }
                   : { failure: "..." },
             status: "N/A",
-            color: "#0091ff",
+            color: palette.accentRail,
           };
         }
         return item;
@@ -2681,36 +2682,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         preserveAspectRatio="none"
         className="overflow-visible"
       >
-        <style>
-          {`
-            @keyframes drawSparkline {
-              0% { stroke-dasharray: 0 500; opacity: 0; }
-              20% { opacity: 1; }
-              100% { stroke-dasharray: 500 500; opacity: 1; }
-            }
-            .animate-sparkline {
-              animation: drawSparkline 1.5s ease-out forwards;
-            }
-            @keyframes pulseGlow {
-              0% {
-                transform: scale(0.9);
-                opacity: 0.45;
-              }
-              50% {
-                transform: scale(1.25);
-                opacity: 0.9;
-              }
-              100% {
-                transform: scale(0.9);
-                opacity: 0.45;
-              }
-            }
-            .animate-pulse-glow {
-              animation: pulseGlow 1.5s infinite ease-in-out;
-            }
-          `}
-        </style>
-
         {/* Target line — the grey dashed horizontal reference. This REPLACES the
             old dashed yesterday-trend line, which was the same grey and was being
             read as the target. Nothing is lost: the vs-Yesterday comparison is
@@ -2722,7 +2693,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             y1={targetY}
             x2={width}
             y2={targetY}
-            stroke="#8fa0b5"
+            stroke={palette.inkMuted}
             strokeWidth="0.4"
             strokeDasharray="3 2"
             className="opacity-70"
@@ -2733,7 +2704,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         {targetY === null && yesterdayPointsStr && (
           <polyline
             fill="none"
-            stroke="#63788f"
+            stroke={palette.inkDim}
             strokeWidth="0.4"
             strokeDasharray="2 2"
             points={yesterdayPointsStr}
@@ -2783,7 +2754,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               cx={lastPointCoord.x}
               cy={lastPointCoord.y}
               r="0.6"
-              fill="#ffffff"
+              fill={palette.white}
               stroke={strokeColor}
               strokeWidth="0.4"
             />
@@ -2879,7 +2850,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             cardIsRed ? "animate-border-pulse-critical" : ""
           } ${
             canDrill
-              ? "cursor-pointer hover:brightness-125 focus-visible:outline-2 focus-visible:outline-[#3b82f6]"
+              ? "cursor-pointer hover:brightness-125 focus-visible:outline-2 focus-visible:outline-tab-border"
               : ""
           }`}
           onClick={canDrill ? openDrilldown : undefined}
@@ -2902,7 +2873,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               : undefined
           }
           style={{
-            background: `linear-gradient(180deg, ${cardColor}1f 0%, ${cardColor}0a 100%), #101c2b`,
+            background: `linear-gradient(180deg, ${cardColor}1f 0%, ${cardColor}0a 100%), rgb(var(--c-panel))`,
             borderColor: cardIsRed ? undefined : `${cardColor}40`,
             boxShadow: cardIsRed ? undefined : `0 4px 12px ${cardColor}15`,
           }}
@@ -2928,14 +2899,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 "Yield %" above "No production" stacks two greys and states a
                 unit for a figure that does not exist. */}
             {!hasNoProduction && (
-              <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none uppercase">
+              <span className="text-ink-muted text-[9px] 2xl:text-[11px] leading-none uppercase">
                 {procItem.type === "yield" && "Yield %"}
                 {procItem.type === "dpmo" && "Index"}
                 {procItem.type === "failure" && "Failure %"}
               </span>
             )}
             {hasNoProduction ? (
-              <span className="text-[#8fa0b5] text-[10px] 2xl:text-[12px] font-bold leading-tight text-center">
+              <span className="text-ink-muted text-[10px] 2xl:text-[12px] font-bold leading-tight text-center">
                 No production
               </span>
             ) : (
@@ -2964,7 +2935,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
 
           {isNum(procItem.target) && (
-            <span className="absolute bottom-1 right-1.5 2xl:right-2 text-[#63788f] text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
+            <span className="absolute bottom-1 right-1.5 2xl:right-2 text-ink-dim text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
               Tgt {procItem.target}
               {procItem.targetUnit === "percent" ? "%" : ""}
             </span>
@@ -2997,17 +2968,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       const kpiGrade = kpiCardGrade(kpiItem);
       const trendColor =
         kpiGrade === "unknown"
-          ? kpiItem.color || "#8fa0b5"
+          ? kpiItem.color || palette.inkMuted
           : GRADE_CSS[kpiGrade];
 
-      const deltaColor = "#8fa0b5";
+      const deltaColor = palette.inkMuted;
 
       return (
         <div
           key={kpiItem.id}
           className="relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[112px] 2xl:h-[131px] transition-all duration-300 flex-1 min-w-0"
           style={{
-            background: `linear-gradient(180deg, ${trendColor}1f 0%, ${trendColor}0a 100%), #101c2b`,
+            background: `linear-gradient(180deg, ${trendColor}1f 0%, ${trendColor}0a 100%), rgb(var(--c-panel))`,
             borderColor: `${trendColor}40`,
             boxShadow: `0 4px 12px ${trendColor}15`,
           }}
@@ -3020,7 +2991,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
 
           <div className="flex-grow flex flex-col justify-center items-center min-h-0 -mt-1.5 2xl:-mt-2">
-            <span className="text-[#8fa0b5] text-[9px] 2xl:text-[11px] leading-none uppercase">
+            <span className="text-ink-muted text-[9px] 2xl:text-[11px] leading-none uppercase">
               Yield %
             </span>
             <span
@@ -3051,7 +3022,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
 
           {isNum(target) && (
-            <span className="absolute bottom-1 right-1.5 2xl:right-2 text-[#63788f] text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
+            <span className="absolute bottom-1 right-1.5 2xl:right-2 text-ink-dim text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
               Tgt {target}%
             </span>
           )}
@@ -3088,9 +3059,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     // different colour from the identical figure shown elsewhere.
     const kpiGrade = kpiCardGrade(kpiItem);
     const trendColor =
-      kpiGrade === "unknown" ? kpiItem.color || "#8fa0b5" : GRADE_CSS[kpiGrade];
+      kpiGrade === "unknown" ? kpiItem.color || palette.inkMuted : GRADE_CSS[kpiGrade];
 
-    const deltaColor = "#8fa0b5";
+    const deltaColor = palette.inkMuted;
 
     return (
       <div
@@ -3120,7 +3091,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               >
                 {kpiItem.value}
               </span>
-              <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
+              <span className="text-ink-muted text-[9.5px] font-bold uppercase leading-none">
                 Cur
               </span>
               <span
@@ -3134,7 +3105,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               >
                 {kpiItem.projectedValue || "—"}
               </span>
-              <span className="text-[#8fa0b5] text-[9.5px] font-bold uppercase leading-none">
+              <span className="text-ink-muted text-[9.5px] font-bold uppercase leading-none">
                 Proj
               </span>
             </div>
@@ -3158,7 +3129,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               {kpiItem.change}
             </span>
             {isNum(target) && (
-              <span className="text-[#63788f] text-[9.5px] 2xl:text-[11px] font-bold ml-auto whitespace-nowrap">
+              <span className="text-ink-dim text-[9.5px] 2xl:text-[11px] font-bold ml-auto whitespace-nowrap">
                 Tgt {target}%
               </span>
             )}
@@ -3250,16 +3221,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   // an alarm for the best possible result. The headline and its chart take the
   // same colour so the two can never disagree.
   const incidentColor =
-    safetyAccident > safetyTargets.incident ? "#ff4c4c" : "#22c55e";
+    safetyAccident > safetyTargets.incident ? palette.critical : palette.healthy;
   const nearMissColor =
-    safetyNearMiss > safetyTargets.nearMiss ? "#ff4c4c" : "#22c55e";
+    safetyNearMiss > safetyTargets.nearMiss ? palette.critical : palette.healthy;
   const nearMissYTicks = getYTicks(nearMissPoints, 5);
   const customerComplaintsYTicks = getYTicks(customerComplaintsPoints, 4);
 
   return (
-    <div className="w-full min-h-screen bg-[#030810] text-[#f8fafc] flex flex-col px-4 pt-4 pb-2 box-border gap-3 font-sans select-none">
+    <div className="w-full min-h-screen bg-page text-ink flex flex-col px-4 pt-4 pb-2 box-border gap-3 font-sans select-none">
       {/* Top Branding & SubHeader Row */}
-      <header className="flex flex-col lg:flex-row justify-between items-center bg-[#101c2b] border border-[#1c3149] rounded-xl px-3.5 py-1.5 gap-3">
+      <header className="flex flex-col lg:flex-row justify-between items-center bg-panel border border-line rounded-xl px-3.5 py-1.5 gap-3">
         <div className="flex items-center gap-3 shrink-0">
           {/* Nokia SVG Wordmark (White) */}
           <svg
@@ -3271,32 +3242,32 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           >
             <path
               d="M164.52 1.70304V54.2969H172.407V1.70304H164.52ZM80.2509 0.804622C64.8848 0.804553 52.9624 11.9886 52.9624 28C52.9624 44.7324 64.8848 55.1957 80.2509 55.1954C95.6171 55.1951 107.564 44.7324 107.539 28C107.517 12.8299 95.6171 0.804691 80.2509 0.804622ZM99.6661 28C99.6661 39.8532 90.9737 47.7084 80.2509 47.7084C69.5282 47.7084 60.8357 39.8532 60.8357 28C60.8357 16.3618 69.5282 8.29171 80.2509 8.29171C90.9737 8.29171 99.6661 16.3618 99.6661 28ZM0 4.74601e-06V54.2969H8.04989V18.4143L49.8817 56V44.7427L0 4.74601e-06ZM113.472 28L142.745 54.297H154.483L125.165 28L154.483 1.70302H142.745L113.472 28ZM238 54.2969H229.323L222.978 42.6502H194.239L187.893 54.2969H179.215L189.724 34.8846H218.851L204.327 7.90705L208.608 0L238 54.2969Z"
-              fill="#ffffff"
+              fill={palette.white}
             />
           </svg>
 
           {/* Vertical Separator Line */}
-          <div className="h-8 w-[1px] bg-[#26405a] mx-1.5 self-center" />
+          <div className="h-8 w-[1px] bg-line-strong mx-1.5 self-center" />
           <div className="flex items-baseline gap-2">
             <span className="text-[15px] xl:text-[17px] font-black text-white leading-none tracking-wide whitespace-nowrap">
               QUALITY EXCELLENCE CENTER
             </span>
-            <span className="text-[11px] xl:text-[12.5px] font-bold text-[#06b6d4] leading-none tracking-wider whitespace-nowrap">
+            <span className="text-[11px] xl:text-[12.5px] font-bold text-info leading-none tracking-wider whitespace-nowrap">
               CHENNAI FACTORY
             </span>
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 xl:gap-3.5 flex-nowrap min-w-0 text-[#8fa0b5] font-mono text-[13px] xl:text-[14px]">
-          <span className="hidden xl:inline text-[#63788f] whitespace-nowrap">
+        <div className="flex items-center justify-end gap-2 xl:gap-3.5 flex-nowrap min-w-0 text-ink-muted font-mono text-[13px] xl:text-[14px]">
+          <span className="hidden xl:inline text-ink-dim whitespace-nowrap">
             {dateStr}
           </span>
-          <span className="hidden xl:inline h-3.5 w-[1px] bg-[#1c3149]" />
+          <span className="hidden xl:inline h-3.5 w-[1px] bg-line" />
           <span className="text-white font-bold whitespace-nowrap">
             {timeStr}
           </span>
-          <span className="hidden 2xl:inline h-3.5 w-[1px] bg-[#1c3149]" />
-          <div className="hidden 2xl:flex items-center gap-1 text-[#06b6d4]">
-            <Thermometer size={14} className="text-[#06b6d4]" />
+          <span className="hidden 2xl:inline h-3.5 w-[1px] bg-line" />
+          <div className="hidden 2xl:flex items-center gap-1 text-info">
+            <Thermometer size={14} className="text-info" />
             <span
               className="text-white font-bold"
               title={
@@ -3310,9 +3281,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 : "N/A"}
             </span>
           </div>
-          <span className="hidden 2xl:inline h-3.5 w-[1px] bg-[#1c3149]" />
-          <div className="hidden 2xl:flex items-center gap-1 text-[#06b6d4]">
-            <Droplets size={14} className="text-[#06b6d4]" />
+          <span className="hidden 2xl:inline h-3.5 w-[1px] bg-line" />
+          <div className="hidden 2xl:flex items-center gap-1 text-info">
+            <Droplets size={14} className="text-info" />
             <span
               className="text-white font-bold"
               title={
@@ -3326,24 +3297,24 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 : "N/A"}
             </span>
           </div>
-          <span className="h-3.5 w-[1px] bg-[#1c3149]" />
+          <span className="h-3.5 w-[1px] bg-line" />
 
           <div
             className={`flex items-center gap-1.5 border px-2.5 py-0.5 rounded text-[13px] font-black shrink-0 whitespace-nowrap ${
               isStatusLive
-                ? "border-[#22c55e]/30 bg-[#22c55e]/5 text-[#22c55e]"
-                : "border-[#ff4c4c]/30 bg-[#ff4c4c]/5 text-[#ff4c4c]"
+                ? "border-healthy/30 bg-healthy/5 text-healthy"
+                : "border-critical/30 bg-critical/5 text-critical"
             }`}
           >
             <span
-              className={`w-2 h-2 rounded-full ${isStatusLive ? "bg-[#22c55e]" : "bg-[#ff4c4c]"}`}
+              className={`w-2 h-2 rounded-full ${isStatusLive ? "bg-healthy" : "bg-critical"}`}
             />
             {liveStatus}
           </div>
 
           <div className="relative">
             <div
-              className="bg-[#101c2b] border border-[#26405a] rounded px-2.5 py-0.5 text-[13px] text-white font-bold flex items-center gap-1.5 cursor-pointer hover:bg-[#16253a] transition-colors shrink-0"
+              className="bg-panel border border-line-strong rounded px-2.5 py-0.5 text-[13px] text-white font-bold flex items-center gap-1.5 cursor-pointer hover:bg-raised transition-colors shrink-0"
               onClick={() => setIsShiftDropdownOpen(!isShiftDropdownOpen)}
               title={activeShift}
             >
@@ -3359,7 +3330,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               </span>
               <ChevronDown
                 size={11}
-                className={`text-[#63788f] transition-transform duration-200 ${isShiftDropdownOpen ? "rotate-180" : ""}`}
+                className={`text-ink-dim transition-transform duration-200 ${isShiftDropdownOpen ? "rotate-180" : ""}`}
               />
             </div>
 
@@ -3369,11 +3340,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   className="fixed inset-0 z-40"
                   onClick={() => setIsShiftDropdownOpen(false)}
                 />
-                <div className="absolute top-full right-0 mt-1 bg-[#101c2b] border border-[#26405a] rounded-lg shadow-xl shadow-black/50 overflow-hidden z-50 w-max">
+                <div className="absolute top-full right-0 mt-1 bg-panel border border-line-strong rounded-lg shadow-xl shadow-black/50 overflow-hidden z-50 w-max">
                   {SHIFTS.map((shift) => (
                     <div
                       key={shift}
-                      className={`px-3 py-2 text-[14px] cursor-pointer hover:bg-[#1e3a8a] hover:text-white transition-colors ${activeShift === shift ? "text-white bg-[#1c3149]" : "text-[#8fa0b5]"}`}
+                      className={`px-3 py-2 text-[14px] cursor-pointer hover:bg-tab-active hover:text-white transition-colors ${activeShift === shift ? "text-white bg-line" : "text-ink-muted"}`}
                       onClick={() => {
                         setActiveShift(shift);
                         setIsShiftDropdownOpen(false);
@@ -3389,7 +3360,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
           <button
             onClick={toggleFullscreen}
-            className="p-1.5 hover:bg-[#16253a] rounded border border-[#26405a] cursor-pointer text-[#8fa0b5] outline-none"
+            className="p-1.5 hover:bg-raised rounded border border-line-strong cursor-pointer text-ink-muted outline-none"
           >
             <Maximize2 size={11} />
           </button>
@@ -3399,12 +3370,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       {/* Redesigned Process Performance & Overall Quality Row */}
       <section className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-1.5">
         {/* Left Section: 8x8 Box layout */}
-        <div className="lg:col-span-3 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col">
-          <div className="flex items-baseline gap-2 border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
-            <span className="text-[12px] font-black tracking-widest text-[#8fa0b5] uppercase">
+        <div className="lg:col-span-3 bg-panel border border-line rounded-xl p-4 flex flex-col">
+          <div className="flex items-baseline gap-2 border-b border-line/50 pb-2 mb-3.5 flex-shrink-0">
+            <span className="text-[12px] font-black tracking-widest text-ink-muted uppercase">
               PROCESS PERFORMANCE
             </span>
-            <span className="text-[10px] font-bold tracking-wider text-[#63788f] normal-case">
+            <span className="text-[10px] font-bold tracking-wider text-ink-dim normal-case">
               [Hourly]
             </span>
           </div>
@@ -3474,8 +3445,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
 
         {/* Right Section: 1x1 Box layout */}
-        <div className="lg:col-span-1 bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col justify-between h-full min-h-[300px]">
-          <span className="text-[12px] font-black tracking-widest text-[#8fa0b5] uppercase border-b border-[#1c3149]/50 pb-2 mb-3.5 flex-shrink-0">
+        <div className="lg:col-span-1 bg-panel border border-line rounded-xl p-4 flex flex-col justify-between h-full min-h-[300px]">
+          <span className="text-[12px] font-black tracking-widest text-ink-muted uppercase border-b border-line/50 pb-2 mb-3.5 flex-shrink-0">
             KEY PERFORMANCE INDICATOR
           </span>
           <div className="flex-grow flex flex-col gap-3.5">
@@ -3498,9 +3469,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           which is exactly the two middle cards plus the gap between them. */}
       <main className="grid grid-cols-1 lg:grid-cols-[calc(25%_-_12px)_minmax(0,1fr)_calc(25%_-_12px)] gap-4">
         {/* Section 1: Factory Quality Twin */}
-        <section className="bg-[#101c2b] border border-white/20 rounded-xl p-4 flex flex-col h-[380px]">
-          <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-3 flex-shrink-0">
-            <span className="text-[12px] font-black tracking-widest text-[#8fa0b5]">
+        <section className="bg-panel border border-white/20 rounded-xl p-4 flex flex-col h-[380px]">
+          <div className="flex items-center justify-between border-b border-line/50 pb-2 mb-3 flex-shrink-0">
+            <span className="text-[12px] font-black tracking-widest text-ink-muted">
               QUALITY HEAT MAP
             </span>
             {/* Legend colors come from STATUS_CSS so the swatches always match
@@ -3522,7 +3493,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
 
           <div
-            className="flex-1 relative bg-[#030810] border border-white/15 rounded-lg overflow-hidden flex items-center justify-center group cursor-pointer"
+            className="flex-1 relative bg-page border border-white/15 rounded-lg overflow-hidden flex items-center justify-center group cursor-pointer"
             onClick={() => setIsTwinModalOpen(true)}
           >
             <FactoryLayoutOverlay
@@ -3531,13 +3502,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               className="transition-transform duration-500 ease-out group-hover:scale-105"
             />
             {/* Overlay Gradient / Glass effect */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#030810]/40 via-transparent to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-t from-page/40 via-transparent to-transparent pointer-events-none" />
 
             {/* Hover overlay with explore button — commented out on request.
                 The parent div keeps its onClick, so clicking the layout still
                 opens the twin modal; only the hover prompt is hidden. */}
             {/* <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-              <div className="bg-[#081119]/95 border border-[#06b6d4]/50 text-[#06b6d4] text-[11px] font-black tracking-widest px-3.5 py-2 rounded-lg shadow-[0_0_15px_rgba(6,182,212,0.15)] flex items-center gap-2 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
+              <div className="bg-[#081119]/95 border border-info/50 text-info text-[11px] font-black tracking-widest px-3.5 py-2 rounded-lg shadow-[0_0_15px_rgba(6,182,212,0.15)] flex items-center gap-2 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
                 <Maximize2 size={12} className="animate-pulse" />
                 EXPLORE PLANT LAYOUT
               </div>
@@ -3546,27 +3517,27 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </section>
 
         {/* Section 2: Product Yield */}
-        <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[380px]">
-          <span className="text-[12px] font-black tracking-widest text-[#8fa0b5] uppercase mb-1.5">
+        <section className="bg-panel border border-line rounded-xl p-4 flex flex-col h-[380px]">
+          <span className="text-[12px] font-black tracking-widest text-ink-muted uppercase mb-1.5">
             PRODUCT YIELD
           </span>
           {/* Tabs */}
           <div className="flex gap-2 mb-1.5">
             <button
               onClick={() => setActiveYieldTab("UNITS")}
-              className={`${activeYieldTab === "UNITS" ? "bg-[#1e3a8a] text-white border-[#3b82f6]/50" : "bg-[#030810] text-[#63788f] border-[#1c3149] hover:bg-[#1c3149]"} border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors`}
+              className={`${activeYieldTab === "UNITS" ? "bg-tab-active text-white border-tab-border/50" : "bg-page text-ink-dim border-line hover:bg-line"} border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors`}
             >
               UNITS
             </button>
             <button
               onClick={() => setActiveYieldTab("TRX")}
-              className={`${activeYieldTab === "TRX" ? "bg-[#1e3a8a] text-white border-[#3b82f6]/50" : "bg-[#030810] text-[#63788f] border-[#1c3149] hover:bg-[#1c3149]"} border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors`}
+              className={`${activeYieldTab === "TRX" ? "bg-tab-active text-white border-tab-border/50" : "bg-page text-ink-dim border-line hover:bg-line"} border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors`}
             >
               TRX
             </button>
             <button
               onClick={() => setActiveYieldTab("PA")}
-              className={`${activeYieldTab === "PA" ? "bg-[#1e3a8a] text-white border-[#3b82f6]/50" : "bg-[#030810] text-[#63788f] border-[#1c3149] hover:bg-[#1c3149]"} border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors`}
+              className={`${activeYieldTab === "PA" ? "bg-tab-active text-white border-tab-border/50" : "bg-page text-ink-dim border-line hover:bg-line"} border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors`}
             >
               PA
             </button>
@@ -3580,8 +3551,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar">
             <table className="w-full min-w-[720px] text-left text-[12px] border-collapse relative">
               <thead>
-                <tr className="text-[#63788f] font-bold text-[10px] uppercase">
-                  <th className="pb-2 font-black pl-2 sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                <tr className="text-ink-dim font-bold text-[10px] uppercase">
+                  <th className="pb-2 font-black pl-2 sticky top-0 bg-panel border-b border-line z-10">
                     S.No
                   </th>
                   <th
@@ -3594,7 +3565,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         return { key: null, order: "asc" };
                       });
                     }}
-                    className="pb-2 font-black sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10 cursor-pointer select-none hover:text-white transition-colors"
+                    className="pb-2 font-black sticky top-0 bg-panel border-b border-line z-10 cursor-pointer select-none hover:text-white transition-colors"
                   >
                     <div className="flex items-center gap-1">
                       PRODUCT NAME
@@ -3621,7 +3592,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         return { key: null, order: "asc" };
                       });
                     }}
-                    className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10 cursor-pointer select-none hover:text-white transition-colors"
+                    className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10 cursor-pointer select-none hover:text-white transition-colors"
                   >
                     <div className="flex items-center justify-center gap-1">
                       TESTED
@@ -3648,7 +3619,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         return { key: null, order: "asc" };
                       });
                     }}
-                    className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10 cursor-pointer select-none hover:text-white transition-colors"
+                    className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10 cursor-pointer select-none hover:text-white transition-colors"
                   >
                     <div className="flex items-center justify-center gap-1">
                       FAILED COUNT
@@ -3665,7 +3636,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       </span>
                     </div>
                   </th>
-                  <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                  <th className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10">
                     FPY %
                   </th>
                   {/* SPY % — hidden on request. Uncomment together with the
@@ -3673,27 +3644,27 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       colSpan back to 9. row.spy is still populated, so nothing
                       needs refetching to bring it back. */}
                   {/*
-                  <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                  <th className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10">
                     SPY %
                   </th>
                   */}
-                  <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                  <th className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10">
                     TARGET YIELD %
                   </th>
-                  <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                  <th className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10">
                     FPY STATUS
                   </th>
                   {/* Header stays plain. The period this column judges against
                       is carried by the cells themselves, which name it in the
                       empty state and in the tooltip. */}
                   {activeYieldTab === "UNITS" && (
-                    <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                    <th className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10">
                       AI RECOMMENDATION HFTPY
                     </th>
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#1c3149]/45 font-mono text-[11px]">
+              <tbody className="divide-y divide-line/45 font-mono text-[11px]">
                 {paginatedYieldData.length === 0 && (
                   <tr>
                     <td
@@ -3701,20 +3672,20 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       className="py-10 text-center font-sans text-[12px] font-bold tracking-wide"
                     >
                       {yieldFetchState === "loading" ? (
-                        <span className="text-[#63788f]">Loading…</span>
+                        <span className="text-ink-dim">Loading…</span>
                       ) : yieldFetchState === "error" ? (
-                        <span className="text-[#eab308]">
+                        <span className="text-warning">
                           Product yield unavailable — API unreachable
                         </span>
                       ) : (
-                        <span className="text-[#63788f]">No records found</span>
+                        <span className="text-ink-dim">No records found</span>
                       )}
                     </td>
                   </tr>
                 )}
                 {paginatedYieldData.map((row, idx) => (
-                  <tr key={row.id} className="hover:bg-[#101c2b]/40">
-                    <td className="py-[2.5px] text-[#8fa0b5] pl-2">
+                  <tr key={row.id} className="hover:bg-panel/40">
+                    <td className="py-[2.5px] text-ink-muted pl-2">
                       {(yieldPage - 1) * ITEMS_PER_PAGE + idx + 1}.
                     </td>
                     <td className="py-[2.5px] text-white font-sans font-bold">
@@ -3769,7 +3740,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                           share one tone lookup with the FPY figure, and the /10
                           background is that same tone at 1a alpha. */}
                       <span
-                        className="text-[9.5px] font-black px-1.5 py-0.5 rounded border border-[#1c3149]/50"
+                        className="text-[9.5px] font-black px-1.5 py-0.5 rounded border border-line/50"
                         style={{
                           color: yieldRowTone(row.status),
                           backgroundColor: `${yieldRowTone(row.status)}1a`,
@@ -3786,7 +3757,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                         the 262 lines below are untouched — flip the condition to
                         `true` to show it on every tab again. */}
                     {activeYieldTab === "UNITS" && (
-                      <td className="py-[2.5px] text-center text-[#c8d6e4] font-sans text-[10px] leading-tight">
+                      <td className="py-[2.5px] text-center text-ink-secondary font-sans text-[10px] leading-tight">
                         {(() => {
                           // Raw analysis JSON while the Azure OpenAI layer is
                           // unbuilt. Deliberately the exact fields the model will
@@ -3800,7 +3771,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                             // Still fetching: a short note, not a field dump.
                             if (yieldRecsLoading) {
                               return (
-                                <span className="text-[#63788f] italic animate-soft-pulse">
+                                <span className="text-ink-dim italic animate-soft-pulse">
                                   loading latest AI update…
                                 </span>
                               );
@@ -3816,7 +3787,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                             ) {
                               return (
                                 <span
-                                  className="text-[#63788f] italic"
+                                  className="text-ink-dim italic"
                                   title={`No ${yieldPlanStatus.month ?? ""} sheet in HFTPY Plan.xlsx — add it to get period recommendations.`}
                                 >
                                   awaiting {yieldPlanStatus.month ?? "period"}{" "}
@@ -3835,7 +3806,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                             // than an honest blank.
                             return (
                               <span
-                                className="text-[#63788f] italic"
+                                className="text-ink-dim italic"
                                 title={`No target on file for ${row.name}, so no recommendation can be computed. Add it to Target sheet.xlsx.`}
                               >
                                 no target on file
@@ -3868,7 +3839,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                             // bound rather than a precise figure nobody will act on.
                             const hopeless =
                               isNum(recover) && recover > yr.tested_quantity;
-                            const colour = onTarget ? "#22c55e" : "#ff4c4c";
+                            const colour = onTarget ? palette.healthy : palette.critical;
                             return (
                               <div
                                 className="flex flex-col gap-[1px] text-[9px] leading-[1.3] min-w-[110px]"
@@ -3886,27 +3857,27 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                                 }
                               >
                                 <div className="flex justify-between gap-2">
-                                  <span className="text-[#63788f]">
+                                  <span className="text-ink-dim">
                                     Yield / target
                                   </span>
-                                  <span className="text-[#c8d6e4] font-bold tabular-nums">
+                                  <span className="text-ink-secondary font-bold tabular-nums">
                                     {isNum(yr.current_yield)
                                       ? `${(yr.current_yield * 100).toFixed(1)}%`
                                       : "—"}
-                                    <span className="text-[#63788f]"> / </span>
+                                    <span className="text-ink-dim"> / </span>
                                     {isNum(yr.target_yield)
                                       ? `${(yr.target_yield * 100).toFixed(0)}%`
                                       : "—"}
                                   </span>
                                 </div>
                                 <div className="flex justify-between gap-2">
-                                  <span className="text-[#63788f]">Tested</span>
-                                  <span className="text-[#c8d6e4] font-bold tabular-nums">
+                                  <span className="text-ink-dim">Tested</span>
+                                  <span className="text-ink-secondary font-bold tabular-nums">
                                     {yr.tested_quantity.toLocaleString()}
                                   </span>
                                 </div>
                                 <div className="flex justify-between gap-2 items-center mt-[1px]">
-                                  <span className="text-[#63788f]">
+                                  <span className="text-ink-dim">
                                     {onTarget
                                       ? "Failures spare"
                                       : "Passes to recover"}
@@ -3968,8 +3939,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                             yr.achievability === "ACHIEVED" ||
                             yr.achievability === "ACHIEVABLE";
                           const verdictColor = achievable
-                            ? "#22c55e"
-                            : "#ff4c4c";
+                            ? palette.healthy
+                            : palette.critical;
                           const unprecedented = yr.achievability === "UNLIKELY";
 
                           return (
@@ -4000,34 +3971,34 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                               }
                             >
                               {/* <div className="flex justify-between gap-2">
-                              <span className="text-[#63788f]">
+                              <span className="text-ink-dim">
                                 Total planned
                               </span>
-                              <span className="text-[#c8d6e4] font-bold tabular-nums">
+                              <span className="text-ink-secondary font-bold tabular-nums">
                                 {isNum(yr.planned_quantity)
                                   ? yr.planned_quantity.toLocaleString()
                                   : "—"}
                               </span>
                             </div>
                             <div className="flex justify-between gap-2">
-                              <span className="text-[#63788f]">Remaining</span>
-                              <span className="text-[#c8d6e4] font-bold tabular-nums">
+                              <span className="text-ink-dim">Remaining</span>
+                              <span className="text-ink-secondary font-bold tabular-nums">
                                 {isNum(yr.remaining_quantity)
                                   ? yr.remaining_quantity.toLocaleString()
                                   : "—"}
                               </span>
                             </div>
                             <div className="flex justify-between gap-2">
-                              <span className="text-[#63788f]">
+                              <span className="text-ink-dim">
                                 Expected yield
                               </span>
-                              <span className="font-bold tabular-nums text-[#c8d6e4]">
+                              <span className="font-bold tabular-nums text-ink-secondary">
                                 {isNum(yr.required_future_yield)
                                   ? `${(yr.required_future_yield * 100).toFixed(1)}%`
                                   : "—"}
                                 {unprecedented && (
                                   <span
-                                    className="ml-0.5 text-[#ff4c4c]"
+                                    className="ml-0.5 text-critical"
                                     title="Higher than this product's best full period on record"
                                   >
                                     *
@@ -4059,8 +4030,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           </div>
 
           {/* Pagination */}
-          <div className="flex justify-end items-center gap-3 mt-1.5 pt-2 text-[11px] text-white border-t border-[#1c3149]">
-            <span className="text-[#8fa0b5] font-bold">
+          <div className="flex justify-end items-center gap-3 mt-1.5 pt-2 text-[11px] text-white border-t border-line">
+            <span className="text-ink-muted font-bold">
               {Math.min(
                 (yieldPage - 1) * ITEMS_PER_PAGE + 1,
                 currentYieldData.length,
@@ -4072,18 +4043,18 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               <button
                 onClick={() => setYieldPage(1)}
                 disabled={yieldPage === 1}
-                className={`p-1 transition-colors ${yieldPage === 1 ? "text-[#63788f]/50 cursor-not-allowed" : "text-[#63788f] hover:text-white"}`}
+                className={`p-1 transition-colors ${yieldPage === 1 ? "text-ink-dim/50 cursor-not-allowed" : "text-ink-dim hover:text-white"}`}
               >
                 <ChevronsLeft size={13} />
               </button>
               <button
                 onClick={() => setYieldPage(Math.max(1, yieldPage - 1))}
                 disabled={yieldPage === 1}
-                className={`p-1 transition-colors ${yieldPage === 1 ? "text-[#63788f]/50 cursor-not-allowed" : "text-[#63788f] hover:text-white"}`}
+                className={`p-1 transition-colors ${yieldPage === 1 ? "text-ink-dim/50 cursor-not-allowed" : "text-ink-dim hover:text-white"}`}
               >
                 <ChevronLeft size={13} />
               </button>
-              <button className="bg-[#1c3149] text-white font-bold w-4.5 h-4.5 rounded flex items-center justify-center text-[10px]">
+              <button className="bg-line text-white font-bold w-4.5 h-4.5 rounded flex items-center justify-center text-[10px]">
                 {yieldPage}
               </button>
               <button
@@ -4091,14 +4062,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   setYieldPage(Math.min(totalYieldPages, yieldPage + 1))
                 }
                 disabled={yieldPage === totalYieldPages}
-                className={`p-1 transition-colors ${yieldPage === totalYieldPages ? "text-[#63788f]/50 cursor-not-allowed" : "text-[#63788f] hover:text-white"}`}
+                className={`p-1 transition-colors ${yieldPage === totalYieldPages ? "text-ink-dim/50 cursor-not-allowed" : "text-ink-dim hover:text-white"}`}
               >
                 <ChevronRight size={13} />
               </button>
               <button
                 onClick={() => setYieldPage(totalYieldPages)}
                 disabled={yieldPage === totalYieldPages}
-                className={`p-1 transition-colors ${yieldPage === totalYieldPages ? "text-[#63788f]/50 cursor-not-allowed" : "text-[#63788f] hover:text-white"}`}
+                className={`p-1 transition-colors ${yieldPage === totalYieldPages ? "text-ink-dim/50 cursor-not-allowed" : "text-ink-dim hover:text-white"}`}
               >
                 <ChevronsRight size={13} />
               </button>
@@ -4107,11 +4078,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </section>
 
         {/* Section 3: Attention Center Alerts */}
-        <section className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-4 flex flex-col h-[380px]">
-          <div className="flex items-center justify-between border-b border-[#1c3149]/50 pb-2 mb-2 flex-shrink-0">
+        <section className="bg-panel border border-line rounded-xl p-4 flex flex-col h-[380px]">
+          <div className="flex items-center justify-between border-b border-line/50 pb-2 mb-2 flex-shrink-0">
             {/* No count badges here — the tab row directly below carries the
                 same numbers per severity, so the badges were saying it twice. */}
-            <span className="text-[12px] font-black tracking-widest text-[#8fa0b5] uppercase">
+            <span className="text-[12px] font-black tracking-widest text-ink-muted uppercase">
               ATTENTION CENTER
             </span>
           </div>
@@ -4123,11 +4094,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 key={tab}
                 onClick={() => setActiveAlertTab(tab)}
                 aria-pressed={activeAlertTab === tab}
-                className={`${activeAlertTab === tab ? "bg-[#1e3a8a] text-white border-[#3b82f6]/50" : "bg-[#030810] text-[#63788f] border-[#1c3149] hover:bg-[#1c3149] hover:text-[#8fa0b5]"} border text-[11px] font-bold px-3 py-1.5 rounded transition-colors flex items-center gap-1.5`}
+                className={`${activeAlertTab === tab ? "bg-tab-active text-white border-tab-border/50" : "bg-page text-ink-dim border-line hover:bg-line hover:text-ink-muted"} border text-[11px] font-bold px-3 py-1.5 rounded transition-colors flex items-center gap-1.5`}
               >
                 {tab}
                 <span
-                  className={`${activeAlertTab === tab ? "bg-[#3b82f6]/30 text-white" : "bg-[#1c3149]/70 text-[#63788f]"} rounded px-1 font-mono text-[10px] leading-tight`}
+                  className={`${activeAlertTab === tab ? "bg-tab-border/30 text-white" : "bg-line/70 text-ink-dim"} rounded px-1 font-mono text-[10px] leading-tight`}
                 >
                   {alertTabCounts[tab]}
                 </span>
@@ -4144,20 +4115,20 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {visibleAlerts.length === 0 && (
               <div className="flex-1 flex items-center justify-center py-10 text-center text-[12px] font-bold tracking-wide">
                 {alertsFeedState === "loading" ? (
-                  <span className="text-[#63788f]">Loading…</span>
+                  <span className="text-ink-dim">Loading…</span>
                 ) : alertsFeedState === "error" ? (
-                  <span className="text-[#eab308]">
+                  <span className="text-warning">
                     Alerts unavailable — live feed disconnected
                   </span>
                 ) : (
-                  <span className="text-[#63788f]">No records found</span>
+                  <span className="text-ink-dim">No records found</span>
                 )}
               </div>
             )}
             {previewAlerts.map((alert) => (
               <div
                 key={alert.id}
-                className={`group flex-shrink-0 bg-gradient-to-b from-[#0b1520] to-[#070f17] border ${alert.level === "Critical" ? "animate-border-pulse-critical" : "border-[#eab308]/25 hover:border-[#eab308]/45"} rounded-lg pl-3 pr-2.5 py-2.5 relative flex flex-col gap-2 overflow-hidden transition-all duration-300`}
+                className={`group flex-shrink-0 bg-gradient-to-b from-[#0b1520] to-[#070f17] border ${alert.level === "Critical" ? "animate-border-pulse-critical" : "border-warning/25 hover:border-warning/45"} rounded-lg pl-3 pr-2.5 py-2.5 relative flex flex-col gap-2 overflow-hidden transition-all duration-300`}
                 style={{
                   boxShadow:
                     alert.level === "Critical"
@@ -4172,8 +4143,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   style={{
                     background:
                       alert.level === "Critical"
-                        ? "linear-gradient(180deg,#ff4c4c,rgba(255,76,76,0.15))"
-                        : "linear-gradient(180deg,#eab308,rgba(234,179,8,0.15))",
+                        ? "linear-gradient(180deg,rgb(var(--c-critical)),rgb(var(--c-critical)/0.15))"
+                        : "linear-gradient(180deg,rgb(var(--c-warning)),rgb(var(--c-warning)/0.15))",
                   }}
                 />
 
@@ -4183,22 +4154,22 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       size={13}
                       className={`mt-[2px] flex-shrink-0 ${
                         alert.level === "Critical"
-                          ? "text-[#ff4c4c]"
-                          : "text-[#eab308]"
+                          ? "text-critical"
+                          : "text-warning"
                       }`}
-                      fill={alert.level === "Critical" ? "#ff4c4c" : "#eab308"}
+                      fill={alert.level === "Critical" ? palette.critical : palette.warning}
                       style={{
                         filter:
                           alert.level === "Critical"
-                            ? "drop-shadow(0 0 8px #ff4c4c)"
-                            : "drop-shadow(0 0 8px #eab308)",
+                            ? "drop-shadow(0 0 8px rgb(var(--c-critical)))"
+                            : "drop-shadow(0 0 8px rgb(var(--c-warning)))",
                       }}
                     />
                     <span className="text-[12px] font-semibold leading-snug text-[#e8eef5]">
                       {alert.title}
                     </span>
                   </div>
-                  <div className="flex items-center gap-0.5 text-[10px] text-[#63788f] font-bold whitespace-nowrap flex-shrink-0 group-hover:text-[#8fa0b5] transition-colors">
+                  <div className="flex items-center gap-0.5 text-[10px] text-ink-dim font-bold whitespace-nowrap flex-shrink-0 group-hover:text-ink-muted transition-colors">
                     {alert.time}
                     <ChevronRight size={11} />
                   </div>
@@ -4211,8 +4182,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   <span
                     className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-[1px] rounded border ${
                       alert.level === "Critical"
-                        ? "text-[#ff8080] border-[#ff4c4c]/30 bg-[#ff4c4c]/10"
-                        : "text-[#eab308] border-[#eab308]/30 bg-[#eab308]/10"
+                        ? "text-[#ff8080] border-critical/30 bg-critical/10"
+                        : "text-warning border-warning/30 bg-warning/10"
                     }`}
                   >
                     {alert.impact}
@@ -4223,7 +4194,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     the same height; the full text is on hover, in the portal
                     tooltip rendered at the end of this component. */}
                 <div
-                  className="mt-auto bg-[#4338ca]/[0.08] hover:bg-[#4338ca]/[0.14] border border-[#4338ca]/25 hover:border-[#4338ca]/45 rounded-md p-1.5 flex items-start gap-2 transition-colors cursor-default"
+                  className="mt-auto bg-indigo-700/[0.08] hover:bg-indigo-700/[0.14] border border-indigo-700/25 hover:border-indigo-700/45 rounded-md p-1.5 flex items-start gap-2 transition-colors cursor-default"
                   onMouseEnter={(e) => {
                     const r = e.currentTarget.getBoundingClientRect();
                     setRecTip({
@@ -4234,12 +4205,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   }}
                   onMouseLeave={() => setRecTip(null)}
                 >
-                  <div className="bg-[#4f46e5] w-4.5 h-4.5 rounded flex items-center justify-center flex-shrink-0 text-white shadow-[0_0_12px_rgba(79,70,229,0.5)]">
+                  <div className="bg-indigo-600 w-4.5 h-4.5 rounded flex items-center justify-center flex-shrink-0 text-white shadow-[0_0_12px_rgba(79,70,229,0.5)]">
                     <Bot size={11} />
                   </div>
                   <div className="flex flex-col flex-1 min-w-0">
                     <span
-                      className="text-[#818cf8] text-[9px] font-black uppercase tracking-wider"
+                      className="text-indigo-400 text-[9px] font-black uppercase tracking-wider"
                       style={{ textShadow: "0 0 10px rgba(99,102,241,0.35)" }}
                     >
                       AI Recommendation
@@ -4256,8 +4227,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           {/* Counted off the loaded alerts, not the server's `counts` tally: that
               tally is uncapped while the list it ships with is not, so it can
               promise more rows than the modal can actually show. */}
-          <div className="flex justify-between items-center pt-2.5 mt-1 flex-shrink-0 border-t border-[#1c3149]/50">
-            <span className="text-[10px] font-bold text-[#63788f]">
+          <div className="flex justify-between items-center pt-2.5 mt-1 flex-shrink-0 border-t border-line/50">
+            <span className="text-[10px] font-bold text-ink-dim">
               {visibleAlerts.length > ALERT_PREVIEW_LIMIT
                 ? `Showing ${ALERT_PREVIEW_LIMIT} of ${visibleAlerts.length}`
                 : `Showing ${visibleAlerts.length}`}
@@ -4265,10 +4236,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             <button
               onClick={() => setIsAlertsModalOpen(true)}
               disabled={visibleAlerts.length === 0}
-              className="flex items-center gap-1 text-[10px] font-bold text-[#3b82f6] hover:text-white disabled:text-[#3b5069] disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-1 text-[10px] font-bold text-tab-border hover:text-white disabled:text-[#3b5069] disabled:cursor-not-allowed transition-colors"
             >
               View All Alerts
-              <span className="bg-[#1e3a8a]/60 border border-[#3b82f6]/40 rounded px-1.5 py-[1px] font-mono">
+              <span className="bg-tab-active/60 border border-tab-border/40 rounded px-1.5 py-[1px] font-mono">
                 {visibleAlerts.length}
               </span>
               <ChevronRight size={11} />
@@ -4280,17 +4251,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       {/* Row 4: Bottom Operational KPIs */}
       <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4">
         {/* Card 1: Safety */}
-        <div className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
-          <div className="flex items-center gap-1.5 border-b border-[#1c3149]/50 pb-1.5 flex-shrink-0">
-            <Shield size={15} className="text-[#22c55e]" />
-            <span className="text-[#8fa0b5] text-[12px] font-black uppercase tracking-wider">
+        <div className="bg-panel border border-line rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
+          <div className="flex items-center gap-1.5 border-b border-line/50 pb-1.5 flex-shrink-0">
+            <Shield size={15} className="text-healthy" />
+            <span className="text-ink-muted text-[12px] font-black uppercase tracking-wider">
               SAFETY
             </span>
           </div>
           <div className="flex-1 grid grid-cols-2 gap-3 items-center min-h-0 pt-2">
             <div className="flex flex-col h-full justify-between">
               <div className="flex flex-col">
-                <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
+                <span className="text-ink-muted text-[11px] font-bold uppercase leading-none">
                   INCIDENT
                 </span>
                 <div className="flex items-baseline gap-1.5 mt-1">
@@ -4300,7 +4271,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   >
                     {safetyAccident}
                   </span>
-                  {/* <span className="text-[#63788f] text-[10px] font-bold">
+                  {/* <span className="text-ink-dim text-[10px] font-bold">
                     This Month
                   </span> */}
                 </div>
@@ -4315,9 +4286,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               </div>
             </div>
 
-            <div className="flex flex-col h-full justify-between border-l border-[#1c3149]/30 pl-3">
+            <div className="flex flex-col h-full justify-between border-l border-line/30 pl-3">
               <div className="flex flex-col">
-                <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
+                <span className="text-ink-muted text-[11px] font-bold uppercase leading-none">
                   NEAR MISS
                 </span>
                 <div className="flex items-baseline gap-1.5 mt-1">
@@ -4327,7 +4298,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   >
                     {safetyNearMiss}
                   </span>
-                  {/* <span className="text-[#63788f] text-[10px] font-bold">
+                  {/* <span className="text-ink-dim text-[10px] font-bold">
                     This Month
                   </span> */}
                 </div>
@@ -4345,11 +4316,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
 
         {/* Card 2: Sustainability */}
-        <div className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
+        <div className="bg-panel border border-line rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
           {/* Header */}
-          <div className="flex items-center gap-1.5 border-b border-[#1c3149]/50 pb-1.5 flex-shrink-0">
-            <Leaf size={15} className="text-[#22c55e]" />
-            <span className="text-[#8fa0b5] text-[12px] font-black uppercase tracking-wider">
+          <div className="flex items-center gap-1.5 border-b border-line/50 pb-1.5 flex-shrink-0">
+            <Leaf size={15} className="text-healthy" />
+            <span className="text-ink-muted text-[12px] font-black uppercase tracking-wider">
               SUSTAINABILITY
             </span>
           </div>
@@ -4359,11 +4330,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {/* Left */}
             <div className="flex flex-col pr-3 min-h-0">
               <div className="mb-1.5 -mt-1.5">
-                <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
+                <span className="text-ink-muted text-[11px] font-bold uppercase leading-none">
                   GREEN ENERGY (%)
                 </span>
 
-                <div className="text-[#22c55e] text-[24px] font-black font-mono mt-1 leading-none">
+                <div className="text-healthy text-[24px] font-black font-mono mt-1 leading-none">
                   {greenEnergyPct}%
                 </div>
               </div>
@@ -4375,7 +4346,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   max={100}
                   labelMin="0%"
                   labelMax="100%"
-                  color="#22c55e"
+                  color={palette.healthy}
                   icon={CustomSymmetricalLeafIcon}
                   showValueInCenter={false}
                 />
@@ -4383,17 +4354,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </div>
 
             {/* Right */}
-            <div className="flex flex-col border-l border-[#1c3149]/40 pl-3 min-h-0">
+            <div className="flex flex-col border-l border-line/40 pl-3 min-h-0">
               <div className="mb-1.5 -mt-1.5">
-                <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
+                <span className="text-ink-muted text-[11px] font-bold uppercase leading-none">
                   CO₂ EMISSION (tCO₂)
                 </span>
 
                 <div className="mt-1 flex items-baseline leading-none">
-                  <span className="text-[#22c55e] text-[21px] font-black font-mono">
+                  <span className="text-healthy text-[21px] font-black font-mono">
                     {co2Emission.toLocaleString()}
                   </span>
-                  <span className="ml-1 text-[11px] text-[#8fa0b5]">tCO₂</span>
+                  <span className="ml-1 text-[11px] text-ink-muted">tCO₂</span>
                 </div>
               </div>
 
@@ -4408,7 +4379,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     points={co2Points}
                     yTicks={co2YTicks}
                     xTicks={co2Labels.length ? co2Labels : safetyXTicks}
-                    color="#22c55e"
+                    color={palette.healthy}
                   />
                 </div>
               </div>
@@ -4417,21 +4388,21 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
 
         {/* Card 3: Customer Reflection */}
-        <div className="bg-[#101c2b] border border-[#1c3149] rounded-xl pt-3 px-3 pb-[17px] flex flex-col h-[195px] 2xl:h-[172px] justify-between">
-          <div className="flex items-center gap-1.5 border-b border-[#1c3149]/50 pb-1.5 flex-shrink-0">
-            <Target size={15} className="text-[#22c55e]" />
-            <span className="text-[#8fa0b5] text-[12px] font-black uppercase tracking-wider">
+        <div className="bg-panel border border-line rounded-xl pt-3 px-3 pb-[17px] flex flex-col h-[195px] 2xl:h-[172px] justify-between">
+          <div className="flex items-center gap-1.5 border-b border-line/50 pb-1.5 flex-shrink-0">
+            <Target size={15} className="text-healthy" />
+            <span className="text-ink-muted text-[12px] font-black uppercase tracking-wider">
               CUSTOMER REFLECTION
             </span>
           </div>
           <div className="flex-1 grid grid-cols-2 gap-3 items-center min-h-0 pt-2">
             <div className="flex flex-col h-full justify-between">
               <div className="flex flex-col">
-                <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
+                <span className="text-ink-muted text-[11px] font-bold uppercase leading-none">
                   COMPLAINTS
                 </span>
                 <div className="flex items-baseline gap-1.5 mt-1">
-                  <span className="text-[#22c55e] text-[24px] font-black leading-none font-mono">
+                  <span className="text-healthy text-[24px] font-black leading-none font-mono">
                     {customerComplaintsCount}
                   </span>
                   {/* Caption hidden. Note if it comes back it must say "Overall",
@@ -4439,7 +4410,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       year-to-date sum across every reported month (Jan-Aug = 12) —
                       while this month is 1. The old label named a different window
                       from the number beside it. */}
-                  {/* <span className="text-[#63788f] text-[10px] font-bold font-sans">
+                  {/* <span className="text-ink-dim text-[10px] font-bold font-sans">
                     Overall
                   </span> */}
                 </div>
@@ -4453,19 +4424,19 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                       ? complaintsXTicks
                       : safetyXTicks
                   }
-                  color="#22c55e"
+                  color={palette.healthy}
                 />
               </div>
             </div>
 
-            <div className="flex flex-col h-full justify-between border-l border-[#1c3149]/30 pl-3">
+            <div className="flex flex-col h-full justify-between border-l border-line/30 pl-3">
               <div className="flex flex-col">
                 <div className="flex justify-between items-baseline">
-                  <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
+                  <span className="text-ink-muted text-[11px] font-bold uppercase leading-none">
                     ERI (%)
                   </span>
                   {eriData && (
-                    <span className="text-[#63788f] text-[9.5px] font-bold font-sans">
+                    <span className="text-ink-dim text-[9.5px] font-bold font-sans">
                       Target {eriData.target_pct}%
                     </span>
                   )}
@@ -4479,7 +4450,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   </span>
                   {eriData && (
                     <span
-                      className="text-[#63788f] text-[9px] font-bold font-sans truncate max-w-[50px]"
+                      className="text-ink-dim text-[9px] font-bold font-sans truncate max-w-[50px]"
                       title={eriData.period}
                     >
                       {eriData.period_code || eriData.period}
@@ -4500,7 +4471,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 />
               </div>
               {eriData && (
-                <div className="flex justify-between text-[9px] text-[#63788f] font-bold mt-0.5 pb-1.5 mb-3">
+                <div className="flex justify-between text-[9px] text-ink-dim font-bold mt-0.5 pb-1.5 mb-3">
                   <span>Returns</span>
                   <span className="text-white font-mono">
                     {eriData.returns} / {eriData.deliveries}
@@ -4512,16 +4483,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </div>
 
         {/* Card 4: CI */}
-        <div className="bg-[#101c2b] border border-[#1c3149] rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
-          <div className="flex items-center gap-1.5 border-b border-[#1c3149]/50 pb-1.5 flex-shrink-0">
-            <Trophy size={15} className="text-[#22c55e]" />
-            <span className="text-[#8fa0b5] text-[12px] font-black uppercase tracking-wider">
+        <div className="bg-panel border border-line rounded-xl p-3 flex flex-col h-[195px] 2xl:h-[172px] justify-between">
+          <div className="flex items-center gap-1.5 border-b border-line/50 pb-1.5 flex-shrink-0">
+            <Trophy size={15} className="text-healthy" />
+            <span className="text-ink-muted text-[12px] font-black uppercase tracking-wider">
               CI
             </span>
             {/* Which month the two figures describe — the card reports the last
                 completed month, so leaving it unlabelled reads as "today". */}
             {ciMonthLabel && (
-              <span className="text-[#63788f] text-[10px] font-bold ml-auto">
+              <span className="text-ink-dim text-[10px] font-bold ml-auto">
                 {ciMonthLabel}
               </span>
             )}
@@ -4542,14 +4513,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               would collapse to near-zero every 1st. */}
           <div className="flex-1 grid grid-cols-2 gap-3 min-h-0 pt-2">
             <div className="flex flex-col h-full min-h-0">
-              <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
+              <span className="text-ink-muted text-[11px] font-bold uppercase leading-none">
                 Lean savings
-                <span className="text-[#63788f] ml-1 normal-case">
+                <span className="text-ink-dim ml-1 normal-case">
                   (K&euro;)
                 </span>
               </span>
               <div className="flex items-baseline gap-1.5 mt-1 mb-3">
-                <span className="text-[#22c55e] text-[24px] font-black leading-none font-mono">
+                <span className="text-healthy text-[24px] font-black leading-none font-mono">
                   {fmtCompact(ciTotals.leanSavings, "—")}
                 </span>
               </div>
@@ -4559,20 +4530,20 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     points={ciSavingsPoints}
                     yTicks={ciSavingsYTicks}
                     xTicks={ciMonthTicks}
-                    color="#22c55e"
+                    color={palette.healthy}
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col h-full min-h-0 border-l border-[#1c3149]/30 pl-3">
-              <span className="text-[#8fa0b5] text-[11px] font-bold uppercase leading-none">
+            <div className="flex flex-col h-full min-h-0 border-l border-line/30 pl-3">
+              <span className="text-ink-muted text-[11px] font-bold uppercase leading-none">
                 No. of Kaizen
               </span>
               <div className="flex items-baseline gap-1.5 mt-1 mb-3">
                 {/* Exact rather than compacted: a Kaizen count runs to a few
                     hundred a year, where fmtCompact would round it to "1K". */}
-                <span className="text-[#22c55e] text-[24px] font-black leading-none font-mono">
+                <span className="text-healthy text-[24px] font-black leading-none font-mono">
                   {fmtCount(ciTotals.kaizen, "—")}
                 </span>
               </div>
@@ -4582,7 +4553,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                     points={ciKaizenPoints}
                     yTicks={ciKaizenYTicks}
                     xTicks={ciMonthTicks}
-                    color="#22c55e"
+                    color={palette.healthy}
                   />
                 </div>
               </div>
@@ -4596,8 +4567,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           the rest of the chrome. Drop the logo where marked: at h-[18px] w-auto it
           aligns with the caption without growing this strip, which is what the
           gap-3 and pb-2 above were tightened to afford. */}
-      <footer className="flex items-center justify-end gap-2 flex-shrink-0 border-t border-[#1c3149]/60 py-0.5">
-        <span className="text-[9px] font-semibold text-[#63788f] leading-none">
+      <footer className="flex items-center justify-end gap-2 flex-shrink-0 border-t border-line/60 py-0.5">
+        <span className="text-[9px] font-semibold text-ink-dim leading-none">
           Powered by
         </span>
         <svg
@@ -4650,15 +4621,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       {/* 3D Digital Twin Fullscreen Modal */}
       {isTwinModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 lg:p-8 transition-all duration-300">
-          <div className="relative w-full h-full max-w-[95vw] max-h-[90vh] bg-[#101c2b] border border-[#1c3149] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
+          <div className="relative w-full h-full max-w-[95vw] max-h-[90vh] bg-panel border border-line rounded-2xl overflow-hidden flex flex-col shadow-2xl">
             {/* Modal Header */}
-            <div className="flex justify-between items-center bg-[#101c2b]/90 px-6 py-4 border-b border-[#1c3149] z-10">
+            <div className="flex justify-between items-center bg-panel/90 px-6 py-4 border-b border-line z-10">
               <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#06b6d4] animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-info animate-pulse" />
                 <span className="text-[16px] font-black text-white uppercase tracking-wider">
                   Quality Plant Floor Layout
                 </span>
-                <div className="flex gap-3 text-[12px] font-bold text-[#8fa0b5] ml-4">
+                <div className="flex gap-3 text-[12px] font-bold text-ink-muted ml-4">
                   {(["healthy", "warning", "critical"] as const).map((s) => (
                     <div key={s} className="flex items-center gap-1.5">
                       <span
@@ -4675,14 +4646,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               </div>
               <button
                 onClick={() => setIsTwinModalOpen(false)}
-                className="bg-[#16253a] hover:bg-[#ff4c4c] text-[#8fa0b5] hover:text-white border border-[#26405a] rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
+                className="bg-raised hover:bg-critical text-ink-muted hover:text-white border border-line-strong rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
               >
                 ✕ Close view
               </button>
             </div>
 
             {/* Model Viewport */}
-            <div className="flex-1 relative min-h-0 bg-[#030810] flex items-center justify-center p-4">
+            <div className="flex-1 relative min-h-0 bg-page flex items-center justify-center p-4">
               <FactoryLayoutOverlay zones={twinZones} variant="full" />
             </div>
           </div>
@@ -4699,24 +4670,24 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         // panel below gains the brighter border and deeper shadow that the heavy
         // dim used to provide.
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#030810]/30 backdrop-blur-sm p-4 lg:p-8"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-page/30 backdrop-blur-sm p-4 lg:p-8"
           onClick={() => setIsAlertsModalOpen(false)}
         >
           <div
-            className="relative w-full max-w-[1200px] max-h-[85vh] bg-[#101c2b]/95 border border-[#3a5a7d] rounded-2xl overflow-hidden flex flex-col shadow-[0_24px_70px_rgba(0,0,0,0.75)]"
+            className="relative w-full max-w-[1200px] max-h-[85vh] bg-panel/95 border border-line-soft rounded-2xl overflow-hidden flex flex-col shadow-[0_24px_70px_rgba(0,0,0,0.75)]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex justify-between items-center bg-[#101c2b]/90 px-6 py-4 border-b border-[#1c3149] flex-shrink-0">
+            <div className="flex justify-between items-center bg-panel/90 px-6 py-4 border-b border-line flex-shrink-0">
               <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#ff4c4c] animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-critical animate-pulse" />
                 <span className="text-[16px] font-black text-white uppercase tracking-wider">
                   Attention Center
                 </span>
               </div>
               <button
                 onClick={() => setIsAlertsModalOpen(false)}
-                className="bg-[#16253a] hover:bg-[#ff4c4c] text-[#8fa0b5] hover:text-white border border-[#26405a] rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
+                className="bg-raised hover:bg-critical text-ink-muted hover:text-white border border-line-strong rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
               >
                 ✕ Close
               </button>
@@ -4724,25 +4695,25 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
             {/* Filter row — shares activeAlertTab with the panel, so the tab you
                 pick here is still applied when the modal closes. */}
-            <div className="flex items-center justify-between px-6 py-3 border-b border-[#1c3149]/60 flex-shrink-0">
+            <div className="flex items-center justify-between px-6 py-3 border-b border-line/60 flex-shrink-0">
               <div className="flex gap-2">
                 {(["All", "Critical", "Risk"] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveAlertTab(tab)}
                     aria-pressed={activeAlertTab === tab}
-                    className={`${activeAlertTab === tab ? "bg-[#1e3a8a] text-white border-[#3b82f6]/50" : "bg-[#030810] text-[#63788f] border-[#1c3149] hover:bg-[#1c3149] hover:text-[#8fa0b5]"} border text-[11px] font-bold px-3 py-1.5 rounded transition-colors flex items-center gap-1.5`}
+                    className={`${activeAlertTab === tab ? "bg-tab-active text-white border-tab-border/50" : "bg-page text-ink-dim border-line hover:bg-line hover:text-ink-muted"} border text-[11px] font-bold px-3 py-1.5 rounded transition-colors flex items-center gap-1.5`}
                   >
                     {tab}
                     <span
-                      className={`${activeAlertTab === tab ? "bg-[#3b82f6]/30 text-white" : "bg-[#1c3149]/70 text-[#63788f]"} rounded px-1 font-mono text-[10px] leading-tight`}
+                      className={`${activeAlertTab === tab ? "bg-tab-border/30 text-white" : "bg-line/70 text-ink-dim"} rounded px-1 font-mono text-[10px] leading-tight`}
                     >
                       {alertTabCounts[tab]}
                     </span>
                   </button>
                 ))}
               </div>
-              <span className="text-[11px] font-bold text-[#63788f]">
+              <span className="text-[11px] font-bold text-ink-dim">
                 {visibleAlerts.length}{" "}
                 {visibleAlerts.length === 1 ? "alert" : "alerts"}
               </span>
@@ -4751,38 +4722,38 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {/* Table */}
             <div className="flex-1 min-h-0 overflow-auto custom-scrollbar px-6 py-3">
               {visibleAlerts.length === 0 ? (
-                <div className="flex items-center justify-center py-16 text-[12px] font-bold text-[#63788f]">
+                <div className="flex items-center justify-center py-16 text-[12px] font-bold text-ink-dim">
                   No records found
                 </div>
               ) : (
                 <table className="w-full text-left border-collapse">
-                  <thead className="text-[10px] text-[#63788f] uppercase tracking-wider">
+                  <thead className="text-[10px] text-ink-dim uppercase tracking-wider">
                     <tr>
-                      <th className="pb-2 font-black sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                      <th className="pb-2 font-black sticky top-0 bg-panel border-b border-line z-10">
                         Severity
                       </th>
-                      <th className="pb-2 font-black sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                      <th className="pb-2 font-black sticky top-0 bg-panel border-b border-line z-10">
                         Alert
                       </th>
-                      <th className="pb-2 font-black text-center sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                      <th className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10">
                         Impact
                       </th>
-                      <th className="pb-2 font-black text-right sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                      <th className="pb-2 font-black text-right sticky top-0 bg-panel border-b border-line z-10">
                         Age
                       </th>
-                      <th className="pb-2 font-black sticky top-0 bg-[#101c2b] border-b border-[#1c3149] z-10">
+                      <th className="pb-2 font-black sticky top-0 bg-panel border-b border-line z-10">
                         AI Recommendation
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#1c3149]/45">
+                  <tbody className="divide-y divide-line/45">
                     {visibleAlerts.map((alert) => {
                       const isCritical = alert.level === "Critical";
-                      const tone = isCritical ? "#ff4c4c" : "#eab308";
+                      const tone = isCritical ? palette.critical : palette.warning;
                       return (
                         <tr
                           key={alert.id}
-                          className="hover:bg-[#16253a]/40 transition-colors align-top"
+                          className="hover:bg-raised/40 transition-colors align-top"
                         >
                           <td className="py-2.5 pr-3 whitespace-nowrap">
                             <span
@@ -4806,17 +4777,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                           <td className="py-2.5 pr-3 text-[11.5px] font-semibold text-[#e8eef5] leading-snug min-w-[220px]">
                             {alert.title}
                           </td>
-                          <td className="py-2.5 pr-3 text-center text-[10px] font-bold text-[#8fa0b5] whitespace-nowrap">
+                          <td className="py-2.5 pr-3 text-center text-[10px] font-bold text-ink-muted whitespace-nowrap">
                             {alert.impact}
                           </td>
-                          <td className="py-2.5 pr-3 text-right text-[10px] font-bold text-[#63788f] whitespace-nowrap font-mono">
+                          <td className="py-2.5 pr-3 text-right text-[10px] font-bold text-ink-dim whitespace-nowrap font-mono">
                             {alert.time}
                           </td>
                           <td className="py-2.5 text-[11px] text-[#c3cdda] font-medium leading-snug min-w-[280px]">
                             <div className="flex items-start gap-1.5">
                               <Bot
                                 size={11}
-                                className="text-[#818cf8] mt-[2px] flex-shrink-0"
+                                className="text-indigo-400 mt-[2px] flex-shrink-0"
                               />
                               <span>{alert.rec}</span>
                             </div>
@@ -4839,15 +4810,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         createPortal(
           <div
             role="tooltip"
-            className="fixed z-[9999] pointer-events-none w-[300px] max-w-[90vw] -translate-x-1/2 -translate-y-full bg-[#0b1220] border border-[#4338ca]/50 rounded-md p-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.7)]"
+            className="fixed z-[9999] pointer-events-none w-[300px] max-w-[90vw] -translate-x-1/2 -translate-y-full bg-[#0b1220] border border-indigo-700/50 rounded-md p-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.7)]"
             style={{
               left: Math.min(Math.max(recTip.x, 160), window.innerWidth - 160),
               top: recTip.y - 8,
             }}
           >
             <div className="flex items-center gap-1.5 mb-1">
-              <Bot size={11} className="text-[#818cf8]" />
-              <span className="text-[#818cf8] text-[9px] font-black uppercase tracking-wider">
+              <Bot size={11} className="text-indigo-400" />
+              <span className="text-indigo-400 text-[9px] font-black uppercase tracking-wider">
                 AI Recommendation
               </span>
             </div>

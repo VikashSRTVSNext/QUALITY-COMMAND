@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, Sparkles, AlertTriangle } from 'lucide-react';
 import { useDefectDetail } from '../../data/queries';
 import Sparkline from '../../widgets/Sparkline';
+import { toolPalette } from "../../theme/palette";
 
 // Full-page drill-down for a defect root-cause view: /quality/defect/:defectCode
 export const DefectDetailPage: React.FC = () => {
@@ -11,34 +12,34 @@ export const DefectDetailPage: React.FC = () => {
   const { data, isLoading, isError } = useDefectDetail(defectCode);
 
   return (
-    <div className="w-full min-h-screen bg-[#02070e] text-[#f8fafc] p-6 flex flex-col gap-6">
+    <div className="w-full min-h-screen bg-[#02070e] text-ink p-6 flex flex-col gap-6">
       <button
         onClick={() => navigate('/quality')}
-        className="flex items-center gap-1.5 text-[#8fa0b5] hover:text-white w-fit text-sm font-bold"
+        className="flex items-center gap-1.5 text-ink-muted hover:text-white w-fit text-sm font-bold"
       >
         <ChevronLeft size={16} /> Quality
-        <span className="text-[#142337]">/</span>
-        <span className="text-[#06b6d4]">{data?.name ?? defectCode}</span>
+        <span className="text-inset">/</span>
+        <span className="text-info">{data?.name ?? defectCode}</span>
       </button>
 
       {isLoading && <div className="text-[#526a8a]">Loading defect analysis…</div>}
-      {isError && <div className="text-[#ff4c4c]">Failed to load defect {defectCode}.</div>}
+      {isError && <div className="text-critical">Failed to load defect {defectCode}.</div>}
 
       {data && (
         <>
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-black flex items-center gap-2">
-              <AlertTriangle size={22} className="text-[#f97316]" /> {data.name}
+              <AlertTriangle size={22} className="text-orange-500" /> {data.name}
             </h1>
-            <span className="text-sm font-black px-3 py-1 rounded bg-[#3b82f6]/15 text-[#3b82f6] font-mono">
+            <span className="text-sm font-black px-3 py-1 rounded bg-tab-border/15 text-tab-border font-mono">
               {data.ppm} PPM
             </span>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Root cause breakdown */}
-            <section className="bg-[#070e17] border border-[#142337] rounded-xl p-5">
-              <h2 className="text-sm font-black uppercase tracking-widest text-[#8fa0b5] mb-4">
+            <section className="bg-[#070e17] border border-inset rounded-xl p-5">
+              <h2 className="text-sm font-black uppercase tracking-widest text-ink-muted mb-4">
                 Root Cause Breakdown
               </h2>
               <div className="flex flex-col gap-3">
@@ -48,9 +49,9 @@ export const DefectDetailPage: React.FC = () => {
                       <span>{rc.cause}</span>
                       <span className="font-mono text-white">{rc.sharePct}%</span>
                     </div>
-                    <div className="w-full h-1.5 bg-[#142337] rounded-full overflow-hidden">
+                    <div className="w-full h-1.5 bg-inset rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-[#06b6d4] rounded-full"
+                        className="h-full bg-info rounded-full"
                         style={{ width: `${rc.sharePct}%` }}
                       />
                     </div>
@@ -60,15 +61,15 @@ export const DefectDetailPage: React.FC = () => {
             </section>
 
             {/* Trend + affected lines */}
-            <section className="bg-[#070e17] border border-[#142337] rounded-xl p-5 flex flex-col gap-4">
+            <section className="bg-[#070e17] border border-inset rounded-xl p-5 flex flex-col gap-4">
               <div>
-                <h2 className="text-sm font-black uppercase tracking-widest text-[#8fa0b5] mb-3">
+                <h2 className="text-sm font-black uppercase tracking-widest text-ink-muted mb-3">
                   PPM Trend (6 periods)
                 </h2>
-                <Sparkline data={data.trend} stroke="#f97316" fluid height={56} />
+                <Sparkline data={data.trend} stroke={toolPalette.orange500} fluid height={56} />
               </div>
               <div>
-                <h3 className="text-xs font-black uppercase tracking-widest text-[#8fa0b5] mb-2">
+                <h3 className="text-xs font-black uppercase tracking-widest text-ink-muted mb-2">
                   Affected Lines
                 </h3>
                 <div className="flex flex-wrap gap-2">
@@ -86,11 +87,11 @@ export const DefectDetailPage: React.FC = () => {
           </div>
 
           {/* AI recommendation */}
-          <div className="bg-[#06b6d4]/5 border border-[#06b6d4]/20 rounded-xl p-4 flex items-start gap-2 text-sm">
-            <Sparkles size={16} className="text-[#06b6d4] flex-shrink-0 mt-0.5" />
+          <div className="bg-info/5 border border-info/20 rounded-xl p-4 flex items-start gap-2 text-sm">
+            <Sparkles size={16} className="text-info flex-shrink-0 mt-0.5" />
             <span>
               <strong className="text-white">AI Recommendation: </strong>
-              <span className="text-[#8fa0b5]">{data.recommendation}</span>
+              <span className="text-ink-muted">{data.recommendation}</span>
             </span>
           </div>
         </>

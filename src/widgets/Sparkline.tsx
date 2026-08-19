@@ -1,4 +1,5 @@
 import React from 'react';
+import { palette } from "../theme/palette";
 
 interface SparklineProps {
   data: number[];
@@ -16,7 +17,7 @@ interface SparklineProps {
  */
 export const Sparkline: React.FC<SparklineProps> = ({
   data,
-  stroke = '#22c55e',
+  stroke = palette.healthy,
   width = 80,
   height = 24,
   fluid = false,

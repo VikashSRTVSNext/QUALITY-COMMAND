@@ -2,55 +2,235 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+   DESIGN TOKENS — single source of truth
+   ============================================================================
+   Every colour, size, elevation and timing the app uses is declared once here.
+   tailwind.config.js reads these same variables, so one definition is reachable
+   two ways:
+
+     raw CSS   →  color: rgb(var(--c-ink));
+     Tailwind  →  text-ink      bg-panel      border-line
+                  text-ink/70   bg-panel/50   border-line/30
+
+   Colours are stored as SPACE-SEPARATED RGB CHANNELS rather than hex. That is
+   what makes the opacity modifiers above work: Tailwind expands `bg-panel/50`
+   into `rgb(var(--c-panel) / 0.5)`, which a hex variable cannot do. It is also
+   why the same channels can drive a fill AND its glow without the two drifting
+   apart — see --glow-* below.
+
+   The values match what ships today (and the Figma dark theme, which agrees).
+   Changing one here changes it everywhere that uses the token. Markup written
+   before these existed still holds arbitrary literals like bg-[#101c2b]; those
+   keep working untouched and can be swapped to tokens as files are edited.
+   ============================================================================ */
+
 @layer base {
+  :root {
+    /* --- surfaces, darkest to lightest ------------------------------------ */
+
+    /* The page itself. The deepest value on screen, so cards read as floating
+       above it rather than sitting flush. */
+    --c-page:          3 8 16;          /* #030810 */
+    /* Sunken tracks and hairlines inside a card: progress-bar troughs, the
+       breadcrumb separator, detail-panel outlines. */
+    --c-inset:         20 35 55;        /* #142337 */
+    /* Cards and panels — the workhorse surface. */
+    --c-panel:         16 28 43;        /* #101c2b */
+    /* Gradient tops, hover states, the raised edge of a card. */
+    --c-raised:        22 37 58;        /* #16253a */
+
+    /* --- borders ----------------------------------------------------------- */
+
+    /* Default hairline between regions. Also doubles as a subtle fill for
+       hovered tabs, which is why it appears as both border- and bg-. */
+    --c-line:          28 49 73;        /* #1c3149 */
+    /* Emphasised divider: card outlines, focused inputs, table header rules. */
+    --c-line-strong:   38 64 90;        /* #26405a */
+    /* Modal chrome — header, footer and sticky column rules. */
+    --c-line-modal:    43 68 99;        /* #2b4463 */
+    /* Lighter rule used where a border sits against a pale fill. Shared by the
+       quality layout and the products modal. */
+    --c-line-soft:     58 90 125;       /* #3a5a7d */
+
+    /* --- text, brightest to dimmest --------------------------------------- */
+
+    /* Card titles and headline values. */
+    --c-ink:           248 250 252;     /* #f8fafc */
+    /* Table cells and body copy. */
+    --c-ink-secondary: 200 214 228;     /* #c8d6e4 */
+    /* Column headers and field labels — the most-used text colour in the app. */
+    --c-ink-muted:     143 160 181;     /* #8fa0b5 */
+    /* De-emphasised metadata: units, timestamps, footnotes, inactive tabs. */
+    --c-ink-dim:       99 120 143;      /* #63788f */
+
+    /* --- status ------------------------------------------------------------ */
+
+    /* These drive every range-based judgement on screen: gauges, sparklines,
+       status pills, trend arrows, zone outlines. Keep them in step with
+       STATUS_CSS in src/components/factory/zones.ts. */
+    --c-healthy:       34 197 94;       /* #22c55e */
+    --c-warning:       234 179 8;       /* #eab308 */
+    --c-critical:      255 76 76;       /* #ff4c4c */
+    --c-unknown:       100 116 139;     /* #64748b */
+    --c-info:          6 182 212;       /* #06b6d4 */
+
+    /* --- accents ----------------------------------------------------------- */
+
+    --c-accent:        0 90 255;        /* #005aff — primary action blue */
+    --c-accent-rail:   0 145 255;       /* #0091ff — group rails above cards  */
+    /* Selected tab: a deep navy fill with a brighter border on top. */
+    --c-tab-active:    30 58 138;       /* #1e3a8a */
+    --c-tab-border:    59 130 246;      /* #3b82f6 */
+
+    /* --- elevation and glow ------------------------------------------------ */
+
+    /* Derived from the status channels above, so a fill and its bloom can never
+       drift apart. Previously these were hand-written rgba() duplicates. */
+    --glow-healthy:    0 0 15px rgb(var(--c-healthy) / 0.35);
+    --glow-warning:    0 0 15px rgb(var(--c-warning) / 0.35);
+    --glow-critical:   0 0 15px rgb(var(--c-critical) / 0.5);
+    --glow-info:       0 0 15px rgb(var(--c-info) / 0.35);
+    --glow-accent:     0 0 15px rgb(var(--c-accent) / 0.35);
+
+    --shadow-panel:    0 4px 20px rgb(0 0 0 / 0.5);
+    --shadow-float:    0 10px 30px rgb(0 0 0 / 0.7);
+
+    /* --- radius ------------------------------------------------------------ */
+
+    /* Mirrors Tailwind's default scale, so `rounded` and `var(--radius-sm)`
+       agree. Exposed for raw CSS and inline styles. */
+    --radius-sm:       4px;
+    --radius-md:       8px;
+    --radius-lg:       12px;
+    --radius-full:     9999px;
+
+    /* --- spacing ----------------------------------------------------------- */
+
+    --space-xs:        4px;
+    --space-sm:        8px;
+    --space-md:        16px;
+    --space-lg:        24px;
+    --space-xl:        32px;
+    --grid-gap:        16px;
+
+    /* --- typography -------------------------------------------------------- */
+
+    --font-sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+
+    /* A dense control-room scale — this dashboard's body text is 11-12px, not
+       16px. Named by role because "sm/base/lg" stops meaning anything when the
+       whole range lives between 9 and 24px. The counts are how many arbitrary
+       text-[Npx] literals each step replaces. */
+    --fs-micro:        9px;             /* 21 uses — axis ticks, dense legends */
+    --fs-tiny:         10px;            /* 30 uses — chips, badges            */
+    --fs-small:        11px;            /* 45 uses — the workhorse            */
+    --fs-body:         12px;            /* 34 uses — table cells, body copy   */
+    --fs-label:        13px;            /* 11 uses — field labels             */
+    --fs-lead:         15px;            /* 10 uses — card titles              */
+    --fs-title:        17px;            /*  9 uses — section headings         */
+    --fs-metric:       24px;            /*  7 uses — KPI numbers              */
+    --fs-hero:         42px;            /* headline metrics (OEE, yield %)    */
+
+    /* --- z-index layers ---------------------------------------------------- */
+
+    /* Named stops so stacking is a decision rather than an arms race. The one
+       z-[9999] in the codebase is a tooltip that belongs at --z-tooltip. */
+    --z-base:          1;
+    --z-raised:        10;   /* sticky table headers, card overlays */
+    --z-sticky:        20;
+    --z-overlay:       40;   /* floating editor panels              */
+    --z-modal:         50;
+    --z-popover:       60;
+    --z-tooltip:       70;
+    --z-toast:         80;
+
+    /* --- motion ------------------------------------------------------------ */
+
+    --dur-fast:        150ms;
+    --dur-base:        200ms;
+    --dur-slow:        300ms;
+    --dur-slower:      500ms;
+    --ease-out:        cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out:     cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* --- base elements ------------------------------------------------------- */
+
   body {
-    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-    background-color: #050b12;
-    color: #f8fafc;
+    font-family: var(--font-sans);
+    background-color: rgb(var(--c-page));
+    color: rgb(var(--c-ink));
     margin: 0;
     padding: 0;
     overflow-y: auto;
     overflow-x: hidden;
   }
+
+  /* Keyboard focus was invisible everywhere — several controls carry
+     `outline-none` and nothing replaced it, so tabbing through the plant-layout
+     editor gave no indication of position. :focus-visible only fires for
+     keyboard/AT navigation, so mouse clicks stay unchanged. */
+  :focus-visible {
+    outline: 2px solid rgb(var(--c-info));
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  ::selection {
+    background-color: rgb(var(--c-accent) / 0.35);
+    color: rgb(var(--c-ink));
+  }
 }
 
-/* Custom Scrollbar styled for industrial dark theme */
+/* --- scrollbar ------------------------------------------------------------- */
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #101c2b;
+  background: rgb(var(--c-panel));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1c3149;
+  background: rgb(var(--c-line));
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #26405a;
+  background: rgb(var(--c-line-strong));
 }
 
-/* Glow styles for industrial Nokia styling indicators */
+/* Firefox has no pseudo-element scrollbar; this is the whole API. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--c-line)) rgb(var(--c-panel));
+}
+
+/* --- status glow helpers --------------------------------------------------- */
+
 .status-glow-success {
-  box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+  box-shadow: var(--glow-healthy);
 }
 .status-glow-warning {
-  box-shadow: 0 0 10px rgba(234, 179, 8, 0.4);
+  box-shadow: var(--glow-warning);
 }
 .status-glow-danger {
-  box-shadow: 0 0 10px rgba(255, 76, 76, 0.5);
+  box-shadow: var(--glow-critical);
 }
 .status-glow-info {
-  box-shadow: 0 0 10px rgba(6, 182, 212, 0.4);
+  box-shadow: var(--glow-info);
 }
 .status-glow-primary {
-  box-shadow: 0 0 10px rgba(0, 90, 255, 0.4);
+  box-shadow: var(--glow-accent);
 }
 
-/* Premium soft animations and glows */
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+
 @keyframes soft-pulse {
   0%,
   100% {
@@ -62,25 +242,23 @@
     transform: scale(1.1);
   }
 }
+.animate-soft-pulse {
+  animation: soft-pulse 2s infinite var(--ease-in-out);
+}
 
 @keyframes border-glow-pulse {
   0%,
   100% {
-    border-color: rgba(255, 76, 76, 0.35);
-    box-shadow: 0 0 4px rgba(255, 76, 76, 0.1);
+    border-color: rgb(var(--c-critical) / 0.35);
+    box-shadow: 0 0 4px rgb(var(--c-critical) / 0.1);
   }
   50% {
-    border-color: rgba(255, 76, 76, 0.85);
-    box-shadow: 0 0 16px rgba(255, 76, 76, 0.35);
+    border-color: rgb(var(--c-critical) / 0.85);
+    box-shadow: 0 0 16px rgb(var(--c-critical) / 0.35);
   }
 }
-
-.animate-soft-pulse {
-  animation: soft-pulse 2s infinite ease-in-out;
-}
-
 .animate-border-pulse-critical {
-  animation: border-glow-pulse 2.5s infinite ease-in-out;
+  animation: border-glow-pulse 2.5s infinite var(--ease-in-out);
 }
 
 /* Connectors and flows */
@@ -97,34 +275,100 @@
 @keyframes map-glow-healthy {
   0%,
   100% {
-    box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+    box-shadow: 0 0 10px rgb(var(--c-healthy) / 0.2);
   }
   50% {
-    box-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+    box-shadow: 0 0 20px rgb(var(--c-healthy) / 0.5);
   }
 }
 .animate-map-glow-healthy {
-  animation: map-glow-healthy 3s infinite ease-in-out;
+  animation: map-glow-healthy 3s infinite var(--ease-in-out);
 }
 
 @keyframes map-glow-risk {
   0%,
   100% {
-    border-color: rgba(234, 179, 8, 0.3);
-    box-shadow: 0 0 8px rgba(234, 179, 8, 0.2);
+    border-color: rgb(var(--c-warning) / 0.3);
+    box-shadow: 0 0 8px rgb(var(--c-warning) / 0.2);
   }
   50% {
-    border-color: rgba(234, 179, 8, 0.85);
-    box-shadow: 0 0 16px rgba(234, 179, 8, 0.45);
+    border-color: rgb(var(--c-warning) / 0.85);
+    box-shadow: 0 0 16px rgb(var(--c-warning) / 0.45);
   }
 }
 .animate-map-glow-risk {
-  animation: map-glow-risk 2.5s infinite ease-in-out;
+  animation: map-glow-risk 2.5s infinite var(--ease-in-out);
 }
 
-/* Normal document flow handles styling without sizing locks */
+/* FactoryLayoutOverlay's floating editor panel asks for `animate-fade-in`, which
+   was never defined anywhere — the panel appeared with no transition. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in {
+  animation: fade-in var(--dur-base) var(--ease-out) both;
+}
 
-/* Custom grid layout for 13 process performance cards */
+/* Sparkline draw-on and marker bloom. These previously lived in an inline
+   <style> block inside the sparkline SVG, which re-emitted the same rules once
+   per chart on the page. */
+@keyframes draw-sparkline {
+  0% {
+    stroke-dasharray: 0 500;
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dasharray: 500 500;
+    opacity: 1;
+  }
+}
+.animate-sparkline {
+  animation: draw-sparkline 1.5s ease-out forwards;
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    transform: scale(0.9);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.25);
+    opacity: 0.9;
+  }
+}
+.animate-pulse-glow {
+  animation: pulse-glow 1.5s infinite var(--ease-in-out);
+}
+
+/* This is a wall-mounted dashboard that runs a whole shift, so the infinite
+   pulses and glows above never stop. Honour the OS preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+   LAYOUT
+   ============================================================================ */
+
+/* Custom grid for the 13 process performance cards. */
 @media (min-width: 1024px) {
   .lg\:grid-cols-13 {
     grid-template-columns: repeat(13, minmax(0, 1fr)) !important;

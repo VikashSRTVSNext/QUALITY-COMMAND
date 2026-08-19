@@ -1,4 +1,21 @@
 /** @type {import('tailwindcss').Config} */
+
+// Every token below reads a CSS variable declared in src/index.css — that file
+// is the single source of truth, this one just makes the values reachable as
+// utility classes. Because the variables hold space-separated RGB channels, the
+// `<alpha-value>` placeholder works, so opacity modifiers do too:
+//
+//   bg-panel      →  rgb(var(--c-panel) / 1)
+//   bg-panel/50   →  rgb(var(--c-panel) / 0.5)
+//
+// That was the gap that stopped the previous token set from being adopted: it
+// duplicated the hex values here, so a colour change had to be swept through
+// src/ by hand. Now there is one definition and no sweep.
+//
+// These additions are deliberately ADDITIVE — no default Tailwind scale is
+// overridden — so existing markup renders byte-identically.
+const channel = (name) => `rgb(var(${name}) / <alpha-value>)`;
+
 export default {
   content: [
     "./index.html",
@@ -9,65 +26,104 @@ export default {
       gridTemplateColumns: {
         '13': 'repeat(13, minmax(0, 1fr))',
       },
+
       colors: {
-        // Quality Command Center palette, taken from the Figma dark theme.
-        // These are the source of truth: the page still writes most colours as
-        // arbitrary hex literals (bg-[#101c2b]), so when a value changes here it
-        // must be swept through src/ as well. Prefer the token form
-        // (bg-theme-panelBg) in new markup — it also supports opacity modifiers,
-        // which arbitrary CSS variables do not.
-        theme: {
-          // --- grounds and surfaces, darkest to lightest ---
-          // The page itself — the deepest value on screen, so cards read as
-          // floating above it rather than sitting flush.
-          bg: '#030810',
-          // Pills and badges sunk INTO a card (the "1 Critical" chip).
-          inset: '#050b12',
-          // Table bodies and tab tracks.
-          inset2: '#081119',
-          // Cards and panels. Figma-exact.
-          panelBg: '#101c2b',
-          // Gradient tops, hover states, the raised edge of a card.
-          panelRaised: '#16253a',
+        // --- surfaces, darkest to lightest ---
+        page:         channel('--c-page'),
+        inset:        channel('--c-inset'),
+        panel:        channel('--c-panel'),
+        raised:       channel('--c-raised'),
 
-          // --- borders ---
-          border: '#1c3149',
-          borderStrong: '#26405a',
+        // --- borders (named `line` so they don't collide with border-width
+        //     utilities like `border-2`) ---
+        line: {
+          DEFAULT:    channel('--c-line'),
+          strong:     channel('--c-line-strong'),
+          modal:      channel('--c-line-modal'),
+          soft:       channel('--c-line-soft'),
+        },
 
-          // --- text, brightest to dimmest ---
-          // Card titles and headline values.
-          text: '#f8fafc',
-          // Table cells and body copy.
-          textSecondary: '#c8d6e4',
-          // Column headers and field labels.
-          muted: '#8fa0b5',
-          // De-emphasised metadata: units, timestamps, footnotes.
-          dim: '#63788f',
+        // --- text, brightest to dimmest ---
+        ink: {
+          DEFAULT:    channel('--c-ink'),
+          secondary:  channel('--c-ink-secondary'),
+          muted:      channel('--c-ink-muted'),
+          dim:        channel('--c-ink-dim'),
+        },
 
-          // --- accents and status ---
-          // success/danger are Figma-confirmed and drive every range-based
-          // judgement: gauges, sparklines, status pills, trend arrows. Change
-          // them here AND sweep src/ for both the hex and the rgba() glow
-          // spellings — a fill and its bloom drifting apart is the usual bug.
-          // The blues below are unchanged; they already match the design.
-          primary: '#005aff',
-          // Group rails above the process cards (SMT blue, RFM green).
-          rail: '#0091ff',
-          success: '#22c55e',
-          warning: '#eab308',
-          danger: '#ff4c4c',
-          info: '#06b6d4',
-        }
+        // --- status: every range-based judgement on screen ---
+        healthy:      channel('--c-healthy'),
+        warning:      channel('--c-warning'),
+        critical:     channel('--c-critical'),
+        unknown:      channel('--c-unknown'),
+        info:         channel('--c-info'),
+
+        // --- accents ---
+        accent: {
+          DEFAULT:    channel('--c-accent'),
+          rail:       channel('--c-accent-rail'),
+        },
+        tab: {
+          active:     channel('--c-tab-active'),
+          border:     channel('--c-tab-border'),
+        },
       },
+
+      // Role-named because this dashboard's whole type range lives between 9px
+      // and 42px, where sm/base/lg stop carrying meaning. New names only —
+      // Tailwind's text-xs/text-sm/… are untouched.
+      fontSize: {
+        micro:  'var(--fs-micro)',
+        tiny:   'var(--fs-tiny)',
+        small:  'var(--fs-small)',
+        body:   'var(--fs-body)',
+        label:  'var(--fs-label)',
+        lead:   'var(--fs-lead)',
+        title:  'var(--fs-title)',
+        metric: 'var(--fs-metric)',
+        hero:   'var(--fs-hero)',
+      },
+
       fontFamily: {
         sans: ['"Segoe UI"', '-apple-system', 'BlinkMacSystemFont', 'Roboto', 'sans-serif'],
       },
+
+      // Glows derive from the status channels, so a fill and its bloom cannot
+      // drift apart — the failure mode the old hand-written rgba() pairs had.
       boxShadow: {
-        glowPrimary: '0 0 15px rgba(0, 90, 255, 0.35)',
-        glowSuccess: '0 0 15px rgba(34, 197, 94, 0.35)',
-        glowWarning: '0 0 15px rgba(234, 179, 8, 0.35)',
-        glowDanger: '0 0 15px rgba(255, 76, 76, 0.5)',
-      }
+        glowSuccess:  'var(--glow-healthy)',
+        glowWarning:  'var(--glow-warning)',
+        glowDanger:   'var(--glow-critical)',
+        glowInfo:     'var(--glow-info)',
+        glowPrimary:  'var(--glow-accent)',
+        panel:        'var(--shadow-panel)',
+        float:        'var(--shadow-float)',
+      },
+
+      // Named stops so stacking is a decision, not an arms race. Numeric
+      // z-10/z-40/z-50 still work.
+      zIndex: {
+        base:    'var(--z-base)',
+        raised:  'var(--z-raised)',
+        sticky:  'var(--z-sticky)',
+        overlay: 'var(--z-overlay)',
+        modal:   'var(--z-modal)',
+        popover: 'var(--z-popover)',
+        tooltip: 'var(--z-tooltip)',
+        toast:   'var(--z-toast)',
+      },
+
+      transitionDuration: {
+        fast:   'var(--dur-fast)',
+        base:   'var(--dur-base)',
+        slow:   'var(--dur-slow)',
+        slower: 'var(--dur-slower)',
+      },
+
+      transitionTimingFunction: {
+        'out-soft': 'var(--ease-out)',
+        'in-out-soft': 'var(--ease-in-out)',
+      },
     },
   },
   plugins: [],

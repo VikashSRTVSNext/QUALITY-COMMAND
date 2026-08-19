@@ -1,6 +1,7 @@
 // Shared zone data model for the factory quality views.
 // Consumed by the 2D plant-layout overlay (FactoryLayoutOverlay) and the
 // quality dashboard so there is a single source of truth.
+import { zonePalette } from "../../theme/palette";
 
 export type ZoneStatus = "healthy" | "warning" | "critical" | "unknown";
 
@@ -12,13 +13,10 @@ export interface ZoneDef {
   detail: string;
 }
 
-// Status → CSS colour. Green / amber / red / grey only.
-export const STATUS_CSS: Record<ZoneStatus, string> = {
-  healthy:  "#2fe0a0",
-  warning:  "#f59e0b",
-  critical: "#f24b5c",
-  unknown:  "#64748b",
-};
+// Status → CSS colour. These reach the overlay as SVG `fill`/`stroke`
+// attributes, where a CSS variable would not resolve, so they must stay real
+// colour strings — see the note on zonePalette in src/theme/palette.ts.
+export const STATUS_CSS: Record<ZoneStatus, string> = zonePalette;
 
 export const STATUS_LABEL: Record<ZoneStatus, string> = {
   healthy:  "Healthy",

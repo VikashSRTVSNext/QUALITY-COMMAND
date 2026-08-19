@@ -10,6 +10,7 @@ import {
 } from "./zones";
 
 import qualityOgLayout from "../../assets/Quality-OG-Layout.png";
+import { palette, toolPalette } from "../../theme/palette";
 
 interface FactoryLayoutOverlayProps {
   /** Live zones — same array the 3D twin consumes, statuses fed by the SSE feed. */
@@ -593,8 +594,8 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
           }}
           className={`absolute top-4 right-4 z-40 px-3 py-1.5 rounded-lg border text-[11px] font-black uppercase tracking-widest transition-all duration-200 cursor-pointer shadow-lg select-none outline-none ${
             isEditMode
-              ? "bg-[#ef4444] hover:bg-[#dc2626] text-white border-[#f87171] shadow-red-500/20"
-              : "bg-[#050d17]/95 hover:bg-[#16254c] text-[#38bdf8] border-[#38bdf8]/30 shadow-[#38bdf8]/10 hover:border-[#38bdf8]/60"
+              ? "bg-red-500 hover:bg-red-600 text-white border-red-400 shadow-red-500/20"
+              : "bg-[#050d17]/95 hover:bg-[#16254c] text-sky-400 border-sky-400/30 shadow-sky-400/10 hover:border-sky-400/60"
           }`}
         >
           {isEditMode ? "Close Editor" : "Edit Overlay"}
@@ -603,7 +604,7 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-[#22c55e] text-white text-[12px] font-bold shadow-lg flex items-center gap-1.5 border border-[#4ade80] animate-bounce">
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-healthy text-white text-[12px] font-bold shadow-lg flex items-center gap-1.5 border border-green-400 animate-bounce">
           <CheckCircle2 size={14} />
           {toastMessage}
         </div>
@@ -687,7 +688,7 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
                   y1={lay}
                   x2={overlay.anchor[0]}
                   y2={overlay.anchor[1]}
-                  stroke="#ef4444"
+                  stroke={toolPalette.red500}
                   strokeWidth={2.5}
                   strokeDasharray="5,5"
                   opacity={0.85}
@@ -722,15 +723,15 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
                         cx={pt[0]}
                         cy={pt[1]}
                         r={9}
-                        fill="#38bdf8"
-                        stroke="#ffffff"
+                        fill={toolPalette.sky400}
+                        stroke={palette.white}
                         strokeWidth={isSelected ? 3.5 : 1.5}
                         style={{ pointerEvents: "none" }}
                       />
                       <text
                         x={pt[0]}
                         y={pt[1] - 15}
-                        fill="#ffffff"
+                        fill={palette.white}
                         fontSize="11"
                         fontWeight="black"
                         textAnchor="middle"
@@ -765,15 +766,15 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
                     cx={overlay.anchor[0]}
                     cy={overlay.anchor[1]}
                     r={9}
-                    fill="#10b981"
-                    stroke="#ffffff"
+                    fill={toolPalette.emerald500}
+                    stroke={palette.white}
                     strokeWidth={selectedHandle?.type === "anchor" ? 3.5 : 1.5}
                     style={{ pointerEvents: "none" }}
                   />
                   <text
                     x={overlay.anchor[0]}
                     y={overlay.anchor[1] - 15}
-                    fill="#10b981"
+                    fill={toolPalette.emerald500}
                     fontSize="11"
                     fontWeight="black"
                     textAnchor="middle"
@@ -806,15 +807,15 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
                     cx={lax}
                     cy={lay}
                     r={9}
-                    fill="#f59e0b"
-                    stroke="#ffffff"
+                    fill={toolPalette.amber500}
+                    stroke={palette.white}
                     strokeWidth={selectedHandle?.type === "label" ? 3.5 : 1.5}
                     style={{ pointerEvents: "none" }}
                   />
                   <text
                     x={lax}
                     y={lay - 15}
-                    fill="#f59e0b"
+                    fill={toolPalette.amber500}
                     fontSize="11"
                     fontWeight="black"
                     textAnchor="middle"
@@ -911,19 +912,19 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
             onTouchStart={handlePanelDragStart}
           >
             <div className="flex items-center gap-2 pointer-events-none">
-              <span className="h-2 w-2 rounded-full bg-[#38bdf8] animate-pulse" />
-              <span className="font-black uppercase tracking-wider text-[#38bdf8]">
+              <span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse" />
+              <span className="font-black uppercase tracking-wider text-sky-400">
                 Layout Overlay Editor
               </span>
             </div>
-            <span className="text-[9px] text-[#8fa0b5] bg-[#1c2e4a] px-1.5 py-0.5 rounded font-bold pointer-events-none">
+            <span className="text-[9px] text-ink-muted bg-[#1c2e4a] px-1.5 py-0.5 rounded font-bold pointer-events-none">
               Local Auto-Save
             </span>
           </div>
 
           {/* Active Zone Selector */}
           <div className="flex flex-col gap-1">
-            <label className="text-[#8fa0b5] font-black uppercase text-[9px] tracking-wider">
+            <label className="text-ink-muted font-black uppercase text-[9px] tracking-wider">
               Selected Zone to Edit:
             </label>
             <div className="flex gap-2">
@@ -933,7 +934,7 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
                   setActiveZoneId(e.target.value || null);
                   setSelectedHandle(null);
                 }}
-                className="flex-1 bg-[#101c2b] border border-white/10 rounded px-2.5 py-1.5 text-white font-bold outline-none cursor-pointer text-[12px] hover:border-white/20 transition-colors"
+                className="flex-1 bg-panel border border-white/10 rounded px-2.5 py-1.5 text-white font-bold outline-none cursor-pointer text-[12px] hover:border-white/20 transition-colors"
               >
                 <option value="">-- Choose zone or click on plant floor --</option>
                 {Object.entries(overlays).map(([id, overlay]) => {
@@ -950,7 +951,7 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
                 showConfirmDelete ? (
                   <button
                     onClick={handleDeleteZone}
-                    className="px-2 py-1.5 bg-[#ef4444] hover:bg-[#dc2626] text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[10px] uppercase"
+                    className="px-2 py-1.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[10px] uppercase"
                     title="Click again to confirm delete"
                   >
                     Confirm?
@@ -993,7 +994,7 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
                   localStorage.setItem("custom_zone_overlays", JSON.stringify(nextOverlays));
                   triggerToast(`Point P${nextPoly.length} added`);
                 }}
-                className="flex-1 py-1.5 bg-[#1e293b] hover:bg-[#0284c7] border border-white/10 hover:border-[#38bdf8]/40 text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[11px] uppercase tracking-wider"
+                className="flex-1 py-1.5 bg-slate-800 hover:bg-sky-600 border border-white/10 hover:border-sky-400/40 text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[11px] uppercase tracking-wider"
                 title="Insert a new polygon point between the last and first vertex"
               >
                 + Add Point
@@ -1017,7 +1018,7 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
                   localStorage.setItem("custom_zone_overlays", JSON.stringify(nextOverlays));
                   triggerToast(`Point P${poly.length} removed`);
                 }}
-                className="flex-1 py-1.5 bg-[#1e293b] hover:bg-red-600/60 border border-white/10 hover:border-red-500/40 text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[11px] uppercase tracking-wider"
+                className="flex-1 py-1.5 bg-slate-800 hover:bg-red-600/60 border border-white/10 hover:border-red-500/40 text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[11px] uppercase tracking-wider"
                 title="Remove the last polygon point (min 3 required)"
                 disabled={!activeZoneId || (overlays[activeZoneId]?.poly?.length ?? 0) <= 3}
               >
@@ -1034,17 +1035,17 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
                 setNewZoneName("");
                 setNewZoneId("");
               }}
-              className="py-1.5 bg-[#1e293b] hover:bg-[#334155] border border-white/10 text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[11px] uppercase tracking-wider"
+              className="py-1.5 bg-slate-800 hover:bg-slate-700 border border-white/10 text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[11px] uppercase tracking-wider"
             >
               + Create Custom Zone
             </button>
           ) : (
             <div className="flex flex-col gap-2 p-2.5 rounded bg-white/5 border border-white/5">
-              <div className="text-[#38bdf8] font-black uppercase text-[9px] tracking-wider">
+              <div className="text-sky-400 font-black uppercase text-[9px] tracking-wider">
                 Create Custom Zone
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[#8fa0b5] text-[9px] uppercase font-bold">Zone Name:</label>
+                <label className="text-ink-muted text-[9px] uppercase font-bold">Zone Name:</label>
                 <input
                   type="text"
                   placeholder="e.g. Warehouse"
@@ -1053,29 +1054,29 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
                     setNewZoneName(e.target.value);
                     setNewZoneId(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
                   }}
-                  className="bg-[#101c2b] border border-white/10 rounded px-2.5 py-1 text-white outline-none focus:border-[#38bdf8]/50 text-[11px]"
+                  className="bg-panel border border-white/10 rounded px-2.5 py-1 text-white outline-none focus:border-sky-400/50 text-[11px]"
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[#8fa0b5] text-[9px] uppercase font-bold">Zone ID (slug):</label>
+                <label className="text-ink-muted text-[9px] uppercase font-bold">Zone ID (slug):</label>
                 <input
                   type="text"
                   placeholder="e.g. warehouse"
                   value={newZoneId}
                   onChange={(e) => setNewZoneId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]+/g, ""))}
-                  className="bg-[#101c2b] border border-white/10 rounded px-2.5 py-1 text-white outline-none focus:border-[#38bdf8]/50 text-[11px]"
+                  className="bg-panel border border-white/10 rounded px-2.5 py-1 text-white outline-none focus:border-sky-400/50 text-[11px]"
                 />
               </div>
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={handleCreateZone}
-                  className="flex-1 py-1 bg-[#10b981] hover:bg-[#059669] text-white font-bold rounded cursor-pointer text-[11px] uppercase"
+                  className="flex-1 py-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded cursor-pointer text-[11px] uppercase"
                 >
                   Create
                 </button>
                 <button
                   onClick={() => setShowAddForm(false)}
-                  className="px-3 py-1 bg-[#475569] hover:bg-[#334155] text-white font-bold rounded cursor-pointer text-[11px] uppercase"
+                  className="px-3 py-1 bg-slate-600 hover:bg-slate-700 text-white font-bold rounded cursor-pointer text-[11px] uppercase"
                 >
                   Cancel
                 </button>
@@ -1084,29 +1085,29 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
           )}
 
           {/* Instructions */}
-          <div className="text-[#8fa0b5] leading-relaxed text-[11px] bg-white/5 p-2.5 rounded border border-white/5">
+          <div className="text-ink-muted leading-relaxed text-[11px] bg-white/5 p-2.5 rounded border border-white/5">
             <p className="font-black text-white uppercase text-[9px] tracking-wider mb-1">🎮 Control Guide:</p>
             <ul className="list-disc list-inside space-y-0.5 ml-1 text-[#a3b3c9]">
-              <li>Drag <span className="text-[#38bdf8] font-bold">P1 – Pn</span> handles to position corners. Use <span className="text-white font-bold">+ Add Point / − Remove Point</span> above to change polygon shape.</li>
-              <li>Drag <span className="text-[#10b981] font-bold">Anchor</span> to connect leader line to room.</li>
-              <li>Drag <span className="text-[#f59e0b] font-bold">Label</span> to reposition status box.</li>
+              <li>Drag <span className="text-sky-400 font-bold">P1 – Pn</span> handles to position corners. Use <span className="text-white font-bold">+ Add Point / − Remove Point</span> above to change polygon shape.</li>
+              <li>Drag <span className="text-emerald-500 font-bold">Anchor</span> to connect leader line to room.</li>
+              <li>Drag <span className="text-amber-500 font-bold">Label</span> to reposition status box.</li>
               <li>Click a handle & press <span className="text-white bg-white/10 px-1 py-0.5 rounded text-[10px]">↑ ↓ ← →</span> to nudge. Hold <span className="text-white bg-white/10 px-1 py-0.5 rounded text-[10px]">Shift</span> to jump 10px.</li>
             </ul>
           </div>
 
           {/* Code output display */}
           <div className="flex flex-col gap-1">
-            <label className="text-[#8fa0b5] font-black uppercase text-[9px] tracking-wider">
+            <label className="text-ink-muted font-black uppercase text-[9px] tracking-wider">
               Updated Config JSON (zones.ts):
             </label>
             <div className="relative">
               <textarea
                 readOnly
                 value={getUpdatedConfigJS()}
-                className="w-full h-24 bg-[#020617] border border-white/5 rounded p-2 font-mono text-[9px] text-[#22c55e] resize-none outline-none cursor-pointer"
+                className="w-full h-24 bg-slate-950 border border-white/5 rounded p-2 font-mono text-[9px] text-healthy resize-none outline-none cursor-pointer"
                 onClick={(e) => (e.target as HTMLTextAreaElement).select()}
               />
-              <div className="absolute bottom-1 right-2 text-[8px] text-[#8fa0b5] bg-black/50 px-1 rounded pointer-events-none">
+              <div className="absolute bottom-1 right-2 text-[8px] text-ink-muted bg-black/50 px-1 rounded pointer-events-none">
                 Click to Select
               </div>
             </div>
@@ -1116,7 +1117,7 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
           <div className="flex gap-2 pt-1">
             <button
               onClick={handleCopyConfig}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-[#0284c7] hover:bg-[#0369a1] active:bg-[#075985] text-white font-black uppercase tracking-wider rounded cursor-pointer transition-colors duration-150 text-[11px]"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-sky-600 hover:bg-sky-700 active:bg-sky-800 text-white font-black uppercase tracking-wider rounded cursor-pointer transition-colors duration-150 text-[11px]"
             >
               <Copy size={13} />
               Copy Config
@@ -1124,14 +1125,14 @@ export const FactoryLayoutOverlay: React.FC<FactoryLayoutOverlayProps> = ({
             {showConfirmReset ? (
               <button
                 onClick={handleResetDefaults}
-                className="flex-1 flex items-center justify-center py-2 bg-[#ef4444] hover:bg-[#dc2626] text-white font-black uppercase tracking-wider rounded cursor-pointer transition-colors duration-150 text-[11px]"
+                className="flex-1 flex items-center justify-center py-2 bg-red-500 hover:bg-red-600 text-white font-black uppercase tracking-wider rounded cursor-pointer transition-colors duration-150 text-[11px]"
               >
                 Confirm Reset?
               </button>
             ) : (
               <button
                 onClick={handleResetDefaults}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-[#334155] hover:bg-[#475569] text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[11px]"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded cursor-pointer transition-colors duration-150 text-[11px]"
                 title="Reset to original default coordinates"
               >
                 <RotateCcw size={13} />

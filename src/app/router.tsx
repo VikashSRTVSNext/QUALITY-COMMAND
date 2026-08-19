@@ -11,7 +11,7 @@ const DefectDetailPage = React.lazy(() => import('../dashboards/quality/DefectDe
 dashboardRegistry.register(qualityDashboard);
 
 const Loading = () => (
-  <div className="w-full min-h-screen flex items-center justify-center bg-[#08111a] text-[#52607f]">
+  <div className="w-full min-h-screen flex items-center justify-center bg-page text-ink-dim">
     Loading…
   </div>
 );

@@ -46,20 +46,20 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
         </svg>
 
         {/* Separator */}
-        <div className="h-6 w-[1.5px] bg-gradient-to-b from-transparent via-[#1c3149] to-transparent hidden sm:block" />
+        <div className="h-6 w-[1.5px] bg-gradient-to-b from-transparent via-line to-transparent hidden sm:block" />
 
         {/* Status Section */}
         <div className="flex items-center gap-2 lg:gap-2.5 flex-wrap justify-center">
-          <span className="text-[13px] lg:text-[15px] 2xl:text-[17px] font-bold text-[#8fa0b5] tracking-wider whitespace-nowrap hidden 2xl:inline">
+          <span className="text-[13px] lg:text-[15px] 2xl:text-[17px] font-bold text-ink-muted tracking-wider whitespace-nowrap hidden 2xl:inline">
             FACTORY COMMAND CENTER
           </span>
           <div className="flex items-center gap-1.5 ml-1">
-            <span className="text-[13px] lg:text-[15px] 2xl:text-[17px] font-bold tracking-wider whitespace-nowrap text-[#06b6d4] drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">
+            <span className="text-[13px] lg:text-[15px] 2xl:text-[17px] font-bold tracking-wider whitespace-nowrap text-info drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">
               QUALITY CENTER
             </span>
           </div>
-          <span className="bg-[#22c55e]/10 text-[#22c55e] border border-[#22c55e]/25 text-[10px] lg:text-[12px] 2xl:text-[14px] font-black px-1.5 py-0.5 rounded flex items-center gap-1 ml-1 2xl:ml-2">
-            <span className="w-1 lg:w-1.5 h-1 lg:h-1.5 rounded-full bg-[#22c55e] animate-soft-pulse" />
+          <span className="bg-healthy/10 text-healthy border border-healthy/25 text-[10px] lg:text-[12px] 2xl:text-[14px] font-black px-1.5 py-0.5 rounded flex items-center gap-1 ml-1 2xl:ml-2">
+            <span className="w-1 lg:w-1.5 h-1 lg:h-1.5 rounded-full bg-healthy animate-soft-pulse" />
             LIVE
           </span>
         </div>
@@ -68,8 +68,8 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
       {/* Right side: Telemetry indicators, time, clock and action buttons */}
       <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2 lg:gap-3 2xl:gap-4 w-full lg:w-auto">
         {/* Date Display */}
-        <div className="hidden 2xl:flex items-center gap-1 text-[14px] lg:text-[15px] 2xl:text-[17px] text-[#8fa0b5] font-medium font-mono">
-          <Calendar size={12} className="text-[#8fa0b5]" />
+        <div className="hidden 2xl:flex items-center gap-1 text-[14px] lg:text-[15px] 2xl:text-[17px] text-ink-muted font-medium font-mono">
+          <Calendar size={12} className="text-ink-muted" />
           <span className="whitespace-nowrap">
             {time.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
           </span>
@@ -77,20 +77,20 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
 
         {/* Live Clock */}
         <div className="flex items-center gap-1 text-[15px] lg:text-[17px] 2xl:text-[19px] text-white font-bold font-mono">
-          <Clock size={12} className="text-[#8fa0b5]" />
+          <Clock size={12} className="text-ink-muted" />
           <span className="whitespace-nowrap">{time.toLocaleTimeString()}</span>
         </div>
 
         {/* Shift selector badge */}
         <button
           onClick={handleShiftToggle}
-          className="flex items-center bg-[#101c2b] hover:bg-[#161f38] border border-[#1c3149] rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold text-[#8fa0b5] cursor-pointer select-none transition-all duration-200 outline-none"
+          className="flex items-center bg-panel hover:bg-[#161f38] border border-line rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold text-ink-muted cursor-pointer select-none transition-all duration-200 outline-none"
         >
-          <span className="flex items-center gap-1 text-white mr-0 2xl:mr-2 2xl:border-r 2xl:border-[#1c3149] 2xl:pr-2">
+          <span className="flex items-center gap-1 text-white mr-0 2xl:mr-2 2xl:border-r 2xl:border-line 2xl:pr-2">
             {shiftInfo[currentShift].label}{" "}
             <ChevronDown
               size={10}
-              className="text-[#8fa0b5] hidden 2xl:inline"
+              className="text-ink-muted hidden 2xl:inline"
             />
           </span>
           <span className="text-white whitespace-nowrap hidden 2xl:inline">
@@ -99,27 +99,27 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
         </button>
 
         {/* Swipe entry badge */}
-        <div className="flex items-center bg-[#101c2b] border border-[#1c3149] rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold text-[#8fa0b5] gap-1.5 lg:gap-2">
+        <div className="flex items-center bg-panel border border-line rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold text-ink-muted gap-1.5 lg:gap-2">
           <span className="whitespace-nowrap hidden 2xl:inline">
             SWIPE ENTRY
           </span>
           <span className="whitespace-nowrap 2xl:hidden">SWIPES</span>
-          <span className="text-[#22c55e] bg-[#22c55e]/15 px-1.5 py-0.5 rounded font-black text-[12px] lg:text-[13px] 2xl:text-[15px]">
+          <span className="text-healthy bg-healthy/15 px-1.5 py-0.5 rounded font-black text-[12px] lg:text-[13px] 2xl:text-[15px]">
             4
           </span>
         </div>
 
         {/* Live connection status badge — driven by /dashboard/status API */}
         <div
-          className={`flex items-center bg-[#101c2b] border rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold gap-1 lg:gap-1.5 transition-all duration-500 ${
+          className={`flex items-center bg-panel border rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold gap-1 lg:gap-1.5 transition-all duration-500 ${
             isOnline
-              ? "border-[#22c55e]/80 text-[#22c55e] status-glow-success shadow-[0_0_12px_rgba(34, 197, 94,0.15)]"
-              : "border-[#ff4c4c]/60 text-[#ff4c4c] shadow-[0_0_12px_rgba(255, 76, 76,0.15)]"
+              ? "border-healthy/80 text-healthy status-glow-success shadow-[0_0_12px_rgba(34, 197, 94,0.15)]"
+              : "border-critical/60 text-critical shadow-[0_0_12px_rgba(255, 76, 76,0.15)]"
           }`}
         >
           <span
             className={`w-1 lg:w-1.5 h-1 lg:h-1.5 rounded-full ${
-              isOnline ? "bg-[#22c55e] animate-soft-pulse" : "bg-[#ff4c4c]"
+              isOnline ? "bg-healthy animate-soft-pulse" : "bg-critical"
             }`}
           />
           <span className="whitespace-nowrap hidden 2xl:inline">
@@ -131,8 +131,8 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
         </div>
 
         {/* Data refresh badge */}
-        <div className="flex items-center bg-[#101c2b] border border-[#1c3149]/80 rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold text-[#06b6d4] gap-1 lg:gap-1.5">
-          <RefreshCw size={11} className="text-[#06b6d4]" />
+        <div className="flex items-center bg-panel border border-line/80 rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold text-info gap-1 lg:gap-1.5">
+          <RefreshCw size={11} className="text-info" />
           <span className="whitespace-nowrap">
             <span className="hidden 2xl:inline">DATA REFRESH: </span>
             <strong className="text-white">5:22</strong>
@@ -140,7 +140,7 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
         </div>
 
         {/* Menu Toggle */}
-        <button className="p-1 lg:p-1.5 hover:bg-[#1c3149] rounded-md text-[#8fa0b5] hover:text-white transition-colors">
+        <button className="p-1 lg:p-1.5 hover:bg-line rounded-md text-ink-muted hover:text-white transition-colors">
           <Menu size={14} />
         </button>
       </div>
