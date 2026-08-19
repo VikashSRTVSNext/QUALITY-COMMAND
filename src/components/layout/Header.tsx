@@ -30,9 +30,9 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
 
   return (
     <div className="flex flex-col lg:flex-row justify-between items-center w-full px-2 gap-2 lg:gap-3 2xl:gap-4 py-1">
-      {/* Left side: Nokia Logo & Plant Status */}
+      {/* Left section: Nokia Logo & Plant Status */}
       <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 lg:gap-3 2xl:gap-4">
-        {/* SVG Nokia Logo Wordmark */}
+        {/* Nokia Logo Wordmark */}
         <svg
           viewBox="0 0 238 56"
           fill="none"
@@ -45,10 +45,10 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
           />
         </svg>
 
-        {/* Separator */}
+        {/* Visual Separator */}
         <div className="h-6 w-[1.5px] bg-gradient-to-b from-transparent via-line to-transparent hidden sm:block" />
 
-        {/* Status Section */}
+        {/* Status Info */}
         <div className="flex items-center gap-2 lg:gap-2.5 flex-wrap justify-center">
           <span className="text-[13px] lg:text-[15px] 2xl:text-[17px] font-bold text-ink-muted tracking-wider whitespace-nowrap hidden 2xl:inline">
             FACTORY COMMAND CENTER
@@ -59,13 +59,12 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
             </span>
           </div>
           <span className="bg-healthy/10 text-healthy border border-healthy/25 text-[10px] lg:text-[12px] 2xl:text-[14px] font-black px-1.5 py-0.5 rounded flex items-center gap-1 ml-1 2xl:ml-2">
-            <span className="w-1 lg:w-1.5 h-1 lg:h-1.5 rounded-full bg-healthy animate-soft-pulse" />
-            LIVE
+            <span className="w-1 lg:w-1.5 h-1 lg:h-1.5 rounded-full bg-healthy animate-soft-pulse" />LIVE
           </span>
         </div>
       </div>
 
-      {/* Right side: Telemetry indicators, time, clock and action buttons */}
+      {/* Right section: Telemetry, Time & Actions */}
       <div className="flex flex-wrap items-center justify-center lg:justify-end gap-2 lg:gap-3 2xl:gap-4 w-full lg:w-auto">
         {/* Date Display */}
         <div className="hidden 2xl:flex items-center gap-1 text-[14px] lg:text-[15px] 2xl:text-[17px] text-ink-muted font-medium font-mono">
@@ -75,14 +74,15 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
           </span>
         </div>
 
-        {/* Live Clock */}
+        {/* Clock Display */}
         <div className="flex items-center gap-1 text-[15px] lg:text-[17px] 2xl:text-[19px] text-white font-bold font-mono">
           <Clock size={12} className="text-ink-muted" />
           <span className="whitespace-nowrap">{time.toLocaleTimeString()}</span>
         </div>
 
-        {/* Shift selector badge */}
+        {/* Shift Selector */}
         <button
+          type="button"
           onClick={handleShiftToggle}
           className="flex items-center bg-panel hover:bg-[#161f38] border border-line rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold text-ink-muted cursor-pointer select-none transition-all duration-200 outline-none"
         >
@@ -98,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
           </span>
         </button>
 
-        {/* Swipe entry badge */}
+        {/* Swipe Entry Status */}
         <div className="flex items-center bg-panel border border-line rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold text-ink-muted gap-1.5 lg:gap-2">
           <span className="whitespace-nowrap hidden 2xl:inline">
             SWIPE ENTRY
@@ -109,7 +109,7 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
           </span>
         </div>
 
-        {/* Live connection status badge — driven by /dashboard/status API */}
+        {/* System Online Status */}
         <div
           className={`flex items-center bg-panel border rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold gap-1 lg:gap-1.5 transition-all duration-500 ${
             isOnline
@@ -130,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
           </span>
         </div>
 
-        {/* Data refresh badge */}
+        {/* Data Refresh Status */}
         <div className="flex items-center bg-panel border border-line/80 rounded-md px-2 py-0.5 lg:px-2.5 lg:py-1 2xl:px-3 2xl:py-1.2 text-[14px] lg:text-[15px] 2xl:text-[17px] font-bold text-info gap-1 lg:gap-1.5">
           <RefreshCw size={11} className="text-info" />
           <span className="whitespace-nowrap">
@@ -139,8 +139,11 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
           </span>
         </div>
 
-        {/* Menu Toggle */}
-        <button className="p-1 lg:p-1.5 hover:bg-line rounded-md text-ink-muted hover:text-white transition-colors">
+        {/* Navigation Menu Toggle */}
+        <button
+          type="button"
+          className="p-1 lg:p-1.5 hover:bg-line rounded-md text-ink-muted hover:text-white transition-colors"
+        >
           <Menu size={14} />
         </button>
       </div>
