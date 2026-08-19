@@ -219,7 +219,7 @@ export const ProcessProductsModal: React.FC<Props> = ({
   const cardValue =
     cardDone > 0
       ? metric === "failure"
-        ? (100 * ((data?.card ?? []).reduce((a, r) => a + (r.failed ?? 0), 0))) /
+        ? (100 * (data?.card ?? []).reduce((a, r) => a + (r.failed ?? 0), 0)) /
           cardDone
         : (100 * cardOk) / cardDone
       : null;
@@ -493,7 +493,6 @@ export const ProcessProductsModal: React.FC<Props> = ({
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

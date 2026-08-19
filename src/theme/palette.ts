@@ -56,18 +56,21 @@ export const palette = {
 } as const;
 
 /**
- * Status palette for the plant-layout overlay.
+ * Status colours for the plant-layout overlay, as real colour strings.
  *
- * Deliberately NOT the same greens and reds as `palette` above — the zone
- * outlines sit on a photographic floorplan render and were tuned against it, so
- * they run a touch more saturated than the dashboard's status colours. Kept
- * separate rather than folded in, because unifying them would change what the
- * plant layout looks like.
+ * Identical to the status colours in `palette` — this alias exists only because
+ * these values reach the overlay through SVG `fill`/`stroke` attributes, where a
+ * CSS variable does not resolve, so `fill-healthy` is not an option there.
+ *
+ * Until the 3D digital twin was removed, these were a separate, more saturated
+ * set (#2fe0a0 / #f24b5c) tuned for the twin's emissive materials and consumed
+ * only by FactoryZone and zoneContents. Both are gone, so the overlay now shares
+ * the dashboard's status palette and a warning reads the same yellow everywhere.
  */
 export const zonePalette = {
-  healthy:       '#2fe0a0',
-  warning:       '#f59e0b',
-  critical:      '#f24b5c',
+  healthy:       palette.healthy,
+  warning:       palette.warning,
+  critical:      palette.critical,
   unknown:       palette.unknown,
 } as const;
 

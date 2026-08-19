@@ -21,8 +21,9 @@ for (const [, name, chan] of css.matchAll(/--c-([a-z0-9-]+):\s*(\d+ \d+ \d+);/g)
   cssColors[name] = '#' + [r, g, b].map((n) => n.toString(16).padStart(2, '0')).join('');
 }
 
-// Only the `palette` export mirrors index.css. zonePalette and toolPalette are
-// deliberately off-palette and documented as such, so they are not checked.
+// Only the `palette` export holds literal hex, so only it is checked. zonePalette
+// now aliases palette's own status colours, and toolPalette is deliberately
+// off-palette (stock Tailwind values used by the layout editor's chrome).
 const paletteBlock = ts.slice(
   ts.indexOf('export const palette'),
   ts.indexOf('export const zonePalette')
