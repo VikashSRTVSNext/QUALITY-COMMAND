@@ -1,5 +1,8 @@
 import { isNum } from "../../core/format";
-import { DRILLDOWN_STEPS } from "./ProcessProductsModal";
+import {
+  DRILLDOWN_STEPS,
+  TILE_DRILLDOWN_ENABLED,
+} from "./ProcessProductsModal";
 import TileSparkline from "./TileSparkline";
 import { API_KEY_BY_TILE, cardVerdict, getProcessTrendData } from "./metrics";
 
@@ -35,7 +38,10 @@ export const ProcessMetricCard = ({
   const drillStep =
     API_KEY_BY_TILE[item.name] ?? item.name.replace(/\s+/g, "_");
 
-  const canDrill = Boolean(DRILLDOWN_STEPS[drillStep]) && !hasNoProduction;
+  const canDrill =
+    TILE_DRILLDOWN_ENABLED &&
+    Boolean(DRILLDOWN_STEPS[drillStep]) &&
+    !hasNoProduction;
   const openDrilldown = () =>
     onDrill({ step: drillStep, title });
 

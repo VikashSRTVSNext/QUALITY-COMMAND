@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import qualityData from "../../data/qualityData.json";
-import { apiUrl, DASHBOARD_SSE_URL } from "../../core/api/config";
+import { apiUrl, DASHBOARD_STREAM_URLS } from "../../core/api/config";
+import { filterYieldRows } from "../quality/productYieldFilter";
 import { ZONES, ZoneDef, STATUS_CSS, STATUS_LABEL } from "../factory/zones";
 import FactoryLayoutOverlay from "../factory/FactoryLayoutOverlay";
 import ProcessProductsModal from "../quality/ProcessProductsModal";
@@ -801,7 +802,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       color: palette.raised,
     })),
   );
-  const [productYield, setProductYield] = useState<any[]>([]);
+  const [rawProductYield, setRawProductYield] = useState<any[]>([]);
   const [yieldFetchState, setYieldFetchState] = useState<
     "loading" | "ready" | "error"
   >("loading");
@@ -920,57 +921,36 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    const fetchYieldData = async () => {
-      const shiftMatch = activeShift.match(/Shift\s+([A-C])/i);
-      const targetShift = shiftMatch ? shiftMatch[1].toUpperCase() : "D";
-      const targetLevel = activeYieldTab === "UNITS" ? "UNIT" : activeYieldTab;
+  // Product-yield rows now arrive on /dashboard/stream/product-yield, unfiltered
+  // and for every shift and level at once. Filtering and shaping them is cheap
+  // and local, so switching a tab costs no request — it used to refetch.
+  const productYield = React.useMemo(() => {
+    const shiftMatch = activeShift.match(/Shift\s+([A-C])/i);
+    const targetShift = shiftMatch ? shiftMatch[1].toUpperCase() : null;
 
-      try {
-        const url = apiUrl(
-          `/dashboard/product-yield?shift=${targetShift}&level=${targetLevel}`,
-        );
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Failed to fetch product yield");
-        const data = await res.json();
-        if (data && Array.isArray(data.rows)) {
-          const mappedRows = data.rows.map((row: any) => ({
-            id: row.id,
-            name: row.product,
-            tested: fmtCount(row.tested, "—"),
-            failed: isNum(row.failed) ? row.failed.toString() : "—",
-            fpy: row.fpy,
-            spy: row.spy,
-            target: row.target_yield,
-            status:
-              row.status === "healthy"
-                ? "Healthy"
-                : row.status === "warning"
-                  ? "Warning"
-                  : row.status === "no_target"
-                    ? "No Target"
-                    : "Critical",
-            rec: row.ai_recommendation,
-            shift: row.shift,
-            sub_module: row.sub_module,
-          }));
-          setProductYield(mappedRows);
-        } else {
-          setProductYield([]);
-        }
-        setYieldFetchState("ready");
-      } catch (err) {
-        console.error("Error fetching product yield:", err);
-        setProductYield([]);
-        setYieldFetchState("error");
-      }
-    };
-
-    setYieldFetchState("loading");
-    fetchYieldData();
-    const interval = setInterval(fetchYieldData, 5 * 60 * 1000); // 5 minutes
-    return () => clearInterval(interval);
-  }, [activeShift, activeYieldTab]);
+    return filterYieldRows(rawProductYield, activeYieldTab, targetShift).map(
+      (row: any) => ({
+        id: row.id,
+        name: row.product,
+        tested: fmtCount(row.tested, "—"),
+        failed: isNum(row.failed) ? row.failed.toString() : "—",
+        fpy: row.fpy,
+        spy: row.spy,
+        target: row.target_yield,
+        status:
+          row.status === "healthy"
+            ? "Healthy"
+            : row.status === "warning"
+              ? "Warning"
+              : row.status === "no_target"
+                ? "No Target"
+                : "Critical",
+        rec: row.ai_recommendation,
+        shift: row.shift,
+        sub_module: row.sub_module,
+      }),
+    );
+  }, [rawProductYield, activeShift, activeYieldTab]);
 
   useEffect(() => {
     const fetchSafetyData = async () => {
@@ -1045,8 +1025,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   }, []);
 
   useEffect(() => {
-    const es = new EventSource(DASHBOARD_SSE_URL);
-
     const handleData = (data: any) => {
       if (!data) return;
 
@@ -1072,6 +1050,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
       if (data.kpis) {
         setRawKpiData(data.kpis);
+      }
+
+      // Sent unfiltered by /stream/product-yield; the shift and level filter
+      // that the REST endpoint used to apply now happens in the panel.
+      if (Array.isArray(data.product_yield?.rows)) {
+        setRawProductYield(data.product_yield.rows);
+        setYieldFetchState("ready");
       }
 
       if (data.hftpy !== undefined) {
@@ -1210,44 +1195,47 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       }
     };
 
-    es.addEventListener("snapshot", (e) => {
-      try {
-        const parsed = JSON.parse(e.data);
-        handleData(parsed);
-      } catch (err) {
-        console.error("Error parsing snapshot event", err);
-      }
+    // Three streams instead of one. Each carries a slice of the snapshot and
+    // stays quiet until that slice changes, so an idle dashboard costs almost
+    // nothing. handleData already guards every section, so a payload holding one
+    // section simply skips the rest.
+    //
+    // OFFLINE is only reported once ALL of them are down: one stream dropping
+    // stales part of the dashboard, but the rest is still live and saying
+    // OFFLINE would be a lie.
+    const sources = Object.values(DASHBOARD_STREAM_URLS).map((url) => {
+      const es = new EventSource(url);
+
+      const consume = (raw: string) => {
+        try {
+          handleData(JSON.parse(raw));
+        } catch (err) {
+          console.error(`Error parsing snapshot from ${url}`, err);
+        }
+      };
+
+      es.addEventListener("snapshot", (e) => consume((e as MessageEvent).data));
+      // The streams name their events, but an unnamed message is still handled
+      // so a proxy that strips event names cannot blank the dashboard.
+      es.onmessage = (e) => e.data && consume(e.data);
+
+      es.onopen = () => setLiveStatus("ONLINE");
+      es.onerror = () => {
+        const allDown = sources.every(
+          (src) => src.readyState === EventSource.CLOSED,
+        );
+        if (allDown) {
+          console.error("All dashboard streams are down");
+          setLiveStatus("OFFLINE");
+          setAlertsFeedState("error");
+        }
+      };
+
+      return es;
     });
 
-    es.onmessage = (e) => {
-      try {
-        const parsed = JSON.parse(e.data);
-
-        if (
-          parsed.kpis ||
-          parsed.meta ||
-          parsed.attention ||
-          parsed.attention_center
-        ) {
-          handleData(parsed);
-        }
-      } catch (err) {
-        // ignore
-      }
-    };
-
-    es.onopen = () => {
-      setLiveStatus("ONLINE");
-    };
-
-    es.onerror = (err) => {
-      console.error("SSE connection error", err);
-      setLiveStatus("OFFLINE");
-      setAlertsFeedState("error");
-    };
-
     return () => {
-      es.close();
+      sources.forEach((es) => es.close());
     };
   }, []);
 
@@ -2006,6 +1994,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           recommendations={yieldRecommendations}
           recsLoading={yieldRecsLoading}
           planStatus={yieldPlanStatus}
+          shift={
+            activeShift.match(/Shift\s+([A-C])/i)?.[1].toUpperCase() ?? null
+          }
         />
 
         <AttentionCenterPanel

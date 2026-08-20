@@ -8,9 +8,38 @@ import {
 import { isNum } from "../../core/format";
 import { palette } from "../../theme/palette";
 import SortableTh, { SortState } from "./SortableTh";
+import ProcessProductsTable from "./ProcessProductsTable";
+import { useProcessProducts } from "./useProcessProducts";
 import { yieldRowTone } from "./metrics";
 
 export type YieldTab = "UNITS" | "TRX" | "PA";
+
+// The process steps that can be shown as a tab, in process order.
+//
+// `label` is what the tile calls it, `step` is the mart name the endpoint takes.
+// Every entry must also be in DRILLDOWN_STEPS, which is what makes the matching
+// tile clickable — the same steps reached two ways.
+const STEP_TABS: { label: string; step: string }[] = [
+  { label: "AXI-S", step: "AXI" },
+  { label: "THERMAL AVI", step: "THERMAL_AVI" },
+  { label: "BURN-IN-S", step: "BURN_IN" },
+  { label: "LBTS-S", step: "LBTS" },
+  { label: "RTWP", step: "RTWP" },
+  { label: "IP", step: "IP" },
+  { label: "OTA", step: "OTA_TEST" },
+  { label: "AUTO OGI", step: "AUTO_OGI" },
+];
+
+const TAB_CLASS =
+  "border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors whitespace-nowrap flex-shrink-0";
+const TAB_ON = "bg-tab-active text-white border-tab-border/50";
+const TAB_OFF = "bg-page text-ink-dim border-line hover:bg-line";
+
+// A step tab's table. Split out because useProcessProducts cannot be called
+// conditionally, and the query should only run while its tab is selected.
+const StepPane = ({ step, shift }: { step: string; shift: string | null }) => (
+  <ProcessProductsTable query={useProcessProducts(step, shift)} />
+);
 type SortKey = "name" | "tested" | "failed";
 
 const ITEMS_PER_PAGE = 10;
@@ -28,6 +57,9 @@ interface ProductYieldPanelProps {
   recommendations: Record<string, any>;
   recsLoading: boolean;
   planStatus: { available: boolean; month?: string | null };
+  /** "A" | "B" | "C", or null for the whole production day. Passed straight to
+   *  the process-step endpoint, which takes the letter rather than the label. */
+  shift: string | null;
 }
 
 // Product Yield panel: level tabs, a sortable and paginated table, and the AI
@@ -43,12 +75,17 @@ export const ProductYieldPanel = ({
   recommendations,
   recsLoading,
   planStatus,
+  shift,
 }: ProductYieldPanelProps) => {
   const [sort, setSort] = useState<SortState<SortKey>>({
     key: null,
     order: "asc",
   });
   const [page, setPage] = useState(1);
+  // null = a level tab (UNITS/TRX/PA) is showing. A step name = that step's
+  // table is showing instead. Level lives in the dashboard because it is a
+  // request parameter for a different endpoint; step is local to this panel.
+  const [activeStep, setActiveStep] = useState<string | null>(null);
 
   const sortedRows = React.useMemo(() => {
     if (!sort.key) return rows;
@@ -101,27 +138,37 @@ export const ProductYieldPanel = ({
         <span className="text-[12px] font-black tracking-widest text-ink-muted uppercase mb-1.5">
           PRODUCT YIELD
         </span>
-        <div className="flex gap-2 mb-1.5">
-          <button
-            onClick={() => onTabChange("UNITS")}
-            className={`${activeTab === "UNITS" ? "bg-tab-active text-white border-tab-border/50" : "bg-page text-ink-dim border-line hover:bg-line"} border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors`}
-          >
-            UNITS
-          </button>
-          <button
-            onClick={() => onTabChange("TRX")}
-            className={`${activeTab === "TRX" ? "bg-tab-active text-white border-tab-border/50" : "bg-page text-ink-dim border-line hover:bg-line"} border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors`}
-          >
-            TRX
-          </button>
-          <button
-            onClick={() => onTabChange("PA")}
-            className={`${activeTab === "PA" ? "bg-tab-active text-white border-tab-border/50" : "bg-page text-ink-dim border-line hover:bg-line"} border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors`}
-          >
-            PA
-          </button>
+        {/* One row, horizontally scrollable: three level tabs then one per
+            process step. A step is its own view and level does not apply to it,
+            because /process/{step}/products takes no level parameter. */}
+        <div className="flex gap-2 mb-1.5 overflow-x-auto custom-scrollbar pb-1">
+          {(["UNITS", "TRX", "PA"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => {
+                setActiveStep(null);
+                onTabChange(tab);
+              }}
+              className={`${activeStep === null && activeTab === tab ? TAB_ON : TAB_OFF} ${TAB_CLASS}`}
+            >
+              {tab}
+            </button>
+          ))}
+          {STEP_TABS.map(({ label, step }) => (
+            <button
+              key={step}
+              onClick={() => setActiveStep(step)}
+              className={`${activeStep === step ? TAB_ON : TAB_OFF} ${TAB_CLASS}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
+        {activeStep ? (
+          <StepPane step={activeStep} shift={shift} />
+        ) : (
+          <>
         <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar">
           <table className="w-full min-w-[720px] text-left text-[12px] border-collapse relative">
             <thead>
@@ -445,6 +492,8 @@ export const ProductYieldPanel = ({
             </button>
           </div>
         </div>
+          </>
+        )}
       </section>
   );
 };
