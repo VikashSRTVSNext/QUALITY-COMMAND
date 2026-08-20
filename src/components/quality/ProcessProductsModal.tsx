@@ -1,4 +1,15 @@
 import React, { useCallback, useEffect, useState } from "react";
+
+// Per-product breakdown behind a Process Performance tile.
+//
+// The tile shows one figure for a whole step; this shows which products make it
+// up, worst first, so an under-target step names the items dragging it down.
+//
+// Reads GET /process/{step}/products. Pagination and sorting are SERVER-side —
+// unlike the Product Yield table, which holds every row and slices locally. A
+// step can carry a long tail of low-volume items, so only one page is ever
+// fetched.
+
 import {
   ChevronLeft,
   ChevronRight,
@@ -8,38 +19,31 @@ import {
 import { apiUrl } from "../../core/api/config";
 import { palette } from "../../theme/palette";
 
-// Per-product drill-down behind a Process Performance card.
-//
-// Opened by clicking a tile in the SMT/RFM strip. Answers the question the card
-// itself cannot: the card shows one yield for the whole step, this shows which
-// PRODUCTS make it up, worst first — so a step under target names the items
-// dragging it down instead of just reporting that it is under target.
-//
-// Reads GET /process/{step}/products, which queries the production log directly
-// (no mart) using the same window, dedup and numerator/denominator as the card.
-// The step's own figures come back in `card`, and are shown in the header so the
-// modal always states the number it was opened from rather than re-deriving it.
-//
-// PAGINATION IS SERVER-SIDE, unlike the product-yield table below the strip,
-// which holds every row and slices client-side. A step can carry a long tail of
-// low-volume items, and only one page of them is ever on screen.
 
-// The steps a tile can drill into. The endpoint serves every card built from the
-// production log, but only the ones listed here are wired up as clickable —
-// adding a step is one entry, and it is deliberately explicit so no tile becomes
+// Which steps a tile can drill into. An explicit allowlist, so no tile becomes
 // clickable by accident.
 //
-// Keys are mart step names (`process_step`), which is what the endpoint's path
-// takes. SPI, DPMOI and SMT_DEFECTS can never appear here: they are not built
-// from the production log and have no per-product breakdown at this grain.
+// Keys are mart step names (the endpoint's path segment), NOT tile labels — the
+// two differ for most steps, so each entry names its tile. ProcessMetricCard
+// does the tile -> step lookup via API_KEY_BY_TILE in metrics.ts.
+//
+// SPI, DPMOI and SMT_DEFECTS can never appear here: they are not built from the
+// production log, so they have no per-product breakdown.
 export const DRILLDOWN_STEPS: Record<string, true> = {
+  AXI: true, // tile "AXI - S"
+  AUTO_OGI: true, // tile "AUTO OGI"
+  BURN_IN: true, // tile "BURN-IN - S"
+  IP: true,
+  LBTS: true, // tile "LBTS - S"
+  OTA_TEST: true, // tile "OTA"
   RTWP: true,
+  THERMAL_AVI: true, // tile "THERMAL AVI"
 };
 
 export type ProcessProductRow = {
   item: string;
-  /** Target sheet's short PRODUCT NAME ('AKNB'). Null when the sheet has no row
-   *  for this item code — a gap in the sheet, so the item code stands alone. */
+  /** Short name from the Target sheet. Null when the sheet has no row for this
+   *  item code, in which case the code stands alone. */
   product_name: string | null;
   boards: number | null;
   done: number | null;
@@ -106,23 +110,20 @@ const fmtCount = (v: number | null | undefined) =>
 const fmtPct = (v: number | null | undefined) =>
   isNum(v) ? `${v.toFixed(2)}%` : "—";
 
-// Sortable columns, mapped to the `sort` values the endpoint accepts. Anything
-// not listed here is not sortable, because the server decides the ordering and
-// an unsupported key is a 400 rather than a silently unsorted table.
+// Column -> the `sort` value the endpoint accepts. Columns absent from here are
+// not sortable: the server owns the ordering and rejects an unknown key with a
+// 400 rather than returning an unsorted table.
 const SORTABLE: Record<string, string> = {
-  // The Product column leads with the sheet's product name, so its header sorts
-  // by that name (item code as tiebreaker server-side) rather than by item code.
   product: "product",
   failed: "failed",
   value: "value", // resolved per metric below — yield for yield cards, failure for defect cards
 };
 
 type Props = {
-  /** Mart step name, e.g. "RTWP". */
+  /** Mart step name, e.g. "RTWP" — the endpoint's path segment. */
   step: string;
   /** Tile label, so the header matches the card that was clicked. */
   title: string;
-  /** "A" | "B" | "C", or null for the whole production day. */
   shift: string | null;
   onClose: () => void;
 };
@@ -136,11 +137,10 @@ export const ProcessProductsModal: React.FC<Props> = ({
   const [data, setData] = useState<ProcessProductsResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [page, setPage] = useState(1);
-  // null means "let the server pick" — worst-first for whichever metric the card
-  // reports, which is the ordering that makes the modal useful on open.
   const [sort, setSort] = useState<string | null>(null);
+  // null lets the server choose: worst-first on whichever metric the step
+  // reports, which is the ordering that makes the modal useful on open.
 
-  // Escape closes, same as the Attention Center modal.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -150,10 +150,10 @@ export const ProcessProductsModal: React.FC<Props> = ({
   }, [onClose]);
 
   useEffect(() => {
-    // Not an AbortController on unmount only — the guard also covers the shift
-    // or page changing mid-flight, where a slow first response would otherwise
-    // land after a faster second one and show the wrong page.
     let cancelled = false;
+    // The guard covers more than unmount: shift, page and sort can all change
+    // mid-flight, and without it a slow first response could land after a
+    // faster second and show the wrong page.
 
     const fetchPage = async () => {
       try {
@@ -186,10 +186,9 @@ export const ProcessProductsModal: React.FC<Props> = ({
     };
   }, [step, shift, page, sort]);
 
-  // Shift is a dashboard-wide control and can change while this is open. Page 1
-  // is the only safe landing spot: page 4 of the full day may not exist for
-  // shift C, and the server would return an empty table for a step that has
-  // plenty of products.
+  // Shift is a dashboard-wide control and can change while this is open. Page 4
+  // of the full day may not exist for shift C, so page 1 is the only safe
+  // landing spot.
   useEffect(() => {
     setPage(1);
   }, [shift]);
@@ -212,8 +211,6 @@ export const ProcessProductsModal: React.FC<Props> = ({
   const first = totalProducts === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const last = Math.min(page * PAGE_SIZE, totalProducts);
 
-  // The card's figure for the window on screen. With a shift selected the
-  // endpoint already narrowed `card` to it, so this is a sum of one row.
   const cardDone = (data?.card ?? []).reduce((a, r) => a + (r.done ?? 0), 0);
   const cardOk = (data?.card ?? []).reduce((a, r) => a + (r.ok ?? 0), 0);
   const cardValue =
@@ -224,35 +221,20 @@ export const ProcessProductsModal: React.FC<Props> = ({
         : (100 * cardOk) / cardDone
       : null;
 
-  // Opaque, because a sticky header has to OCCLUDE the rows scrolling under it —
-  // a translucent one lets them ghost through as they pass.
   const th =
     "pb-2 pt-1 font-black sticky top-0 bg-panel border-b border-line-modal z-10 select-none";
   const sortable = "cursor-pointer hover:text-white transition-colors";
   const caret = (key: string) => (activeSort === key ? " ▾" : "");
 
-  // Frosted-glass backdrop: the blur sits on the FULL-SCREEN layer, so the whole
-  // dashboard behind goes soft while staying visible as context. The tint is kept
-  // light (unlike the Attention Center modal's bg-black/85) because the point is
-  // glass, not a blackout — at heavy opacity the blur is invisible underneath it
-  // and the effect reads as a plain dim.
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-8 bg-page/30 backdrop-blur-sm"
       onClick={onClose}
     >
-      {/* The panel stays near-opaque on top of the frosted layer. Blurring it too
-          would stack a second blur over an already-soft background and cost the
-          table its legibility — the glass is the backdrop's job, and the panel's
-          job is to be readable against it. */}
       <div
         className="relative w-full max-w-[1100px] max-h-[85vh] bg-panel/95 border border-line-soft rounded-2xl overflow-hidden flex flex-col shadow-[0_24px_70px_rgba(0,0,0,0.75)]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header — the card that was clicked, and its own figure */}
-        {/* Bands use a white wash rather than a fill of the panel colour: an
-            opaque #101c2b strip on a translucent panel reads as a separate solid
-            card sitting on top of the glass. */}
         <div className="flex justify-between items-center bg-white/[0.04] px-6 py-4 border-b border-line-modal flex-shrink-0">
           <div className="flex items-center gap-3">
             <span className="text-[16px] font-black text-white uppercase tracking-wider">
@@ -289,8 +271,6 @@ export const ProcessProductsModal: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Sub-header: what "this step" means, so it is visible that the
-            breakdown covers the test operation and not its rework counterpart. */}
         <div className="flex items-center justify-between px-6 py-2 border-b border-line-modal/50 flex-shrink-0">
           <span className="text-[10px] font-bold text-ink-dim uppercase tracking-wider">
             {data?.operations?.like
@@ -303,7 +283,6 @@ export const ProcessProductsModal: React.FC<Props> = ({
           </span>
         </div>
 
-        {/* Table */}
         <div className="flex-1 min-h-0 overflow-auto custom-scrollbar px-6 py-3">
           {state === "loading" && !data ? (
             <div className="flex items-center justify-center py-16 text-[12px] font-bold text-ink-dim">
@@ -327,17 +306,6 @@ export const ProcessProductsModal: React.FC<Props> = ({
                   >
                     Product{caret("product")}
                   </th>
-                  {/* Boards column hidden on request. The endpoint still returns
-                      `boards` (distinct SFCs) and it stays in the row type, so
-                      restoring it is uncommenting this and its cell below —
-                      nothing to re-derive.
-                  <th
-                    className={`${th} ${sortable} text-right`}
-                    onClick={() => applySort("boards")}
-                  >
-                    Boards{caret("boards")}
-                  </th>
-                  */}
                   <th className={`${th} text-right`}>Done</th>
                   <th className={`${th} text-right`}>OK</th>
                   <th
@@ -359,8 +327,8 @@ export const ProcessProductsModal: React.FC<Props> = ({
                 {(data?.rows ?? []).map((row) => {
                   const value =
                     metric === "failure" ? row.failure_pct : row.yield_pct;
-                  // Null verdict = no target agreed for the step, or nothing
-                  // produced for this product. Neutral, never red: an unjudged
+                  // Null verdict means no target agreed for the step, or this
+                  // product produced nothing. Neutral, never red — an unjudged
                   // figure must not read as a breach.
                   const valueColor =
                     row.meets_target === null
@@ -370,12 +338,6 @@ export const ProcessProductsModal: React.FC<Props> = ({
                         : palette.critical;
                   return (
                     <tr key={row.item} className="hover:bg-white/[0.05]">
-                      {/* Product name leads, item code beneath it. The code is
-                          kept rather than replaced: it is what the MES, the
-                          defect records and the operators all quote, so dropping
-                          it would make a row impossible to trace back. When the
-                          Target sheet has no row for the code, the code becomes
-                          the heading instead of leaving a blank line above it. */}
                       <td className="py-2">
                         {row.product_name ? (
                           <>
@@ -392,11 +354,6 @@ export const ProcessProductsModal: React.FC<Props> = ({
                           </div>
                         )}
                       </td>
-                      {/* Boards cell — hidden with its header above.
-                      <td className="py-2 text-[12px] text-right text-ink-muted font-mono">
-                        {fmtCount(row.boards)}
-                      </td>
-                      */}
                       <td className="py-2 text-[12px] text-right text-ink-muted font-mono">
                         {fmtCount(row.done)}
                       </td>
@@ -420,7 +377,7 @@ export const ProcessProductsModal: React.FC<Props> = ({
           )}
         </div>
 
-        {/* Footer: totals over EVERY product (not this page), then pagination */}
+        {/* Totals are over EVERY product, not just this page. */}
         <div className="flex justify-between items-center px-6 py-3 border-t border-line-modal flex-shrink-0 gap-4">
           <div className="flex items-center gap-4 text-[11px] font-bold text-ink-muted min-w-0">
             <span>
@@ -441,9 +398,7 @@ export const ProcessProductsModal: React.FC<Props> = ({
                 )}
               </span>
             </span>
-            {/* Only rendered when there IS unattributed production. It sits in
-                the totals but not in the rows, so without this line the table
-                would visibly fail to sum to the footer with no explanation. */}
+            {/* Only shown when there IS unattributed production. */}
             {data?.unattributed && (
               <span
                 className="text-ink-dim truncate"
