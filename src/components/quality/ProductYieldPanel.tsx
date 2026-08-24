@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -87,6 +87,41 @@ export const ProductYieldPanel = ({
   // request parameter for a different endpoint; step is local to this panel.
   const [activeStep, setActiveStep] = useState<string | null>(null);
 
+  // The tab strip scrolls horizontally: eleven tabs need ~870px and the middle
+  // dashboard column only has that above ~1850px. The scrollbar is hidden
+  // (.no-scrollbar) because it would eat height from a fixed 380px panel, so
+  // these flags drive a fade on whichever edge still has tabs behind it. A fade
+  // that showed when there was nothing to scroll to would read as a bug.
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  const [tabOverflow, setTabOverflow] = useState({ left: false, right: false });
+
+  useEffect(() => {
+    const el = tabStripRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      // 1px of slack: fractional scroll positions never settle exactly on the
+      // end, which would leave the right fade permanently visible.
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      setTabOverflow({
+        left: el.scrollLeft > 1,
+        right: el.scrollLeft < maxScroll - 1,
+      });
+    };
+
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    // Catches the panel being resized, not just the window — the column is a
+    // grid fraction, so it changes width without a window resize event.
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+
+    return () => {
+      el.removeEventListener("scroll", measure);
+      observer.disconnect();
+    };
+  }, []);
+
   const sortedRows = React.useMemo(() => {
     if (!sort.key) return rows;
     return [...rows].sort((a, b) => {
@@ -141,7 +176,11 @@ export const ProductYieldPanel = ({
         {/* One row, horizontally scrollable: three level tabs then one per
             process step. A step is its own view and level does not apply to it,
             because /process/{step}/products takes no level parameter. */}
-        <div className="flex gap-2 mb-1.5 overflow-x-auto custom-scrollbar pb-1">
+        <div className="relative mb-1.5">
+          <div
+            ref={tabStripRef}
+            className="flex gap-2 overflow-x-auto no-scrollbar"
+          >
           {(["UNITS", "TRX", "PA"] as const).map((tab) => (
             <button
               key={tab}
@@ -162,7 +201,23 @@ export const ProductYieldPanel = ({
             >
               {label}
             </button>
-          ))}
+            ))}
+          </div>
+
+          {/* Fades sit above the strip and ignore the pointer, so a tab under
+              the gradient is still clickable. */}
+          {tabOverflow.left && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-panel to-transparent"
+            />
+          )}
+          {tabOverflow.right && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-panel to-transparent"
+            />
+          )}
         </div>
 
         {activeStep ? (

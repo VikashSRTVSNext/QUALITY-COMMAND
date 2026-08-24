@@ -209,6 +209,18 @@
   scrollbar-color: rgb(var(--c-line)) rgb(var(--c-panel));
 }
 
+/* Hides the scrollbar without disabling the scrolling — for strips where the
+   bar itself is the problem, like the Product Yield tab row inside a panel of
+   fixed height. Anything using this MUST give the user another cue that there is
+   more to see; a hidden scrollbar with no affordance is just missing content. */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* --- status glow helpers --------------------------------------------------- */
 
 .status-glow-success {
