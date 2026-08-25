@@ -33,5 +33,5 @@ docker push tvsnext.azurecr.io/factory-command-center:latest
 
 kubectl apply -f k8s/
 
-kubectl rollout restart deployment/factory-command-center
+kubectl rollout restart deployment/factory-command-center -n nokia-factory-command-center
 ```

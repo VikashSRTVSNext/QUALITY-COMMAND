@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { isNum } from "../../core/format";
+import DrilldownModalShell from "./DrilldownModalShell";
 import NcLogTable from "./NcLogTable";
 import TesterYieldTable from "./TesterYieldTable";
 import { useProductDefects } from "./useProductDefects";
@@ -72,34 +73,20 @@ export const ProductDrilldownModal: React.FC<Props> = ({
     verifiedOnly,
   );
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      // Escape steps BACK one level before closing, so the key does the least
-      // destructive thing available — losing a drill-down to a mistyped Escape is
-      // the annoyance this avoids.
-      if (selection) setSelection(null);
-      else onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, selection]);
 
   const totals = testers.data?.totals;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 lg:p-8 bg-page/30 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-[1400px] max-h-[88vh] bg-panel/95 border border-line-soft rounded-2xl overflow-hidden flex flex-col shadow-[0_24px_70px_rgba(0,0,0,0.75)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* ---- header: breadcrumb + the product's own figure -------------- */}
-        <div className="flex justify-between items-center bg-white/[0.04] px-6 py-4 border-b border-line-modal flex-shrink-0 gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            {/* The product crumb is a button only when there is somewhere to go
+    <DrilldownModalShell
+      onClose={onClose}
+      // Escape steps back to the tester list first, and only closes from there.
+      onBack={selection ? () => setSelection(null) : null}
+      header={
+        <>
+          {/* The shell already wraps this slot in the flex row, so no container
+              here -- one was left behind when this moved onto the shell and left
+              the fragment unbalanced. */}
+          {/* The product crumb is a button only when there is somewhere to go
                 back to, so it never looks interactive while it is the current
                 level. */}
             {selection ? (
@@ -158,28 +145,24 @@ export const ProductDrilldownModal: React.FC<Props> = ({
                 {fmtPct(totals.ftpy_pct)}
               </span>
             )}
-          </div>
-
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <span className="text-[11px] font-bold text-ink-dim">
-              {testers.data?.business_date ?? businessDate ?? ""}
-            </span>
-            {selection && (
-              <button
-                onClick={() => setSelection(null)}
-                className="bg-raised hover:bg-line text-ink-muted hover:text-white border border-line-strong rounded-lg px-3 py-1.5 text-[12px] font-bold cursor-pointer transition-colors duration-200 outline-none"
-              >
-                ← Testers
-              </button>
-            )}
+        </>
+      }
+      meta={
+        <>
+          <span className="text-[11px] font-bold text-ink-dim">
+            {testers.data?.business_date ?? businessDate ?? ""}
+          </span>
+          {selection && (
             <button
-              onClick={onClose}
-              className="bg-raised hover:bg-critical text-ink-muted hover:text-white border border-line-strong rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
+              onClick={() => setSelection(null)}
+              className="bg-raised hover:bg-line text-ink-muted hover:text-white border border-line-strong rounded-lg px-3 py-1.5 text-[12px] font-bold cursor-pointer transition-colors duration-200 outline-none"
             >
-              ✕ Close
+              ← Testers
             </button>
-          </div>
-        </div>
+          )}
+        </>
+      }
+    >
 
         {/* ---- level 2: testers ------------------------------------------ */}
         {!selection && (
@@ -232,8 +215,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
             onVerifiedOnly={setVerifiedOnly}
           />
         )}
-      </div>
-    </div>
+    </DrilldownModalShell>
   );
 };
 

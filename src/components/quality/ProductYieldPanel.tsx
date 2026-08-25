@@ -10,6 +10,8 @@ import { palette } from "../../theme/palette";
 import SortableTh, { SortState } from "./SortableTh";
 import ProcessProductsTable from "./ProcessProductsTable";
 import ProductDrilldownModal from "./ProductDrilldownModal";
+import DpmoiPane from "./DpmoiPane";
+import ScrewDefectsPane from "./ScrewDefectsPane";
 import { useProcessProducts } from "./useProcessProducts";
 import { DEFECT_DRILLDOWN_STEPS } from "./useProductDefects";
 import { yieldRowTone } from "./metrics";
@@ -21,6 +23,13 @@ export type YieldTab = "UNITS" | "TRX" | "PA";
 // `label` is what the tile calls it, `step` is the mart name the endpoint takes.
 // Every entry must also be in DRILLDOWN_STEPS, which is what makes the matching
 // tile clickable — the same steps reached two ways.
+// Sentinel for the screw-defects tab. Not a mart process_step, so it is kept
+// distinct from the names the per-product endpoint accepts.
+export const SCREW_DEFECTS_TAB = "__SCREW_DEFECTS__";
+// Same reasoning: DPMOI's denominator is OPPORTUNITIES (solder joints, components,
+// placements), so /process/{step}/products cannot answer it either.
+export const DPMOI_TAB = "__DPMOI__";
+
 const STEP_TABS: { label: string; step: string }[] = [
   { label: "AXI-S", step: "AXI" },
   { label: "THERMAL AVI", step: "THERMAL_AVI" },
@@ -30,6 +39,11 @@ const STEP_TABS: { label: string; step: string }[] = [
   { label: "IP", step: "IP" },
   { label: "OTA", step: "OTA_TEST" },
   { label: "AUTO OGI", step: "AUTO_OGI" },
+  // NOT a PROCESS_STEPS entry, and it cannot be one: its denominator is SCREWS
+  // DRIVEN rather than boards, so /process/{step}/products cannot answer it. The
+  // sentinel routes to its own pane and endpoint.
+  { label: "SCREW DEFECTS", step: SCREW_DEFECTS_TAB },
+  { label: "DPMOI", step: DPMOI_TAB },
 ];
 
 const TAB_CLASS =
@@ -256,7 +270,13 @@ export const ProductYieldPanel = ({
           )}
         </div>
 
-        {activeStep ? (
+        {activeStep === DPMOI_TAB ? (
+          <DpmoiPane businessDate={null} />
+        ) : activeStep === SCREW_DEFECTS_TAB ? (
+          // Its own pane: screws-driven denominator, and a line/station/item
+          // grouping the per-product table has no column for.
+          <ScrewDefectsPane businessDate={null} />
+        ) : activeStep ? (
           <StepPane step={activeStep} shift={shift} />
         ) : (
           <>
