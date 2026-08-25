@@ -60,6 +60,32 @@ type ProcessProductsResponse = {
   rows: ProcessProductRow[];
 };
 
+// Which steps have a per-product breakdown at all. An explicit allowlist, so no
+// tile or tab becomes clickable by accident.
+//
+// Keys are mart step names (the endpoint's path segment), NOT tile labels — the
+// two differ for most steps. SPI, DPMOI and SMT_DEFECTS can never appear here:
+// they are not built from the production log, so they have no per-product split.
+//
+// Lives here rather than beside the modal, because it describes the LEVEL ONE
+// data this hook loads. The modal it used to sit in now shows the NC log, which
+// is a different question with its own, shorter list of supported steps.
+export const DRILLDOWN_STEPS: Record<string, true> = {
+  AXI: true, // tile "AXI - S"
+  AUTO_OGI: true, // tile "AUTO OGI"
+  BURN_IN: true, // tile "BURN-IN - S"
+  IP: true,
+  LBTS: true, // tile "LBTS - S"
+  OTA_TEST: true, // tile "OTA"
+  RTWP: true,
+  THERMAL_AVI: true, // tile "THERMAL AVI"
+};
+
+// Tile click-through is OFF: the same per-product data is reachable from the step
+// tabs in the Product Yield panel, so opening it from the tile as well is
+// redundant. Set true to restore it — nothing was removed.
+export const TILE_DRILLDOWN_ENABLED = false;
+
 export const PAGE_SIZE = 12;
 
 export const isNum = (v: unknown): v is number =>

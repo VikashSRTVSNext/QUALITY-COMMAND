@@ -2,7 +2,7 @@ import { isNum } from "../../core/format";
 import {
   DRILLDOWN_STEPS,
   TILE_DRILLDOWN_ENABLED,
-} from "./ProcessProductsModal";
+} from "./useProcessProducts";
 import TileSparkline from "./TileSparkline";
 import { API_KEY_BY_TILE, cardVerdict, getProcessTrendData } from "./metrics";
 
@@ -13,8 +13,11 @@ interface ProcessMetricCardProps {
   title: string;
   /** Shift selected in the header — decides which hourly buckets to plot. */
   activeShift: string;
-  /** Opens the per-product drilldown. Only called for tiles that have one. */
-  onDrill: (card: { step: string; title: string }) => void;
+  /** Opens a drilldown from the tile. Optional, and currently unused: tile
+   *  click-through is off (TILE_DRILLDOWN_ENABLED), because the per-product
+   *  table now lives in the Product Yield step tabs. Kept so re-enabling the
+   *  tile path is wiring a handler rather than restoring a prop. */
+  onDrill?: (card: { step: string; title: string }) => void;
 }
 
 // One Process Performance tile: value, hourly trend line and target.
@@ -41,9 +44,9 @@ export const ProcessMetricCard = ({
   const canDrill =
     TILE_DRILLDOWN_ENABLED &&
     Boolean(DRILLDOWN_STEPS[drillStep]) &&
-    !hasNoProduction;
-  const openDrilldown = () =>
-    onDrill({ step: drillStep, title });
+    !hasNoProduction &&
+    Boolean(onDrill);
+  const openDrilldown = () => onDrill?.({ step: drillStep, title });
 
   return (
     <div

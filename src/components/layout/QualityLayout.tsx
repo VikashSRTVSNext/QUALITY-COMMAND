@@ -20,7 +20,6 @@ import { apiUrl, DASHBOARD_STREAM_URLS } from "../../core/api/config";
 import { filterYieldRows } from "../quality/productYieldFilter";
 import { ZONES, ZoneDef, STATUS_CSS, STATUS_LABEL } from "../factory/zones";
 import FactoryLayoutOverlay from "../factory/FactoryLayoutOverlay";
-import ProcessProductsModal from "../quality/ProcessProductsModal";
 import { palette } from "../../theme/palette";
 import {
   fmtAlertAge,
@@ -750,10 +749,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [liveStatus, setLiveStatus] = useState("OFFLINE");
   const [isTwinModalOpen, setIsTwinModalOpen] = useState(false);
   const [isAlertsModalOpen, setIsAlertsModalOpen] = useState(false);
-  const [drilldownCard, setDrilldownCard] = useState<{
-    step: string;
-    title: string;
-  } | null>(null);
   const [kpiCards, setKpiCards] = useState(
     qualityData.kpiCards.map((card) => {
       const isPercent = [1, 2, 3, 4, 5, 7, 9].includes(card.id);
@@ -1652,7 +1647,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           item={procItem}
           title={title}
           activeShift={activeShift}
-          onDrill={setDrilldownCard}
         />
       );
     }
@@ -2311,16 +2305,12 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         </svg>
       </footer>
 
-      {drilldownCard && (
-        <ProcessProductsModal
-          step={drilldownCard.step}
-          title={drilldownCard.title}
-          shift={
-            activeShift.match(/Shift\s+([A-C])/i)?.[1].toUpperCase() ?? null
-          }
-          onClose={() => setDrilldownCard(null)}
-        />
-      )}
+      {/* The tile drilldown modal used to sit here. Its content — the
+          per-product table — moved into the Product Yield step tabs, and the
+          modal shell was reused for the NC log one level further down, which is
+          opened from a row in those tabs (see ProductYieldPanel). Tile
+          click-through is off in ProcessMetricCard; re-enabling it means
+          deciding which level a tile should open. */}
 
       {isTwinModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 lg:p-8 transition-all duration-300">

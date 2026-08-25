@@ -9,7 +9,9 @@ import { isNum } from "../../core/format";
 import { palette } from "../../theme/palette";
 import SortableTh, { SortState } from "./SortableTh";
 import ProcessProductsTable from "./ProcessProductsTable";
+import ProductDrilldownModal from "./ProductDrilldownModal";
 import { useProcessProducts } from "./useProcessProducts";
+import { DEFECT_DRILLDOWN_STEPS } from "./useProductDefects";
 import { yieldRowTone } from "./metrics";
 
 export type YieldTab = "UNITS" | "TRX" | "PA";
@@ -35,11 +37,45 @@ const TAB_CLASS =
 const TAB_ON = "bg-tab-active text-white border-tab-border/50";
 const TAB_OFF = "bg-page text-ink-dim border-line hover:bg-line";
 
-// A step tab's table. Split out because useProcessProducts cannot be called
-// conditionally, and the query should only run while its tab is selected.
-const StepPane = ({ step, shift }: { step: string; shift: string | null }) => (
-  <ProcessProductsTable query={useProcessProducts(step, shift)} />
-);
+// A step tab's table, plus the NC log it opens.
+//
+// Split out because useProcessProducts cannot be called conditionally, and the
+// query should only run while its tab is selected.
+//
+// The selected product lives here rather than in the panel so switching tabs
+// clears it: an NC log belongs to one step, and carrying a selection across a
+// tab change would ask a different step about a product it may not have run.
+const StepPane = ({ step, shift }: { step: string; shift: string | null }) => {
+  const query = useProcessProducts(step, shift);
+  const [selected, setSelected] = useState<{
+    item: string;
+    product_name: string | null;
+  } | null>(null);
+
+  // Only steps whose rework operation is mapped can explain a failure. The rest
+  // keep inert rows instead of opening a modal that would report 501.
+  const canDrill = Boolean(DEFECT_DRILLDOWN_STEPS[step]);
+
+  return (
+    <>
+      <ProcessProductsTable
+        query={query}
+        onRowClick={canDrill ? setSelected : undefined}
+      />
+      {selected && (
+        <ProductDrilldownModal
+          step={step}
+          item={selected.item}
+          productName={selected.product_name}
+          // The day the table itself is showing, so the log cannot describe a
+          // different window from the row that opened it.
+          businessDate={query.data?.business_date ?? null}
+          onClose={() => setSelected(null)}
+        />
+      )}
+    </>
+  );
+};
 type SortKey = "name" | "tested" | "failed";
 
 const ITEMS_PER_PAGE = 10;

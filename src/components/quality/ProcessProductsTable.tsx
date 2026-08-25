@@ -10,14 +10,22 @@ interface ProcessProductsTableProps {
   /** Result of useProcessProducts — the caller owns the query so it can also
    *  read the step's own headline figure for its own header. */
   query: ProcessProductsQuery;
+  /** Opens the next level down (the NC log) for a product. Optional: when it is
+   *  absent the rows are inert, which is what a step with no rework mapping
+   *  needs — offering a click that cannot resolve is worse than none. */
+  onRowClick?: (row: { item: string; product_name: string | null }) => void;
 }
 
 // Per-product breakdown for one process step: operations line, the table, and
 // totals with server-side pagination.
 //
-// Presentational only. Rendered inside ProcessProductsModal when a tile is
-// clicked, and inline in the Product Yield panel when a step tab is selected.
-export const ProcessProductsTable = ({ query }: ProcessProductsTableProps) => {
+// Presentational only. Rendered inline in the Product Yield panel when a step
+// tab is selected. When `onRowClick` is supplied a row opens ProductDrilldownModal
+// — the NC log for that product, which is the level this table cannot show.
+export const ProcessProductsTable = ({
+  query,
+  onRowClick,
+}: ProcessProductsTableProps) => {
   const {
     data,
     state,
@@ -111,7 +119,46 @@ export const ProcessProductsTable = ({ query }: ProcessProductsTableProps) => {
                       ? palette.healthy
                       : palette.critical;
                 return (
-                  <tr key={row.item} className="hover:bg-white/[0.05]">
+                  <tr
+                    key={row.item}
+                    className={`hover:bg-white/[0.05] ${
+                      onRowClick
+                        ? "cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:outline-info"
+                        : ""
+                    }`}
+                    // A row is only a control when there is something to open,
+                    // so the tabIndex and the roles come and go with the handler
+                    // rather than advertising an interaction that does nothing.
+                    onClick={
+                      onRowClick
+                        ? () =>
+                            onRowClick({
+                              item: row.item,
+                              product_name: row.product_name,
+                            })
+                        : undefined
+                    }
+                    onKeyDown={
+                      onRowClick
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onRowClick({
+                                item: row.item,
+                                product_name: row.product_name,
+                              });
+                            }
+                          }
+                        : undefined
+                    }
+                    tabIndex={onRowClick ? 0 : undefined}
+                    role={onRowClick ? "button" : undefined}
+                    title={
+                      onRowClick
+                        ? `Show the NC log for ${row.product_name ?? row.item}`
+                        : undefined
+                    }
+                  >
                     <td className="py-2">
                       {row.product_name ? (
                         <>
