@@ -927,6 +927,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       (row: any) => ({
         id: row.id,
         name: row.product,
+        // Item code, needed to open the UNIT_TEST drill-down from a UNITS row.
+        // The table shows `name`; the endpoint takes the code.
+        item: row.item,
         tested: fmtCount(row.tested, "—"),
         failed: isNum(row.failed) ? row.failed.toString() : "—",
         fpy: row.fpy,

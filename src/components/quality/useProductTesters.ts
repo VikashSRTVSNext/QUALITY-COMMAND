@@ -26,8 +26,19 @@ export type TesterRow = {
   shifts: Record<"A" | "B" | "C", ShiftFigures>;
   causes: CauseCell[];
   /** Failures with no category, or none entered yet. Keeps the cause columns
-   *  from reading as if they covered every failure. */
+   *  from reading as if they covered every failure. Equals pending_units +
+   *  undispositioned_units + failures whose NC code has no category. */
   uncaused_units: number | null;
+  /** Failed, an operator has entered a disposition, nobody has verified it yet.
+   *
+   *  This is the number that reconciles us with the MES portal. Cause counts are
+   *  VERIFIED-only, and that review lands a median of 28 minutes after the test
+   *  (p90 ~3 hours), so MES shows a failure well before it can appear in any
+   *  cause column. Shown as "pending" rather than hidden, so an in-flight review
+   *  does not read as a stale dashboard. */
+  pending_units: number | null;
+  /** Failed with no disposition row at all yet. */
+  undispositioned_units: number | null;
 };
 
 export type ProductTestersResponse = {
@@ -43,6 +54,21 @@ export type ProductTestersResponse = {
     ftpy_pct: number | null;
     causes: CauseCell[];
     uncaused_units: number | null;
+    /** DISTINCT units, from their own query -- NOT the sum of the tester rows,
+     *  which counts a unit once per machine it ran. The three partition the
+     *  product's failed units exactly. */
+    verified_units: number | null;
+    pending_units: number | null;
+    undispositioned_units: number | null;
+    /** Verified, but its NC code has no category in the master -- so it cannot
+     *  appear in a cause column. A master-data gap, NOT a review backlog: the
+     *  two are shown separately because they need different people to act. */
+    unmapped_units: number | null;
+    /** DISTINCT failed units -- the denominator the three counts above
+     *  partition. NOT the same as `failed`, which sums qty_failed and so
+     *  counts failure EVENTS: a unit that fails twice in a day is 2 there and
+     *  1 here. They coincide on most steps and diverge on high-volume ones. */
+    failed_units: number | null;
   };
   /** How the cause counts were derived. Surfaced because the rule is still being
    *  confirmed against the plant's own report. */

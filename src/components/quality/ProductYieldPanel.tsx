@@ -127,6 +127,17 @@ export const ProductYieldPanel = ({
   planStatus,
   shift,
 }: ProductYieldPanelProps) => {
+  // Product opened from a UNITS row. Lives here rather than in StepPane because
+  // the UNITS tab is the panel's own table, not a step pane.
+  //
+  // The UNITS level IS the UNIT_TEST_IN04 first-pass report -- same products, same
+  // figures as the plant's own screen -- so its rows drill into the UNIT_TEST step
+  // instead of needing a tab of their own.
+  const [unitSelection, setUnitSelection] = useState<{
+    item: string;
+    name: string | null;
+  } | null>(null);
+
   const [sort, setSort] = useState<SortState<SortKey>>({
     key: null,
     order: "asc",
@@ -216,6 +227,9 @@ export const ProductYieldPanel = ({
   // meaningless and can land past the end.
   useEffect(() => {
     setPage(1);
+    // A drill-down belongs to one level; carrying it across a tab change would
+    // ask UNIT_TEST about a product from the TRX or PA list.
+    setUnitSelection(null);
   }, [activeTab]);
 
   return (
@@ -348,7 +362,27 @@ export const ProductYieldPanel = ({
                     {(safePage - 1) * ITEMS_PER_PAGE + idx + 1}.
                   </td>
                   <td className="py-[2.5px] text-white font-sans font-bold">
-                    {row.name}
+                    {/* Only the UNITS level maps to a step whose failures can be
+                        explained (UNIT_TEST). TRX and PA have no rework mapping,
+                        so their names stay inert rather than opening a modal that
+                        would report 501. Gated on the same list the step panes
+                        use, so unmapping the step removes this click too. */}
+                    {activeTab === "UNITS" &&
+                    DEFECT_DRILLDOWN_STEPS.UNIT_TEST &&
+                    row.item ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setUnitSelection({ item: row.item, name: row.name })
+                        }
+                        className="text-white font-bold hover:text-info focus-visible:outline focus-visible:outline-1 cursor-pointer text-left"
+                        title={`Open the failure breakdown for ${row.name} (${row.item})`}
+                      >
+                        {row.name}
+                      </button>
+                    ) : (
+                      row.name
+                    )}
                   </td>
                   <td className="py-[2.5px] text-center text-white">
                     {row.tested}
@@ -604,6 +638,23 @@ export const ProductYieldPanel = ({
           </div>
         </div>
           </>
+        )}
+
+        {/* The drill-down for a UNITS row. Mounted at the panel level because the
+            UNITS table is the panel's own, unlike the step tabs which each own a
+            StepPane.
+
+            businessDate is left null on purpose: the UNITS table always shows the
+            current production day, and the endpoint defaults to the same one, so
+            passing nothing keeps the two in step. */}
+        {unitSelection && (
+          <ProductDrilldownModal
+            step="UNIT_TEST"
+            item={unitSelection.item}
+            productName={unitSelection.name}
+            businessDate={null}
+            onClose={() => setUnitSelection(null)}
+          />
         )}
       </section>
   );

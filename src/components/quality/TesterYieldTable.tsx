@@ -46,6 +46,58 @@ export const TesterYieldTable = ({ data, onDrill }: Props) => {
   // so the table lines up with the report a supervisor is comparing against.
   const causeCodes: CauseCell[] = totals.causes;
 
+  // Failed units still waiting on an operator's verification.
+  //
+  // Its own column, OUTSIDE the "Failure cause" group, because it is not a cause
+  // -- it is the reason the cause columns can be short. Cause counts are
+  // verified-only, and that review lands a median of 28 minutes after the test
+  // (p90 ~3 hours), so MES shows a failure well before it can appear above. A
+  // blank breakdown reads as a broken dashboard; "3 pending" reads as the floor
+  // still working.
+  const pendingCell = (row: TesterRow | null) => {
+    const totalsPending = totals.pending_units ?? 0;
+    const units = row ? row.pending_units ?? 0 : totalsPending;
+    const undisposed = row
+      ? row.undispositioned_units ?? 0
+      : totals.undispositioned_units ?? 0;
+    const waiting = units + undisposed;
+
+    if (waiting === 0) {
+      // Everything reviewed. Flat grey, never green: a completed review is the
+      // normal state, not an achievement.
+      return (
+        <td
+          className={`${TD} text-center text-ink-dim/50 tabular-nums border-l border-line/60`}
+          title="Every failure here has been reviewed"
+        >
+          —
+        </td>
+      );
+    }
+    const colour = "#eab308";
+    return (
+      <td className={`${TD} text-center tabular-nums border-l border-line/60`}>
+        <button
+          type="button"
+          onClick={() => onDrill(row?.resource ?? null, null)}
+          className="rounded px-1.5 py-0.5 border font-bold hover:brightness-125 focus-visible:outline focus-visible:outline-1 cursor-pointer"
+          style={{
+            color: colour,
+            borderColor: `${colour}55`,
+            backgroundColor: `${colour}14`,
+          }}
+          title={
+            `${waiting} failed unit(s) awaiting review` +
+            (undisposed ? ` (${undisposed} with nothing entered yet)` : "") +
+            ` — open the NC log${row ? ` for ${row.resource}` : ""}`
+          }
+        >
+          {waiting}u
+        </button>
+      </td>
+    );
+  };
+
   const causeCell = (row: TesterRow | null, code: string) => {
     const source = row ? row.causes : totals.causes;
     const cell = source.find((c) => c.code === code);
@@ -110,6 +162,9 @@ export const TesterYieldTable = ({ data, onDrill }: Props) => {
               >
                 Failure cause
               </th>
+              <th className={`${TH} text-center border-l border-line`}>
+                Review
+              </th>
             </tr>
             <tr>
               <th className={`${TH} text-right border-l border-line`}>Tested</th>
@@ -133,6 +188,12 @@ export const TesterYieldTable = ({ data, onDrill }: Props) => {
                   {c.label}
                 </th>
               ))}
+              <th
+                className={`${TH} text-center border-l border-line`}
+                title="Failed units with no verified disposition yet — these are counted by MES but cannot appear in a cause column until an operator signs them off"
+              >
+                Pending
+              </th>
             </tr>
           </thead>
 
@@ -194,6 +255,7 @@ export const TesterYieldTable = ({ data, onDrill }: Props) => {
                   );
                 })}
                 {causeCodes.map((c) => causeCell(t, c.code))}
+                {pendingCell(t)}
               </tr>
             ))}
           </tbody>
@@ -227,6 +289,7 @@ export const TesterYieldTable = ({ data, onDrill }: Props) => {
                   invite reading the three as a partition of it. */}
               <td className={`${TD} border-l border-line/60`} colSpan={6} />
               {causeCodes.map((c) => causeCell(null, c.code))}
+              {pendingCell(null)}
             </tr>
           </tfoot>
         </table>
@@ -239,13 +302,36 @@ export const TesterYieldTable = ({ data, onDrill }: Props) => {
             deliberately do not sum to the total. */}
         Per-tester cause counts do not sum to the total — a unit that ran three
         machines counts at each one but is a single unit for the product.
-        {totals.uncaused_units ? (
+        {/* Split out rather than reported as one "no cause" number, because the
+            two halves need different actions: a pending review resolves itself,
+            an unmapped NC code needs someone to add it to the master. */}
+        {(totals.pending_units ?? 0) + (totals.undispositioned_units ?? 0) > 0 ? (
           <>
             {" "}
             <span className="text-warning">
-              {totals.uncaused_units} failure(s) have no cause recorded yet
+              {(totals.pending_units ?? 0) +
+                (totals.undispositioned_units ?? 0)}{" "}
+              of {totals.failed_units ?? totals.failed} failed unit(s) are still
+              awaiting review
             </span>
-            , so the columns above do not cover every failure.
+            , so they are counted in Failed but not yet in any cause column. MES
+            shows these immediately; a verified disposition follows a median of
+            ~28 minutes later.
+          </>
+        ) : null}
+        {/* Read straight from the server, NOT derived by subtracting from
+            uncaused_units: that field is a SUM over testers (a unit that ran two
+            machines counts twice) while these three are DISTINCT counts, so the
+            subtraction mixed two different countings and could go negative. */}
+        {(totals.unmapped_units ?? 0) > 0 ? (
+          <>
+            {" "}
+            <span className="text-warning">
+              {totals.unmapped_units} verified failure(s) carry an NC code with no
+              category
+            </span>
+            , so they are missing from the columns above — that is a gap in the NC
+            code master, not a pending review.
           </>
         ) : null}
         <span className="text-ink-dim/70"> Cause rule: {data.cause_rule}.</span>

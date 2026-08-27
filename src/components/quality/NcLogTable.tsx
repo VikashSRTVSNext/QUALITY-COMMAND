@@ -251,7 +251,23 @@ export const NcLogTable = ({
                     <td className={`${TD} text-ink-muted tabular-nums`}>
                       {fmtTime(r.date_time)}
                     </td>
-                    <td className={`${TD} text-ink-dim`}>
+                    {/* Amber for anything not yet verified. This column used to
+                        be flat grey, which was fine while the log was only ever
+                        reached from a cause cell -- every row was V by
+                        construction. It is now also reached from the Pending
+                        column, where the whole point is which rows are NOT V. */}
+                    <td
+                      className={`${TD} ${
+                        r.verified_state === "V"
+                          ? "text-ink-dim"
+                          : "text-warning font-bold"
+                      }`}
+                      title={
+                        r.verified_state === "V"
+                          ? "Verified — counted in the cause columns"
+                          : "Not yet verified — a real failure awaiting sign-off, so it is counted in Failed but not in any cause column"
+                      }
+                    >
                       {r.verified_state ?? "—"}
                     </td>
                     <td className={`${TD} text-ink-secondary`}>

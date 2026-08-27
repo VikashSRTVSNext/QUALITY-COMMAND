@@ -12,6 +12,38 @@ import { apiUrl } from "../../core/api/config";
 // that it knows will not resolve.
 export const DEFECT_DRILLDOWN_STEPS: Record<string, true> = {
   RTWP: true,
+  OTA_TEST: true,
+  // Burn-in is a SAMPLE test, not every unit, so expect a handful of units a day
+  // here rather than RTWP-sized numbers. A near-empty table is the correct
+  // answer for this step, not a bug.
+  BURN_IN: true,
+  // The pressure / ingress-protection test, and the highest-volume step here:
+  // ~900-1000 units a day, so expect the fullest tables of any drill-down.
+  IP: true,
+  // Despite "SAMPLE" in its operation name, LBTS is not sparse like burn-in --
+  // 50-89 units a day, so these tables are worth opening.
+  LBTS: true,
+  // Automated optical inspection. Every failure here disposes as FCR, so its
+  // cause breakdown is one column by nature -- the empty SQA / PP columns are
+  // correct, not missing data.
+  AUTO_OGI: true,
+  // SMT X-ray inspection, and the one step whose cause columns will usually read
+  // zero. Its dispositions arrive a MEDIAN OF 3 DAYS after the failure (RTWP's
+  // take 28 minutes), and this drill-down scopes causes to a single business day,
+  // so they land outside it. The NC log still lists the same-day rows, which is
+  // why it stays clickable -- but an empty AXI cause row does NOT mean nobody
+  // reviewed the failures.
+  AXI: true,
+  // Reached from the UNITS level tab, not a step tab of its own: the UNITS table
+  // IS the UNIT_TEST_IN04 first-pass report. Disposes through TWO rework
+  // operations, best coverage and timing of any step (494/496 units, median
+  // 23 min), and the highest failure volume, so the fullest NC logs.
+  UNIT_TEST: true,
+  // Mapped on an explicit decision, not because the data supports it well.
+  // Its cause columns are ALWAYS zero: no verified row for this step carries a
+  // category (the codes are 'FAIL' and 'RC1', both NULL in the master). The NC
+  // log is the only useful level -- it shows the code, action and comments.
+  THERMAL_AVI: true,
 };
 
 export type NcLogRow = {
