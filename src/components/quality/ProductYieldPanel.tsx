@@ -18,6 +18,17 @@ import { yieldRowTone } from "./metrics";
 
 export type YieldTab = "UNITS" | "TRX" | "PA";
 
+// Which process step explains a failure at each level.
+//
+// TRX and PA share one step on purpose: both are MODULE_TEST_IN04, split only by
+// the item's sub_module. The drill-down is addressed per item, so the item decides
+// which slice it came from and one step serves both.
+const LEVEL_STEP: Record<YieldTab, string> = {
+  UNITS: "UNIT_TEST",
+  TRX: "MODULE_TEST",
+  PA: "MODULE_TEST",
+};
+
 // The process steps that can be shown as a tab, in process order.
 //
 // `label` is what the tile calls it, `step` is the mart name the endpoint takes.
@@ -133,7 +144,8 @@ export const ProductYieldPanel = ({
   // The UNITS level IS the UNIT_TEST_IN04 first-pass report -- same products, same
   // figures as the plant's own screen -- so its rows drill into the UNIT_TEST step
   // instead of needing a tab of their own.
-  const [unitSelection, setUnitSelection] = useState<{
+  const [levelSelection, setLevelSelection] = useState<{
+    step: string;
     item: string;
     name: string | null;
   } | null>(null);
@@ -229,7 +241,7 @@ export const ProductYieldPanel = ({
     setPage(1);
     // A drill-down belongs to one level; carrying it across a tab change would
     // ask UNIT_TEST about a product from the TRX or PA list.
-    setUnitSelection(null);
+    setLevelSelection(null);
   }, [activeTab]);
 
   return (
@@ -367,13 +379,16 @@ export const ProductYieldPanel = ({
                         so their names stay inert rather than opening a modal that
                         would report 501. Gated on the same list the step panes
                         use, so unmapping the step removes this click too. */}
-                    {activeTab === "UNITS" &&
-                    DEFECT_DRILLDOWN_STEPS.UNIT_TEST &&
+                    {DEFECT_DRILLDOWN_STEPS[LEVEL_STEP[activeTab]] &&
                     row.item ? (
                       <button
                         type="button"
                         onClick={() =>
-                          setUnitSelection({ item: row.item, name: row.name })
+                          setLevelSelection({
+                            step: LEVEL_STEP[activeTab],
+                            item: row.item,
+                            name: row.name,
+                          })
                         }
                         className="text-white font-bold hover:text-info focus-visible:outline focus-visible:outline-1 cursor-pointer text-left"
                         title={`Open the failure breakdown for ${row.name} (${row.item})`}
@@ -647,13 +662,13 @@ export const ProductYieldPanel = ({
             businessDate is left null on purpose: the UNITS table always shows the
             current production day, and the endpoint defaults to the same one, so
             passing nothing keeps the two in step. */}
-        {unitSelection && (
+        {levelSelection && (
           <ProductDrilldownModal
-            step="UNIT_TEST"
-            item={unitSelection.item}
-            productName={unitSelection.name}
+            step={levelSelection.step}
+            item={levelSelection.item}
+            productName={levelSelection.name}
             businessDate={null}
-            onClose={() => setUnitSelection(null)}
+            onClose={() => setLevelSelection(null)}
           />
         )}
       </section>

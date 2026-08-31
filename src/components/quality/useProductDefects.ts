@@ -44,6 +44,10 @@ export const DEFECT_DRILLDOWN_STEPS: Record<string, true> = {
   // category (the codes are 'FAIL' and 'RC1', both NULL in the master). The NC
   // log is the only useful level -- it shows the code, action and comments.
   THERMAL_AVI: true,
+  // Reached from the TRX and PA level tabs, which are two slices of one
+  // operation. Best coverage (1382/1390), timing (median 26 min) and category
+  // spread of any step -- six of the seven cause columns populate.
+  MODULE_TEST: true,
 };
 
 export type NcLogRow = {
