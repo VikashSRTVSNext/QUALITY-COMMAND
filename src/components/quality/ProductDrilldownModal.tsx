@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { isNum } from "../../core/format";
+import CauseStrip from "./CauseStrip";
 import DrilldownModalShell from "./DrilldownModalShell";
+import FailedStepChart from "./FailedStepChart";
 import NcLogTable from "./NcLogTable";
 import TesterYieldTable from "./TesterYieldTable";
 import { useProductDefects } from "./useProductDefects";
@@ -23,6 +25,11 @@ type Props = {
 /** Where in the drill-down we are. A tester selection is what distinguishes the
  *  two: null = the tester list, set = that tester's NC log. */
 type Selection = { resource: string | null; category: string | null } | null;
+
+/** How level 2 is drawn. The table is the plant's own report and stays the
+ *  default; the chart answers "what fails most, and is it one machine", which a
+ *  table can hold but cannot show. */
+type Level2View = "table" | "chart";
 
 const fmtPct = (v: number | null | undefined) =>
   isNum(v) ? `${v.toFixed(2)}%` : "—";
@@ -53,6 +60,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
   onClose,
 }) => {
   const [selection, setSelection] = useState<Selection>(null);
+  const [view, setView] = useState<Level2View>("table");
   // The plant's two NC-log filters. Off by default: their screen hides later
   // attempts and unverified records, which makes its log shorter than the floor
   // actually is. Held here rather than in the table so they survive stepping back
@@ -61,18 +69,20 @@ export const ProductDrilldownModal: React.FC<Props> = ({
   const [verifiedOnly, setVerifiedOnly] = useState(false);
 
   const testers = useProductTesters(step, item, businessDate);
-  // The NC log only loads once a tester or cause is chosen. `null` item keeps the
-  // hook idle, so opening the modal costs one request rather than two.
+  // The NC log loads once a tester or cause is chosen -- or once the chart view
+  // is opened, which needs the same rows unfiltered to break them down. `null`
+  // item keeps the hook idle, so opening the modal on the table still costs one
+  // request rather than two.
+  const needsLog = Boolean(selection) || view === "chart";
   const defects = useProductDefects(
-    selection ? step : null,
-    selection ? item : null,
+    needsLog ? step : null,
+    needsLog ? item : null,
     businessDate,
     selection?.resource ?? null,
     selection?.category ?? null,
     firstAttemptOnly ? 1 : null,
     verifiedOnly,
   );
-
 
   const totals = testers.data?.totals;
 
@@ -89,66 +99,91 @@ export const ProductDrilldownModal: React.FC<Props> = ({
           {/* The product crumb is a button only when there is somewhere to go
                 back to, so it never looks interactive while it is the current
                 level. */}
-            {selection ? (
-              <button
-                type="button"
-                onClick={() => setSelection(null)}
-                className="text-[16px] font-black text-ink-muted hover:text-white uppercase tracking-wider truncate cursor-pointer focus-visible:outline focus-visible:outline-1"
-                title="Back to the tester list"
-              >
-                {productName || item}
-              </button>
-            ) : (
-              <span className="text-[16px] font-black text-white uppercase tracking-wider truncate">
-                {productName || item}
-              </span>
-            )}
-
-            <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider whitespace-nowrap">
-              {step}
+          {selection ? (
+            <button
+              type="button"
+              onClick={() => setSelection(null)}
+              className="text-[16px] font-black text-ink-muted hover:text-white uppercase tracking-wider truncate cursor-pointer focus-visible:outline focus-visible:outline-1"
+              title="Back to the tester list"
+            >
+              {productName || item}
+            </button>
+          ) : (
+            <span className="text-[16px] font-black text-white uppercase tracking-wider truncate">
+              {productName || item}
             </span>
+          )}
 
-            {selection ? (
-              <>
-                <ChevronRight size={13} className="text-ink-dim flex-shrink-0" />
-                <span className="text-[13px] font-bold text-white font-mono whitespace-nowrap">
-                  {selection.resource ?? "All testers"}
-                </span>
-                {selection.category && (
-                  <>
-                    <ChevronRight
-                      size={13}
-                      className="text-ink-dim flex-shrink-0"
-                    />
-                    <span className="text-[12px] font-black text-info uppercase tracking-wider">
-                      {selection.category}
-                    </span>
-                  </>
-                )}
-              </>
-            ) : (
-              <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider whitespace-nowrap">
-                · By tester
-              </span>
-            )}
+          <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider whitespace-nowrap">
+            {step}
+          </span>
 
-            {productName && !selection && (
-              <span className="text-[11px] font-mono text-ink-dim truncate">
-                {item}
+          {selection ? (
+            <>
+              <ChevronRight size={13} className="text-ink-dim flex-shrink-0" />
+              <span className="text-[13px] font-bold text-white font-mono whitespace-nowrap">
+                {selection.resource ?? "All testers"}
               </span>
-            )}
+              {selection.category && (
+                <>
+                  <ChevronRight
+                    size={13}
+                    className="text-ink-dim flex-shrink-0"
+                  />
+                  <span className="text-[12px] font-black text-info uppercase tracking-wider">
+                    {selection.category}
+                  </span>
+                </>
+              )}
+            </>
+          ) : (
+            <span className="text-[11px] font-bold text-ink-dim uppercase tracking-wider whitespace-nowrap">
+              · By tester
+            </span>
+          )}
 
-            {totals && (
-              <span className="flex items-center gap-1.5 text-[11px] font-bold text-ink-muted whitespace-nowrap">
-                <span className="w-1 h-1 rounded-full bg-ink-dim" />
-                {totals.failed} of {totals.tested} failed ·{" "}
-                {fmtPct(totals.ftpy_pct)}
-              </span>
-            )}
+          {productName && !selection && (
+            <span className="text-[11px] font-mono text-ink-dim truncate">
+              {item}
+            </span>
+          )}
+
+          {totals && (
+            <span className="flex items-center gap-1.5 text-[11px] font-bold text-ink-muted whitespace-nowrap">
+              <span className="w-1 h-1 rounded-full bg-ink-dim" />
+              {totals.failed} of {totals.tested} failed ·{" "}
+              {fmtPct(totals.ftpy_pct)}
+            </span>
+          )}
         </>
       }
       meta={
         <>
+          {/* Level 2 only. At level 3 the NC log IS the detail, so a view
+              switch there would offer a chart of a single selection. */}
+          {!selection && (
+            <div className="flex items-center gap-1">
+              {(["table", "chart"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  className={`border text-[10px] font-bold px-2.5 py-1 rounded uppercase transition-colors cursor-pointer ${
+                    view === v
+                      ? "bg-tab-active text-white border-tab-border/50"
+                      : "bg-page text-ink-dim border-line hover:bg-line"
+                  }`}
+                  title={
+                    v === "table"
+                      ? "The plant's tester yield report, cell for cell"
+                      : "Failures by NC code, stacked by tester"
+                  }
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          )}
           <span className="text-[11px] font-bold text-ink-dim">
             {testers.data?.business_date ?? businessDate ?? ""}
           </span>
@@ -163,58 +198,76 @@ export const ProductDrilldownModal: React.FC<Props> = ({
         </>
       }
     >
-
-        {/* ---- level 2: testers ------------------------------------------ */}
-        {!selection && (
-          <>
-            {testers.state === "loading" && (
-              <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
-                Loading tester breakdown…
+      {/* ---- level 2: testers ------------------------------------------ */}
+      {!selection && (
+        <>
+          {testers.state === "loading" && (
+            <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
+              Loading tester breakdown…
+            </div>
+          )}
+          {testers.state === "unsupported" && (
+            <div className="py-16 px-8 text-center">
+              <div className="text-[12px] font-bold text-warning mb-1.5">
+                No tester breakdown available for {step}
               </div>
-            )}
-            {testers.state === "unsupported" && (
-              <div className="py-16 px-8 text-center">
-                <div className="text-[12px] font-bold text-warning mb-1.5">
-                  No tester breakdown available for {step}
-                </div>
-                <div className="text-[11px] text-ink-dim max-w-[60ch] mx-auto leading-relaxed">
-                  {testers.error}
-                </div>
-              </div>
-            )}
-            {testers.state === "error" && (
-              <div className="py-16 text-center text-[12px] font-bold text-critical">
+              <div className="text-[11px] text-ink-dim max-w-[60ch] mx-auto leading-relaxed">
                 {testers.error}
               </div>
-            )}
-            {testers.state === "ready" &&
-              testers.data &&
-              (testers.data.testers.length === 0 ? (
-                <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
-                  No production for this product on{" "}
-                  {testers.data.business_date}.
-                </div>
-              ) : (
-                <TesterYieldTable
-                  data={testers.data}
-                  onDrill={(resource, category) =>
-                    setSelection({ resource, category })
-                  }
-                />
-              ))}
-          </>
-        )}
+            </div>
+          )}
+          {testers.state === "error" && (
+            <div className="py-16 text-center text-[12px] font-bold text-critical">
+              {testers.error}
+            </div>
+          )}
+          {testers.state === "ready" &&
+            testers.data &&
+            (testers.data.testers.length === 0 ? (
+              <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
+                No production for this product on {testers.data.business_date}.
+              </div>
+            ) : (
+              <>
+                {/* Above BOTH views, not inside the table: it summarises the
+                      level, and a supervisor switching views should not watch
+                      the summary disappear and come back. */}
+                {/* <CauseStrip
+                    totals={testers.data.totals}
+                    onDrill={(resource, category) =>
+                      setSelection({ resource, category })
+                    }
+                  /> */}
+                {view === "table" ? (
+                  <TesterYieldTable
+                    data={testers.data}
+                    onDrill={(resource, category) =>
+                      setSelection({ resource, category })
+                    }
+                  />
+                ) : (
+                  <FailedStepChart
+                    query={defects}
+                    onDrill={(resource, category) =>
+                      setSelection({ resource, category })
+                    }
+                  />
+                )}
+              </>
+            ))}
+        </>
+      )}
 
-        {/* ---- level 3: the NC log --------------------------------------- */}
-        {selection && (
-          <NcLogTable
-            query={defects}
-            firstAttemptOnly={firstAttemptOnly}
-            onFirstAttemptOnly={setFirstAttemptOnly}
-            verifiedOnly={verifiedOnly}
-            onVerifiedOnly={setVerifiedOnly}
-          />
-        )}
+      {/* ---- level 3: the NC log --------------------------------------- */}
+      {selection && (
+        <NcLogTable
+          query={defects}
+          firstAttemptOnly={firstAttemptOnly}
+          onFirstAttemptOnly={setFirstAttemptOnly}
+          verifiedOnly={verifiedOnly}
+          onVerifiedOnly={setVerifiedOnly}
+        />
+      )}
     </DrilldownModalShell>
   );
 };
