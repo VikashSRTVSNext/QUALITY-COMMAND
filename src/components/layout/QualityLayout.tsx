@@ -523,6 +523,9 @@ const PROCESS_NAME_ALIASES: Record<string, string> = {
   LBTS: "LBTS - S",
 };
 
+// TEMPORARY: hard-coded UNIT-HFTPY actual, overriding the live feed value.
+const HFTPY_HARDCODED_VALUE = "77.8%";
+
 const LARGE_KPI_LABEL_ALIASES: Record<string, string> = {
   CUSTOMER: "CUSTOMER QUALITY AUDIT (%)",
   UNITHFTPY: "UNIT-HFTPY (%)",
@@ -1673,9 +1676,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     );
     if (!kpiItem) return null;
 
+    // TEMPORARY: UNIT-HFTPY actual is pinned to a fixed value until the feed
+    // supplies a trustworthy number. Remove this override to go back live.
+    const item =
+      kpiItem.id === 9 ? { ...kpiItem, value: HFTPY_HARDCODED_VALUE } : kpiItem;
+
     return (
       <LargeKpiCard
-        item={kpiItem}
+        item={item}
         title={customTitle || metricName}
         projectionIsHardcoded={hftpyBlock?.projection_is_hardcoded}
       />
