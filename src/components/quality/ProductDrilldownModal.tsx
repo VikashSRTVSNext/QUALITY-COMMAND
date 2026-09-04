@@ -5,8 +5,10 @@ import DrilldownModalShell from "./DrilldownModalShell";
 import FailedStepChart from "./FailedStepChart";
 import NcLogTable from "./NcLogTable";
 import TesterYieldTable from "./TesterYieldTable";
+import UnitImageViewer from "./UnitImageViewer";
 import { useProductDefects } from "./useProductDefects";
 import { useProductTesters } from "./useProductTesters";
+import { useProductImages } from "./useUnitImages";
 
 type Props = {
   /** Mart step name, e.g. "RTWP" — the endpoint's path segment. */
@@ -66,6 +68,8 @@ export const ProductDrilldownModal: React.FC<Props> = ({
   // to the tester list and drilling into a different cell.
   const [firstAttemptOnly, setFirstAttemptOnly] = useState(false);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  // Which unit's inspection images are open, if any.
+  const [imagesFor, setImagesFor] = useState<string | null>(null);
 
   const testers = useProductTesters(step, item, businessDate);
   // The NC log loads once a tester or cause is chosen -- or once the chart view
@@ -83,9 +87,22 @@ export const ProductDrilldownModal: React.FC<Props> = ({
     verifiedOnly,
   );
 
+  // Inspection images for the whole product and day, in ONE request, loaded
+  // alongside the NC log so a badge is ready the moment rows render rather than
+  // popping in afterwards. Idles on steps whose cells have no camera, and the
+  // hook answers "off" rather than erroring when the image store is
+  // unconfigured or the gateway is unreachable -- so on a laptop outside the
+  // plant network this simply contributes nothing.
+  const unitImages = useProductImages(
+    needsLog ? step : null,
+    needsLog ? item : null,
+    businessDate,
+  );
+
   const totals = testers.data?.totals;
 
   return (
+    <>
     <DrilldownModalShell
       onClose={onClose}
       // Escape steps back to the tester list first, and only closes from there.
@@ -265,9 +282,28 @@ export const ProductDrilldownModal: React.FC<Props> = ({
           onFirstAttemptOnly={setFirstAttemptOnly}
           verifiedOnly={verifiedOnly}
           onVerifiedOnly={setVerifiedOnly}
+          images={unitImages.data?.by_sfc}
+          onOpenImages={setImagesFor}
         />
       )}
     </DrilldownModalShell>
+
+    {/* ---- the images for one unit ------------------------------------- */}
+    {/* A SIBLING of the shell, not one of its children. The shell's panel is
+        overflow-hidden with rounded corners, and its backdrop-blur makes that
+        panel a containing block for fixed-position descendants -- so nested
+        here the viewer would be clipped to the drill-down's box instead of
+        covering the screen. Rendered above rather than instead of the
+        drill-down, so closing it returns to the same log row. */}
+    {imagesFor && unitImages.data?.by_sfc[imagesFor] && (
+      <UnitImageViewer
+        sfc={imagesFor}
+        unit={unitImages.data.by_sfc[imagesFor]}
+        subject={productName || item}
+        onClose={() => setImagesFor(null)}
+      />
+    )}
+    </>
   );
 };
 

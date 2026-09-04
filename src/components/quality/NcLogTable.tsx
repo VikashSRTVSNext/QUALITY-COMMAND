@@ -1,9 +1,11 @@
+import { Camera, RefreshCw } from "lucide-react";
 import { isNum } from "../../core/format";
 import {
   CATEGORY_COLOR,
   type NcLogRow,
   type ProductDefectsQuery,
 } from "./useProductDefects";
+import type { UnitImages } from "./useUnitImages";
 
 const fmtPct = (v: number | null | undefined) =>
   isNum(v) ? `${v.toFixed(2)}%` : "—";
@@ -36,6 +38,20 @@ type Props = {
   onFirstAttemptOnly: (v: boolean) => void;
   verifiedOnly: boolean;
   onVerifiedOnly: (v: boolean) => void;
+  /**
+   * sfc -> what the inspection cell photographed, for the whole product and day.
+   *
+   * Passed in whole rather than fetched per row: it is one request for the
+   * product, so badging every row costs nothing extra.
+   *
+   * MOST ROWS WILL NOT BE IN IT, and that is expected rather than a gap. The
+   * cell's idea of a failure and the NC log's are unrelated — a unit can fail
+   * here and never be photographed, and the units the camera did reject are
+   * usually recorded by MES as clean passes. Absent = no badge, nothing more.
+   */
+  images?: Record<string, UnitImages>;
+  /** Open the viewer for one unit. Omitted = badges render but do not click. */
+  onOpenImages?: (sfc: string) => void;
 };
 
 const TOGGLE_ON =
@@ -48,6 +64,8 @@ export const NcLogTable = ({
   onFirstAttemptOnly,
   verifiedOnly,
   onVerifiedOnly,
+  images,
+  onOpenImages,
 }: Props) => {
   const { data, state, error } = query;
   const parent = data?.parent;
@@ -231,6 +249,11 @@ export const NcLogTable = ({
                 // Listed for parity with the MES portal, dimmed because it is not
                 // part of today's first-pass yield and so not in the percentages.
                 const carried = !r.first_pass_unit;
+                // A unit can appear on many rows (one per failure event) but has
+                // one set of captures, so this is looked up per row and rendered
+                // per row -- the badge repeats with the serial, which is right:
+                // it belongs to the unit, not to the event.
+                const shot = images?.[r.sfc];
                 return (
                   <tr
                     key={r.slno}
@@ -246,6 +269,40 @@ export const NcLogTable = ({
                         >
                           prev day
                         </span>
+                      )}
+                      {/* Only where the cell actually photographed this unit.
+                          No badge is the common case on some products and does
+                          NOT mean the image is missing — many units are never
+                          imaged at all. A placeholder on every row would read
+                          as "images should be here", which is wrong. */}
+                      {shot && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenImages?.(r.sfc)}
+                          disabled={!onOpenImages}
+                          className={`ml-1.5 inline-flex items-center gap-1 align-middle border rounded px-1 py-px transition-colors ${
+                            shot.retries > 0
+                              ? "text-warning border-warning/40 hover:bg-warning/10"
+                              : "text-info border-info/40 hover:bg-info/10"
+                          } ${onOpenImages ? "cursor-pointer" : "cursor-default"}`}
+                          title={
+                            shot.retries > 0
+                              ? `${shot.attempts} captures — the camera rejected this unit ` +
+                                `${shot.retries} time(s) before accepting it. That is a ` +
+                                `re-image, NOT a failed test: MES records these as passes.`
+                              : `${shot.attempts} capture(s) from the inspection cell.`
+                          }
+                        >
+                          <Camera size={9} />
+                          {shot.retries > 0 && (
+                            <>
+                              <RefreshCw size={8} />
+                              <span className="text-[8.5px] font-black tabular-nums">
+                                {shot.retries}
+                              </span>
+                            </>
+                          )}
+                        </button>
                       )}
                     </td>
                     <td className={`${TD} text-ink-muted tabular-nums`}>
