@@ -44,6 +44,10 @@ export type StackedBarChartProps = {
   maxLabelChars?: number;
   emptyLabel?: string;
   className?: string;
+  /** Turn off ONLY when something else on screen names every series with its
+   *  colour — a ranked list of the same entities, say. Identity must never rest
+   *  on colour alone, so there has to be a legend somewhere. */
+  showLegend?: boolean;
   /** Fires with the clicked SEGMENT, not just the bar it sits in — a stacked bar
    *  carries two facts (which category, which series) and throwing the second
    *  one away is what makes most stacked charts a dead end. */
@@ -91,6 +95,7 @@ export const StackedBarChart = ({
   maxLabelChars = 22,
   emptyLabel = "Nothing to chart",
   className = "",
+  showLegend = true,
   onSegmentClick,
 }: StackedBarChartProps) => {
   const [hovered, setHovered] = useState<string | null>(null);
@@ -105,6 +110,12 @@ export const StackedBarChart = ({
       fullLabel: c.label,
       hint: c.hint,
       total: series.reduce((acc, s) => acc + (c.values[s.key] ?? 0), 0),
+      // Which series ends up on top of THIS bar. Recharts stacks in series
+      // order, so it is the last one with a value — and it differs per bar,
+      // which is why the total cannot simply hang off the last <Bar>.
+      __topKey:
+        [...series].reverse().find((s) => (c.values[s.key] ?? 0) > 0)?.key ??
+        null,
       ...Object.fromEntries(series.map((s) => [s.key, c.values[s.key] ?? 0])),
     });
 
@@ -275,23 +286,47 @@ export const StackedBarChart = ({
               // bar with a 4px cap rather than a pile of lozenges.
               radius={i === series.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
             >
-              {i === series.length - 1 && (
-                <LabelList
-                  dataKey="total"
-                  position="top"
-                  offset={6}
-                  fill={palette.inkMuted}
-                  fontSize={9.5}
-                  fontWeight={700}
-                />
-              )}
+              {/* Every Bar carries the label, and each one draws it only for
+                  the rows where IT is the topmost segment — so exactly one
+                  label lands on each bar, at the top of the stack. Hanging it
+                  off the last <Bar> instead silently skipped any bar whose
+                  last series happened to be zero. */}
+              <LabelList
+                dataKey="total"
+                content={(props: any) => {
+                  const { index, x, y, width, value } = props;
+                  if (
+                    typeof index !== "number" ||
+                    rows[index]?.__topKey !== s.key ||
+                    typeof x !== "number" ||
+                    typeof y !== "number" ||
+                    typeof width !== "number"
+                  ) {
+                    return null;
+                  }
+                  return (
+                    <text
+                      x={x + width / 2}
+                      y={y - 6}
+                      textAnchor="middle"
+                      fill={palette.inkMuted}
+                      fontSize={9.5}
+                      fontWeight={700}
+                    >
+                      {value}
+                    </text>
+                  );
+                }}
+              />
             </Bar>
           ))}
         </BarChart>
       </ResponsiveContainer>
 
-      {/* Always present at two or more series, and never the only carrier of
-          identity — the tooltip names every segment too. */}
+      {/* Present whenever nothing else on screen carries the series names, and
+          never the only carrier of identity — the tooltip names every segment
+          too. */}
+      {showLegend && (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
         {series.map((s) => (
           <button
@@ -322,6 +357,7 @@ export const StackedBarChart = ({
           </span>
         )}
       </div>
+      )}
     </div>
   );
 };

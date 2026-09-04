@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { isNum } from "../../core/format";
-import CauseStrip from "./CauseStrip";
 import DrilldownModalShell from "./DrilldownModalShell";
 import FailedStepChart from "./FailedStepChart";
 import NcLogTable from "./NcLogTable";
