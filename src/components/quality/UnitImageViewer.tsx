@@ -23,6 +23,55 @@ const fmtBytes = (n: number | null | undefined) =>
     ? `${(n / 1_048_576).toFixed(1)} MB`
     : `${Math.round(n / 1024)} KB`;
 
+/** A path segment that is a per-image verdict rather than a folder name. */
+const VERDICT = /^(OK|NG|NOK|PASS|FAIL)$/i;
+
+/**
+ * Pull the meaning out of one zip entry's path.
+ *
+ * The entries are not flat filenames. A real one looks like
+ *   FB_FISTO_FALCON_ALLIED_CAP_QA/OK/2015-04-06_04-52-41/<file>.jpg
+ * so the path carries the INSPECTION POINT that took the picture and, crucially,
+ * that point's own verdict. Rendering the raw string just truncates to
+ * "FB_FISTO_FALCON_ALLIED_CAP_..." on every tile, which reads as noise and
+ * throws away the one field worth having.
+ *
+ * Everything here is defensive: the layout is not documented anywhere, it is
+ * already known to differ between products (one writes a single flat
+ * `{SFC}_0.png`), and the timestamp segment is often nonsense — 2015 dates
+ * appear on units built in 2026, so the cell's clock is not to be trusted. A
+ * flat name simply yields no station and no verdict, and the tile falls back to
+ * the filename.
+ */
+const parseEntry = (entry: string) => {
+  const parts = entry.split("/").filter(Boolean);
+  const file = parts[parts.length - 1] ?? entry;
+  const verdict = parts.find((p) => VERDICT.test(p))?.toUpperCase() ?? null;
+  // The first segment, when there is one, names the inspection point.
+  const station = parts.length > 1 ? parts[0] : null;
+  return { file, station, verdict };
+};
+
+/**
+ * The prefix every station name in this archive shares, so it can be dropped.
+ *
+ * Each tile is labelled FB_FISTO_FALCON_<something>, and the constant two thirds
+ * is what pushes the part that differs off the end of the tile. Computed from
+ * the entries rather than hardcoded, because the prefix is a property of
+ * whichever cell wrote the archive and there is more than one.
+ */
+const commonPrefix = (names: string[]): string => {
+  if (names.length < 2) return "";
+  let prefix = names[0];
+  for (const n of names.slice(1)) {
+    while (prefix && !n.startsWith(prefix)) prefix = prefix.slice(0, -1);
+    if (!prefix) return "";
+  }
+  // Only trim at a separator, or "CAP" and "CHAIN" would collapse to "C".
+  const cut = Math.max(prefix.lastIndexOf("_"), prefix.lastIndexOf("-"));
+  return cut > 0 ? prefix.slice(0, cut + 1) : "";
+};
+
 /**
  * The inspection images the cell captured for one unit.
  *
@@ -69,6 +118,13 @@ export const UnitImageViewer = ({ sfc, unit, subject, onClose }: Props) => {
 
   const images = manifest.data?.entries.filter((e) =>
     e.content_type.startsWith("image/"),
+  );
+
+  // Computed once per archive, not per tile.
+  const stationPrefix = commonPrefix(
+    (images ?? [])
+      .map((e) => parseEntry(e.entry).station)
+      .filter((s): s is string => Boolean(s)),
   );
 
   return (
@@ -193,37 +249,67 @@ export const UnitImageViewer = ({ sfc, unit, subject, onClose }: Props) => {
                       writes a single PNG, another writes five JPEGs, and a
                       fixed grid would strand the single image in a corner. */}
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
-                    {images.map((e) => (
-                      <button
-                        key={e.entry}
-                        type="button"
-                        onClick={() =>
-                          setZoomed(unitImageUrl(selected.key, e.entry))
-                        }
-                        className="group relative bg-page border border-line rounded-lg overflow-hidden cursor-zoom-in hover:border-line-strong transition-colors"
-                        title={`${e.entry} · ${fmtBytes(e.bytes)}`}
-                      >
-                        {/* Loaded at full size and constrained by CSS: there is
-                            no thumbnail endpoint, and at ~200 KB an image that
-                            is worth opening is worth fetching once. Lazy so a
-                            five-image archive does not fetch all five before
-                            anyone scrolls. */}
-                        <img
-                          src={unitImageUrl(selected.key, e.entry)}
-                          alt={`${sfc} — ${e.entry}`}
-                          loading="lazy"
-                          className="w-full h-[170px] object-cover bg-black/40"
-                        />
-                        <div className="flex items-center justify-between px-2 py-1.5 border-t border-line">
-                          <span className="text-[10px] font-mono text-ink-muted truncate">
-                            {e.entry}
-                          </span>
-                          <span className="text-[9.5px] font-bold text-ink-dim tabular-nums flex-shrink-0 ml-2">
-                            {fmtBytes(e.bytes)}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
+                    {images.map((e) => {
+                      const p = parseEntry(e.entry);
+                      // A verdict that is not OK/PASS is the inspection point
+                      // that actually objected -- on a rejected capture, this is
+                      // the tile worth looking at first.
+                      const flagged =
+                        p.verdict != null && !/^(OK|PASS)$/.test(p.verdict);
+                      return (
+                        <button
+                          key={e.entry}
+                          type="button"
+                          onClick={() =>
+                            setZoomed(unitImageUrl(selected.key, e.entry))
+                          }
+                          className={`group relative bg-page border rounded-lg overflow-hidden cursor-zoom-in transition-colors ${
+                            flagged
+                              ? "border-warning/60 hover:border-warning"
+                              : "border-line hover:border-line-strong"
+                          }`}
+                          title={`${e.entry} · ${fmtBytes(e.bytes)}`}
+                        >
+                          {/* Loaded at full size and constrained by CSS: there is
+                              no thumbnail endpoint, and at ~200 KB an image that
+                              is worth opening is worth fetching once. Lazy so a
+                              nine-image archive does not fetch all nine before
+                              anyone scrolls. */}
+                          <img
+                            src={unitImageUrl(selected.key, e.entry)}
+                            alt={`${sfc} — ${p.station ?? p.file}`}
+                            loading="lazy"
+                            className="w-full h-[170px] object-cover bg-black/40"
+                          />
+                          {p.verdict && (
+                            <span
+                              className={`absolute top-1.5 right-1.5 text-[9px] font-black uppercase tracking-wider rounded px-1.5 py-0.5 ${
+                                flagged
+                                  ? "bg-warning text-page"
+                                  : "bg-page/80 text-ink-dim"
+                              }`}
+                              title={`This inspection point recorded ${p.verdict}.`}
+                            >
+                              {p.verdict}
+                            </span>
+                          )}
+                          <div className="flex items-center justify-between px-2 py-1.5 border-t border-line gap-2">
+                            {/* The station, with the prefix every tile shares
+                                trimmed off -- otherwise the part that differs is
+                                the part that gets truncated away. */}
+                            <span className="text-[10px] font-mono text-ink-muted truncate">
+                              {p.station
+                                ? p.station.slice(stationPrefix.length) ||
+                                  p.station
+                                : p.file}
+                            </span>
+                            <span className="text-[9.5px] font-bold text-ink-dim tabular-nums flex-shrink-0">
+                              {fmtBytes(e.bytes)}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </>
               )
