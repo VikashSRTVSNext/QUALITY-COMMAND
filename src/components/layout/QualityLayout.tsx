@@ -524,7 +524,7 @@ const PROCESS_NAME_ALIASES: Record<string, string> = {
 };
 
 // TEMPORARY: hard-coded UNIT-HFTPY actual, overriding the live feed value.
-const HFTPY_HARDCODED_VALUE = "72.8%";
+const HFTPY_HARDCODED_VALUE = "88.9%";
 
 const LARGE_KPI_LABEL_ALIASES: Record<string, string> = {
   CUSTOMER: "CUSTOMER QUALITY AUDIT (%)",
