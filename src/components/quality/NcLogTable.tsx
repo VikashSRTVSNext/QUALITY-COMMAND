@@ -5,7 +5,7 @@ import {
   type NcLogRow,
   type ProductDefectsQuery,
 } from "./useProductDefects";
-import type { UnitImages } from "./useUnitImages";
+import type { ProductImagesResponse } from "./useUnitImages";
 
 const fmtPct = (v: number | null | undefined) =>
   isNum(v) ? `${v.toFixed(2)}%` : "—";
@@ -39,17 +39,21 @@ type Props = {
   verifiedOnly: boolean;
   onVerifiedOnly: (v: boolean) => void;
   /**
-   * sfc -> what the inspection cell photographed, for the whole product and day.
+   * What the inspection cell photographed for this whole product and day.
    *
-   * Passed in whole rather than fetched per row: it is one request for the
-   * product, so badging every row costs nothing extra.
+   * The WHOLE response, not just the sfc map, because the footer reports what
+   * the lookup found. Without that a product with no captures is silent — no
+   * badges, no explanation — and silence reads as a broken panel rather than as
+   * an answer. It matters most for AXI, whose product folder is resolved by
+   * matching against what exists; when nothing matches, the response carries the
+   * folders that were there and the footer can say so.
    *
-   * MOST ROWS WILL NOT BE IN IT, and that is expected rather than a gap. The
+   * MOST ROWS WILL NOT BE BADGED, and that is expected rather than a gap. The
    * cell's idea of a failure and the NC log's are unrelated — a unit can fail
    * here and never be photographed, and the units the camera did reject are
-   * usually recorded by MES as clean passes. Absent = no badge, nothing more.
+   * usually recorded by MES as clean passes.
    */
-  images?: Record<string, UnitImages>;
+  imagesData?: ProductImagesResponse | null;
   /** Open the viewer for one unit. Omitted = badges render but do not click. */
   onOpenImages?: (sfc: string) => void;
 };
@@ -64,10 +68,20 @@ export const NcLogTable = ({
   onFirstAttemptOnly,
   verifiedOnly,
   onVerifiedOnly,
-  images,
+  imagesData,
   onOpenImages,
 }: Props) => {
+  const images = imagesData?.by_sfc;
   const { data, state, error } = query;
+  // Distinct UNITS in the listed rows that have captures -- not rows, since one
+  // unit can appear on several rows and would otherwise be counted each time.
+  const badgedRows = images
+    ? new Set(
+        (data?.nc_log ?? [])
+          .map((r) => r.sfc)
+          .filter((sfc) => images[sfc]),
+      ).size
+    : 0;
   const parent = data?.parent;
   // Only the categories that occurred. Seven always-present columns of mostly
   // 0.00% is the plant report's format; it is not a useful summary here.
@@ -432,6 +446,53 @@ export const NcLogTable = ({
             Test {data.operations.test.join(", ")} · rework{" "}
             {data.operations.rework.join(", ")}.
           </span>
+
+          {/* What the image lookup found, stated even when the answer is
+              nothing. A product with no captures otherwise shows no badges and
+              no reason, and an empty panel reads as a fault rather than as an
+              answer. */}
+          {imagesData && (
+            <div className="mt-1 pt-1 border-t border-line-modal/60">
+              <span className="text-ink-muted font-bold">
+                Inspection images
+              </span>{" "}
+              — {imagesData.units} unit(s) captured for this product on{" "}
+              {imagesData.business_date}
+              {isNum(parent?.done) ? ` of ${parent?.done} started` : ""}
+              {badgedRows > 0 ? (
+                <>
+                  ; {badgedRows} of the {data.nc_log.length} row(s) below{" "}
+                  {badgedRows === 1 ? "has" : "have"} one, marked{" "}
+                  <Camera size={9} className="inline align-middle text-info" />
+                </>
+              ) : (
+                <>
+                  , none of them listed below — the cell photographs what it
+                  inspects, and its captures do not line up with MES failures
+                </>
+              )}
+              .
+              {/* AXI resolves its product folder by matching against what
+                  exists, so a miss is a naming question, not an empty day. The
+                  candidates and the real folder list make it a one-look fix. */}
+              {imagesData.store === "axi" &&
+                imagesData.matched_folders?.length === 0 && (
+                  <span className="text-warning">
+                    {" "}
+                    No AXI folder matched{" "}
+                    <span className="font-mono">
+                      {(imagesData.folder_candidates ?? []).join(", ")}
+                    </span>
+                    . Present:{" "}
+                    <span className="font-mono">
+                      {Object.entries(imagesData.available_folders ?? {})
+                        .map(([k, v]) => `${k}: ${v.slice(0, 6).join(", ")}`)
+                        .join(" · ") || "none"}
+                    </span>
+                  </span>
+                )}
+            </div>
+          )}
         </div>
       )}
     </>

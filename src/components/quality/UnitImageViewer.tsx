@@ -3,6 +3,7 @@ import { X, ImageOff, RefreshCw } from "lucide-react";
 import {
   useArchiveManifest,
   unitImageUrl,
+  type ImageStoreName,
   type UnitArchive,
   type UnitImages,
 } from "./useUnitImages";
@@ -10,6 +11,9 @@ import {
 type Props = {
   sfc: string;
   unit: UnitImages;
+  /** Which bucket these archives came from. Decides both where the images are
+   *  fetched from and whether a verdict is shown at all — AXI records none. */
+  store: ImageStoreName;
   /** Product name or item code, for the header. */
   subject?: string | null;
   onClose: () => void;
@@ -87,14 +91,20 @@ const commonPrefix = (names: string[]): string => {
  * "rejected / accepted by the camera" throughout, and the footnote explaining
  * why the count will not match the NC log.
  */
-export const UnitImageViewer = ({ sfc, unit, subject, onClose }: Props) => {
+export const UnitImageViewer = ({
+  sfc,
+  unit,
+  store,
+  subject,
+  onClose,
+}: Props) => {
   // Default to the LAST attempt: it is the one that decided the unit, and for a
   // single-attempt unit it is the only one.
   const [selected, setSelected] = useState<UnitArchive>(
     unit.archives[unit.archives.length - 1],
   );
   const [zoomed, setZoomed] = useState<string | null>(null);
-  const manifest = useArchiveManifest(selected?.key ?? null);
+  const manifest = useArchiveManifest(store, selected?.key ?? null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -195,13 +205,26 @@ export const UnitImageViewer = ({ sfc, unit, subject, onClose }: Props) => {
                       <span className="text-[10px] font-black text-ink-dim tabular-nums">
                         {i + 1}
                       </span>
-                      <span
-                        className={`text-[9.5px] font-black uppercase tracking-wider ${
-                          rejected ? "text-warning" : "text-healthy"
-                        }`}
-                      >
-                        {rejected ? "rejected" : "accepted"}
-                      </span>
+                      {/* Only where a verdict exists. AXI keys carry none, and
+                          rendering "accepted" for a null would invent a result
+                          the store never recorded -- the exact mistake the AVI
+                          labelling above exists to avoid. Its machine is the
+                          useful fact instead. */}
+                      {a.result ? (
+                        <span
+                          className={`text-[9.5px] font-black uppercase tracking-wider ${
+                            rejected ? "text-warning" : "text-healthy"
+                          }`}
+                        >
+                          {rejected ? "rejected" : "accepted"}
+                        </span>
+                      ) : (
+                        a.machine && (
+                          <span className="text-[9.5px] font-black uppercase tracking-wider text-ink-dim">
+                            {a.machine}
+                          </span>
+                        )
+                      )}
                     </div>
                     <div className="text-[11px] font-mono text-ink-muted tabular-nums mt-0.5">
                       {fmtTime(a.captured_at)}
@@ -261,7 +284,7 @@ export const UnitImageViewer = ({ sfc, unit, subject, onClose }: Props) => {
                           key={e.entry}
                           type="button"
                           onClick={() =>
-                            setZoomed(unitImageUrl(selected.key, e.entry))
+                            setZoomed(unitImageUrl(store, selected.key, e.entry))
                           }
                           className={`group relative bg-page border rounded-lg overflow-hidden cursor-zoom-in transition-colors ${
                             flagged
@@ -276,7 +299,7 @@ export const UnitImageViewer = ({ sfc, unit, subject, onClose }: Props) => {
                               nine-image archive does not fetch all nine before
                               anyone scrolls. */}
                           <img
-                            src={unitImageUrl(selected.key, e.entry)}
+                            src={unitImageUrl(store, selected.key, e.entry)}
                             alt={`${sfc} — ${p.station ?? p.file}`}
                             loading="lazy"
                             className="w-full h-[170px] object-cover bg-black/40"

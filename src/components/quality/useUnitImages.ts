@@ -16,18 +16,37 @@ import { apiUrl } from "../../core/api/config";
 export const IMAGE_STEPS: Record<string, true> = {
   THERMAL_AVI: true,
   AUTO_OGI: true,
+  // X-ray inspection. A SEPARATE bucket with its own credentials and a key
+  // layout sharing nothing with the AVI cells'. Its archives carry no PASS/FAIL
+  // verdict at all, so `result` is null and `retries` is always 0.
+  AXI: true,
 };
+
+/** Which bucket an archive came from. The two are separate stores with separate
+ *  credentials, and a key alone does not say which — so it travels with the
+ *  archive and goes back on every image request. */
+export type ImageStoreName = "avi" | "axi";
 
 export type UnitArchive = {
   /** S3 key. Opaque to the UI — pass it straight back to the image endpoints. */
   key: string;
   sfc: string;
-  /** PASS or FAIL, but see UnitImages.retries — FAIL is a CAMERA verdict. */
-  result: string;
+  /**
+   * PASS or FAIL for the AVI store — but see UnitImages.retries, FAIL there is
+   * a CAMERA verdict, not a test result.
+   *
+   * NULL for AXI, whose filenames are the bare serial and carry no verdict at
+   * all. Null means "this store does not record one", never "it passed", so it
+   * must not be rendered as a verdict.
+   */
+  result: string | null;
+  /** AXI only: which machine took it, AXI1 or AXI2. */
+  machine?: string | null;
   captured_at: string | null;
   /** True when the time came from the upload rather than the filename. About
-   *  two thirds of archives carry no timestamp in their name, so this is the
-   *  common case, not an edge one. Accurate to a couple of minutes. */
+   *  two thirds of AVI archives carry no timestamp in their name, and NO AXI
+   *  archive does — so for AXI this is always true. Accurate to a couple of
+   *  minutes. */
   captured_at_approximate: boolean;
   bytes: number | null;
 };
@@ -56,22 +75,36 @@ export type UnitImages = {
 
 export type ProductImagesResponse = {
   step: string;
+  store: ImageStoreName;
   item: string;
-  /** Item code minus its revision suffix — the bucket's folder name. */
-  item_folder: string;
+  /** The folder the archives were read from — item code minus its revision for
+   *  AVI, whichever candidate resolved for AXI, null when none did. */
+  item_folder: string | null;
   business_date: string;
   window: { from: string; to: string };
   prefixes: string[];
   units: number;
   archives: number;
   /** Units the camera rejected at least once. Exists nowhere else in the
-   *  dashboard: MES records every one of them as a clean pass. */
+   *  dashboard: MES records every one of them as a clean pass. Always 0 for
+   *  AXI, whose archives carry no verdict. */
   retried_units: number;
   /** Archives found in the two calendar folders but belonging to the adjacent
    *  production day. Reported rather than hidden so a supervisor checking the
    *  folder by hand does not think rows went missing. */
   outside_window: number;
   by_sfc: Record<string, UnitImages>;
+
+  // --- AXI only -----------------------------------------------------------
+  // AXI names its product folders by at least four conventions and none is
+  // documented, so the backend resolves the folder by listing what exists and
+  // reports its working. When nothing matched, `available_folders` carries the
+  // folders that were actually there — which is the difference between "no
+  // images today" and "we looked in the wrong place".
+  product_name?: string | null;
+  folder_candidates?: string[];
+  matched_folders?: { machine: string; year: number; folder: string }[];
+  available_folders?: Record<string, string[]>;
 };
 
 export type ArchiveEntry = {
@@ -82,15 +115,25 @@ export type ArchiveEntry = {
 
 export type ArchiveManifest = {
   key: string;
+  store: ImageStoreName;
   archive_bytes: number;
   entries: ArchiveEntry[];
   images: number;
 };
 
-/** Direct URL for one image inside one archive. Safe in an <img src>. */
-export const unitImageUrl = (key: string, entry: string) =>
+/** Direct URL for one image inside one archive. Safe in an <img src>.
+ *
+ *  `store` is required, not defaulted: the two buckets have separate
+ *  credentials and a key alone does not say which it belongs to, so a wrong or
+ *  omitted store is a 403 rather than a wrong picture. */
+export const unitImageUrl = (
+  store: ImageStoreName,
+  key: string,
+  entry: string,
+) =>
   apiUrl(
-    `/process/images/file?key=${encodeURIComponent(key)}` +
+    `/process/images/file?store=${encodeURIComponent(store)}` +
+      `&key=${encodeURIComponent(key)}` +
       `&entry=${encodeURIComponent(entry)}`,
   );
 
@@ -119,6 +162,10 @@ export const useProductImages = (
   step: string | null,
   item: string | null,
   businessDate?: string | null,
+  /** Target-sheet product name, e.g. "AHEGG Z". AXI only, and only to resolve a
+   *  folder — it names most folders after the product ("AHEGG.Z") rather than
+   *  the item code. Harmless to pass for the AVI steps, which ignore it. */
+  productName?: string | null,
 ) => {
   const [data, setData] = useState<ProductImagesResponse | null>(null);
   const [state, setState] = useState<State>("idle");
@@ -142,13 +189,14 @@ export const useProductImages = (
 
     const fetchImages = async () => {
       try {
-        const qs = businessDate
-          ? `?business_date=${encodeURIComponent(businessDate)}`
-          : "";
+        const params = new URLSearchParams();
+        if (businessDate) params.set("business_date", businessDate);
+        if (productName) params.set("product_name", productName);
+        const qs = params.toString();
         const res = await fetch(
           apiUrl(
             `/process/${encodeURIComponent(step)}/products/` +
-              `${encodeURIComponent(item)}/images${qs}`,
+              `${encodeURIComponent(item)}/images${qs ? `?${qs}` : ""}`,
           ),
         );
 
@@ -190,7 +238,7 @@ export const useProductImages = (
     return () => {
       cancelled = true;
     };
-  }, [step, item, businessDate]);
+  }, [step, item, businessDate, productName]);
 
   return { data, state, error };
 };
@@ -204,7 +252,10 @@ export const useProductImages = (
  * totalling ~900 KB. Entry name, count, format and size all differ, so the
  * viewer has to ask.
  */
-export const useArchiveManifest = (key: string | null) => {
+export const useArchiveManifest = (
+  store: ImageStoreName,
+  key: string | null,
+) => {
   const [data, setData] = useState<ArchiveManifest | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error">(
     "idle",
@@ -221,7 +272,10 @@ export const useArchiveManifest = (key: string | null) => {
     const fetchManifest = async () => {
       try {
         const res = await fetch(
-          apiUrl(`/process/images/archive?key=${encodeURIComponent(key)}`),
+          apiUrl(
+            `/process/images/archive?store=${encodeURIComponent(store)}` +
+              `&key=${encodeURIComponent(key)}`,
+          ),
         );
         if (!res.ok) throw new Error(`Failed to read archive ${key}`);
         const json: ArchiveManifest = await res.json();
@@ -241,7 +295,7 @@ export const useArchiveManifest = (key: string | null) => {
     return () => {
       cancelled = true;
     };
-  }, [key]);
+  }, [store, key]);
 
   return { data, state };
 };

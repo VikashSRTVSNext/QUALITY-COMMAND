@@ -97,6 +97,10 @@ export const ProductDrilldownModal: React.FC<Props> = ({
     needsLog ? step : null,
     needsLog ? item : null,
     businessDate,
+    // AXI names its product folders after the PRODUCT ("AHEGG.Z"), not the item
+    // code, so the folder resolver needs the Target-sheet name. The AVI steps
+    // key on the item and ignore this.
+    productName,
   );
 
   const totals = testers.data?.totals;
@@ -282,7 +286,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
           onFirstAttemptOnly={setFirstAttemptOnly}
           verifiedOnly={verifiedOnly}
           onVerifiedOnly={setVerifiedOnly}
-          images={unitImages.data?.by_sfc}
+          imagesData={unitImages.data}
           onOpenImages={setImagesFor}
         />
       )}
@@ -299,6 +303,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
       <UnitImageViewer
         sfc={imagesFor}
         unit={unitImages.data.by_sfc[imagesFor]}
+        store={unitImages.data.store}
         subject={productName || item}
         onClose={() => setImagesFor(null)}
       />
