@@ -62,6 +62,12 @@ export const ProcessProductsTable = ({
   const sortable = "cursor-pointer hover:text-white transition-colors";
   const caret = (key: string) => (activeSort === key ? " ▾" : "");
 
+  // SMT_DEFECTS sends defect_records beside `failed`; no other step does, so the
+  // column appears only where it means something rather than being a prop every
+  // caller has to pass. Failed counts BOARDS and this counts RECORDS -- the
+  // header says so, because confusing the two is the one way this table lies.
+  const hasRecords = (data?.rows ?? []).some((r) => r.defect_records != null);
+
   return (
     <>
       <div className="flex items-center justify-between px-6 py-2 border-b border-line-modal/50 flex-shrink-0">
@@ -107,6 +113,14 @@ export const ProcessProductsTable = ({
                 >
                   Failed{caret("failed")}
                 </th>
+                {hasRecords && (
+                  <th
+                    className={`${th} text-right`}
+                    title="Defect records behind the failed boards. Several bad joints on one board is one failed board and several records."
+                  >
+                    Records
+                  </th>
+                )}
                 <th
                   className={`${th} ${sortable} text-right`}
                   onClick={() => applySort("value")}
@@ -192,6 +206,11 @@ export const ProcessProductsTable = ({
                     <td className="py-2 text-[12px] text-right font-mono font-bold text-[#e0e7ef]">
                       {fmtCount(row.failed)}
                     </td>
+                    {hasRecords && (
+                      <td className="py-2 text-[12px] text-right text-ink-dim font-mono">
+                        {fmtCount(row.defect_records)}
+                      </td>
+                    )}
                     <td
                       className="py-2 text-[12.5px] text-right font-mono font-black"
                       style={{ color: valueColor }}

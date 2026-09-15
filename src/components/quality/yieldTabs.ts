@@ -11,15 +11,12 @@ export const SCREW_DEFECTS_TAB = "__SCREW_DEFECTS__";
 // Same reasoning: DPMOI's denominator is OPPORTUNITIES (solder joints, components,
 // placements), so /process/{step}/products cannot answer it either.
 export const DPMOI_TAB = "__DPMOI__";
-// SMT DEFECTS @ MFT is not built from the production log either, so it has no
-// per-product endpoint yet. Its tab shows a placeholder pane until the API
-// exists; the sentinel keeps it off the process-step path.
-//
-// SPI used to have a sentinel here for the same reason. It no longer does:
-// /process/SPI/products answers with the same keys as every other step, so SPI
-// is a real process step at level one. Only its level TWO differs (pads, not
-// non-conformance records), which is why it gets its own pane and modal.
-export const SMT_DEFECTS_TAB = "__SMT_DEFECTS__";
+// SPI and SMT DEFECTS @ MFT used to have sentinels here, on the grounds that
+// neither is built from the production log so neither could have a per-product
+// endpoint. Both now do, and both answer on the standard step path:
+// they return the same level-one keys as every other step. Only their level TWO
+// differs -- pads for SPI, solder-defect records for SMT -- which is why each
+// gets its own pane and modal.
 
 // The process steps that can be shown as a tab, in process order.
 //
@@ -28,8 +25,7 @@ export const SMT_DEFECTS_TAB = "__SMT_DEFECTS__";
 export const STEP_TABS: { label: string; step: string }[] = [
   { label: "SPI", step: "SPI" },
   { label: "AXI-S", step: "AXI" },
-  // Placeholder — no endpoint yet, see SMT_DEFECTS_TAB.
-  { label: "SMT DEFECTS @ MFT", step: SMT_DEFECTS_TAB },
+  { label: "SMT DEFECTS @ MFT", step: "SMT_DEFECTS" },
   { label: "THERMAL AVI", step: "THERMAL_AVI" },
   { label: "BURN-IN-S", step: "BURN_IN" },
   { label: "LBTS-S", step: "LBTS" },
@@ -56,7 +52,7 @@ const TAB_BY_TILE: Record<string, string> = {
   SPI: "SPI",
   DPMOI: DPMOI_TAB,
   "AXI - S": "AXI",
-  "SMT DEFECTS @ MFT": SMT_DEFECTS_TAB,
+  "SMT DEFECTS @ MFT": "SMT_DEFECTS",
   "THERMAL AVI": "THERMAL_AVI",
   "SCREW DEFECTS": SCREW_DEFECTS_TAB,
   OTA: "OTA_TEST",

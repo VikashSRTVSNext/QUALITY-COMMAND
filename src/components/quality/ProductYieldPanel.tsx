@@ -15,12 +15,11 @@ import ScrewDefectsPane from "./ScrewDefectsPane";
 import { useProcessProducts } from "./useProcessProducts";
 import { DEFECT_DRILLDOWN_STEPS } from "./useProductDefects";
 import { yieldRowTone } from "./metrics";
-import PlaceholderPane from "./PlaceholderPane";
+import SmtDefectsModal from "./SmtDefectsModal";
 import SpiDefectsModal from "./SpiDefectsModal";
 import {
   DPMOI_TAB,
   SCREW_DEFECTS_TAB,
-  SMT_DEFECTS_TAB,
   STEP_TABS,
   type YieldStepRequest,
 } from "./yieldTabs";
@@ -112,6 +111,40 @@ const SpiStepPane = ({ shift }: { shift: string | null }) => {
           productName={selected.product_name}
           // The day the table itself is showing, so both levels describe one
           // window -- a mismatch here is what turns level two into a 404.
+          businessDate={query.data?.business_date ?? null}
+          onClose={() => setSelected(null)}
+        />
+      )}
+    </>
+  );
+};
+
+// SMT DEFECTS @ MFT: standard level-one table, its own level two.
+//
+// Same split as SpiStepPane and for the same reason -- only the products table
+// is shared; the modal, the click gate and the tooltip verb all differ.
+const SmtStepPane = ({ shift }: { shift: string | null }) => {
+  const query = useProcessProducts("SMT_DEFECTS", shift);
+  const [selected, setSelected] = useState<{
+    item: string;
+    product_name: string | null;
+  } | null>(null);
+
+  return (
+    <>
+      <ProcessProductsTable
+        query={query}
+        onRowClick={setSelected}
+        // Level two answers 200 with an empty log for a product with no
+        // defects, so this gate is about not opening an empty modal rather than
+        // about avoiding an error.
+        isRowClickable={(row) => (row.failed ?? 0) > 0}
+        rowActionLabel="Show the defect log"
+      />
+      {selected && (
+        <SmtDefectsModal
+          item={selected.item}
+          productName={selected.product_name}
           businessDate={query.data?.business_date ?? null}
           onClose={() => setSelected(null)}
         />
@@ -336,8 +369,8 @@ export const ProductYieldPanel = ({
 
         {activeStep === "SPI" ? (
           <SpiStepPane shift={shift} />
-        ) : activeStep === SMT_DEFECTS_TAB ? (
-          <PlaceholderPane label="SMT DEFECTS @ MFT" />
+        ) : activeStep === "SMT_DEFECTS" ? (
+          <SmtStepPane shift={shift} />
         ) : activeStep === DPMOI_TAB ? (
           <DpmoiPane businessDate={null} />
         ) : activeStep === SCREW_DEFECTS_TAB ? (

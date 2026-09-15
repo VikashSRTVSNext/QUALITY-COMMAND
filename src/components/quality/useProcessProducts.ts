@@ -13,6 +13,11 @@ export type ProcessProductRow = {
   yield_pct: number | null;
   failure_pct: number | null;
   meets_target: boolean | null;
+  /** SMT_DEFECTS only: defect RECORDS behind `failed`, which counts distinct
+   *  BOARDS. Several bad joints on one board is one failed board and several
+   *  records, so the two must never be added or swapped. Absent on every other
+   *  step, which is what makes the column conditional. */
+  defect_records?: number | null;
 };
 
 type CardShiftRow = {
@@ -75,6 +80,7 @@ type ProcessProductsResponse = {
 export const DRILLDOWN_STEPS: Record<string, true> = {
   AXI: true, // tile "AXI - S"
   SPI: true, // level two is the pad log, not the NC log
+  SMT_DEFECTS: true, // level two is the solder-defect log
   AUTO_OGI: true, // tile "AUTO OGI"
   BURN_IN: true, // tile "BURN-IN - S"
   IP: true,
