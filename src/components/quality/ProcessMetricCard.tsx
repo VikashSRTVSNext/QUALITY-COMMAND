@@ -1,10 +1,7 @@
 import { isNum } from "../../core/format";
-import {
-  DRILLDOWN_STEPS,
-  TILE_DRILLDOWN_ENABLED,
-} from "./useProcessProducts";
 import TileSparkline from "./TileSparkline";
-import { API_KEY_BY_TILE, cardVerdict, getProcessTrendData } from "./metrics";
+import { cardVerdict, getProcessTrendData } from "./metrics";
+import { yieldTabForTile } from "./yieldTabs";
 
 interface ProcessMetricCardProps {
   /** The matching entry from the feed's process_performance list. */
@@ -13,17 +10,16 @@ interface ProcessMetricCardProps {
   title: string;
   /** Shift selected in the header — decides which hourly buckets to plot. */
   activeShift: string;
-  /** Opens a drilldown from the tile. Optional, and currently unused: tile
-   *  click-through is off (TILE_DRILLDOWN_ENABLED), because the per-product
-   *  table now lives in the Product Yield step tabs. Kept so re-enabling the
-   *  tile path is wiring a handler rather than restoring a prop. */
+  /** Called with the Product Yield tab this tile maps to (see yieldTabs.ts)
+   *  when the tile is clicked. Tiles with no tab stay inert. */
   onDrill?: (card: { step: string; title: string }) => void;
 }
 
 // One Process Performance tile: value, hourly trend line and target.
 //
-// Clickable only when the metric has a drilldown AND the shift produced
-// something — opening a modal onto "No production" is a dead end.
+// Clicking it selects the matching tab in the Product Yield panel. It stays
+// clickable on "No production": switching a tab is cheap and the tab shows its
+// own empty state, unlike the modal this used to open.
 export const ProcessMetricCard = ({
   item,
   title,
@@ -38,15 +34,12 @@ export const ProcessMetricCard = ({
   const hasNoProduction =
     item.status === "Not Run" || item.status === "N/A";
 
-  const drillStep =
-    API_KEY_BY_TILE[item.name] ?? item.name.replace(/\s+/g, "_");
+  const tabStep = yieldTabForTile(item.name);
 
-  const canDrill =
-    TILE_DRILLDOWN_ENABLED &&
-    Boolean(DRILLDOWN_STEPS[drillStep]) &&
-    !hasNoProduction &&
-    Boolean(onDrill);
-  const openDrilldown = () => onDrill?.({ step: drillStep, title });
+  const canDrill = tabStep !== null && Boolean(onDrill);
+  const openDrilldown = () => {
+    if (tabStep !== null) onDrill?.({ step: tabStep, title });
+  };
 
   return (
     <div
@@ -61,7 +54,7 @@ export const ProcessMetricCard = ({
       role={canDrill ? "button" : undefined}
       tabIndex={canDrill ? 0 : undefined}
       aria-label={
-    canDrill ? `${title} — view yield by product` : undefined
+    canDrill ? `${title} — open in Product Yield` : undefined
       }
       onKeyDown={
     canDrill

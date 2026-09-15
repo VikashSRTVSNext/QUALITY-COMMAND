@@ -34,6 +34,7 @@ import ProcessMetricCard from "../quality/ProcessMetricCard";
 import KpiMetricCard from "../quality/KpiMetricCard";
 import LargeKpiCard from "../quality/LargeKpiCard";
 import ProductYieldPanel from "../quality/ProductYieldPanel";
+import type { YieldStepRequest } from "../quality/yieldTabs";
 import AttentionCenterPanel from "../quality/AttentionCenterPanel";
 import AlertsModal from "../quality/AlertsModal";
 import {
@@ -788,6 +789,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [activeYieldTab, setActiveYieldTab] = useState<"UNITS" | "TRX" | "PA">(
     "UNITS",
   );
+  // Last Process Performance tile click, forwarded to the Product Yield panel
+  // so it can select the matching step tab. Nonce, not just step: see
+  // YieldStepRequest.
+  const [yieldStepRequest, setYieldStepRequest] =
+    useState<YieldStepRequest | null>(null);
 
   const [processPerformance, setProcessPerformance] = useState<any[]>(
     processPerformanceData.map((item) => ({
@@ -1653,6 +1659,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           item={procItem}
           title={title}
           activeShift={activeShift}
+          onDrill={({ step }) =>
+            setYieldStepRequest({ step, nonce: Date.now() })
+          }
         />
       );
     }
@@ -2002,6 +2011,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           shift={
             activeShift.match(/Shift\s+([A-C])/i)?.[1].toUpperCase() ?? null
           }
+          requestedStep={yieldStepRequest}
         />
 
         <AttentionCenterPanel
@@ -2319,9 +2329,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       {/* The tile drilldown modal used to sit here. Its content — the
           per-product table — moved into the Product Yield step tabs, and the
           modal shell was reused for the NC log one level further down, which is
-          opened from a row in those tabs (see ProductYieldPanel). Tile
-          click-through is off in ProcessMetricCard; re-enabling it means
-          deciding which level a tile should open. */}
+          opened from a row in those tabs (see ProductYieldPanel). A tile click
+          now selects its step tab instead (yieldStepRequest above). */}
 
       {isTwinModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 lg:p-8 transition-all duration-300">

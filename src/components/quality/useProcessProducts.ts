@@ -81,11 +81,6 @@ export const DRILLDOWN_STEPS: Record<string, true> = {
   THERMAL_AVI: true, // tile "THERMAL AVI"
 };
 
-// Tile click-through is OFF: the same per-product data is reachable from the step
-// tabs in the Product Yield panel, so opening it from the tile as well is
-// redundant. Set true to restore it — nothing was removed.
-export const TILE_DRILLDOWN_ENABLED = false;
-
 export const PAGE_SIZE = 12;
 
 export const isNum = (v: unknown): v is number =>

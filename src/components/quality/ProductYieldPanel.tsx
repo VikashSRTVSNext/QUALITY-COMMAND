@@ -15,6 +15,15 @@ import ScrewDefectsPane from "./ScrewDefectsPane";
 import { useProcessProducts } from "./useProcessProducts";
 import { DEFECT_DRILLDOWN_STEPS } from "./useProductDefects";
 import { yieldRowTone } from "./metrics";
+import PlaceholderPane from "./PlaceholderPane";
+import {
+  DPMOI_TAB,
+  SCREW_DEFECTS_TAB,
+  SMT_DEFECTS_TAB,
+  SPI_TAB,
+  STEP_TABS,
+  type YieldStepRequest,
+} from "./yieldTabs";
 
 export type YieldTab = "UNITS" | "TRX" | "PA";
 
@@ -28,34 +37,6 @@ const LEVEL_STEP: Record<YieldTab, string> = {
   TRX: "MODULE_TEST",
   PA: "MODULE_TEST",
 };
-
-// The process steps that can be shown as a tab, in process order.
-//
-// `label` is what the tile calls it, `step` is the mart name the endpoint takes.
-// Every entry must also be in DRILLDOWN_STEPS, which is what makes the matching
-// tile clickable — the same steps reached two ways.
-// Sentinel for the screw-defects tab. Not a mart process_step, so it is kept
-// distinct from the names the per-product endpoint accepts.
-export const SCREW_DEFECTS_TAB = "__SCREW_DEFECTS__";
-// Same reasoning: DPMOI's denominator is OPPORTUNITIES (solder joints, components,
-// placements), so /process/{step}/products cannot answer it either.
-export const DPMOI_TAB = "__DPMOI__";
-
-const STEP_TABS: { label: string; step: string }[] = [
-  { label: "AXI-S", step: "AXI" },
-  { label: "THERMAL AVI", step: "THERMAL_AVI" },
-  { label: "BURN-IN-S", step: "BURN_IN" },
-  { label: "LBTS-S", step: "LBTS" },
-  { label: "RTWP", step: "RTWP" },
-  { label: "IP", step: "IP" },
-  { label: "OTA", step: "OTA_TEST" },
-  { label: "AUTO OGI", step: "AUTO_OGI" },
-  // NOT a PROCESS_STEPS entry, and it cannot be one: its denominator is SCREWS
-  // DRIVEN rather than boards, so /process/{step}/products cannot answer it. The
-  // sentinel routes to its own pane and endpoint.
-  { label: "SCREW DEFECTS", step: SCREW_DEFECTS_TAB },
-  { label: "DPMOI", step: DPMOI_TAB },
-];
 
 const TAB_CLASS =
   "border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors whitespace-nowrap flex-shrink-0";
@@ -121,6 +102,10 @@ interface ProductYieldPanelProps {
   /** "A" | "B" | "C", or null for the whole production day. Passed straight to
    *  the process-step endpoint, which takes the letter rather than the label. */
   shift: string | null;
+  /** Set by the dashboard when a Process Performance tile is clicked: the step
+   *  tab to show. The panel still owns the selection — this only nudges it, so
+   *  the user can click another tab afterwards without fighting the prop. */
+  requestedStep?: YieldStepRequest | null;
 }
 
 // Product Yield panel: level tabs, a sortable and paginated table, and the AI
@@ -137,6 +122,7 @@ export const ProductYieldPanel = ({
   recsLoading,
   planStatus,
   shift,
+  requestedStep,
 }: ProductYieldPanelProps) => {
   // Product opened from a UNITS row. Lives here rather than in StepPane because
   // the UNITS tab is the panel's own table, not a step pane.
@@ -160,8 +146,8 @@ export const ProductYieldPanel = ({
   // request parameter for a different endpoint; step is local to this panel.
   const [activeStep, setActiveStep] = useState<string | null>(null);
 
-  // The tab strip scrolls horizontally: eleven tabs need ~870px and the middle
-  // dashboard column only has that above ~1850px. The scrollbar is hidden
+  // The tab strip scrolls horizontally: thirteen tabs need ~1050px and the middle
+  // dashboard column never has that. The scrollbar is hidden
   // (.no-scrollbar) because it would eat height from a fixed 380px panel, so
   // these flags drive a fade on whichever edge still has tabs behind it. A fade
   // that showed when there was nothing to scroll to would read as a bug.
@@ -194,6 +180,19 @@ export const ProductYieldPanel = ({
       observer.disconnect();
     };
   }, []);
+
+  // A tile click lands here. Keyed on the nonce, not just the step, so clicking
+  // the tile for the tab already selected (or re-clicking after moving away)
+  // still brings that tab back. The strip scrolls the tab into view because
+  // thirteen tabs never all fit, and a selection the user cannot see reads as
+  // the click having done nothing.
+  useEffect(() => {
+    if (!requestedStep) return;
+    setActiveStep(requestedStep.step);
+    tabStripRef.current
+      ?.querySelector<HTMLElement>(`[data-step="${requestedStep.step}"]`)
+      ?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [requestedStep]);
 
   const sortedRows = React.useMemo(() => {
     if (!sort.key) return rows;
@@ -272,6 +271,7 @@ export const ProductYieldPanel = ({
           {STEP_TABS.map(({ label, step }) => (
             <button
               key={step}
+              data-step={step}
               onClick={() => setActiveStep(step)}
               className={`${activeStep === step ? TAB_ON : TAB_OFF} ${TAB_CLASS}`}
             >
@@ -296,7 +296,11 @@ export const ProductYieldPanel = ({
           )}
         </div>
 
-        {activeStep === DPMOI_TAB ? (
+        {activeStep === SPI_TAB ? (
+          <PlaceholderPane label="SPI" />
+        ) : activeStep === SMT_DEFECTS_TAB ? (
+          <PlaceholderPane label="SMT DEFECTS @ MFT" />
+        ) : activeStep === DPMOI_TAB ? (
           <DpmoiPane businessDate={null} />
         ) : activeStep === SCREW_DEFECTS_TAB ? (
           // Its own pane: screws-driven denominator, and a line/station/item

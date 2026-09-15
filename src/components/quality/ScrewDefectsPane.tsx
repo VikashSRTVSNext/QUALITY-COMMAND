@@ -223,39 +223,32 @@ export const ScrewDefectsPane = ({
         </table>
       </div>
 
-      <div className="flex-shrink-0 px-4 py-2.5 border-t border-line bg-page/40 text-[10px] text-ink-dim leading-relaxed">
-        Rate is failures over <b className="text-ink-muted">screws driven</b>, not
-        boards — a board with 18 screws is 18 chances to fail. The total is
-        recomputed from the summed counts, not averaged from the rows above, whose
-        denominators differ.
-        {/* The gap this table exists to expose. An item missing from the master
-            has an UNKNOWN screw count, so its boards are absent from the
-            denominator while its failures still happen on the floor. */}
-        {data.uncovered.length > 0 ? (
-          <>
-            {" "}
-            <span className="text-warning font-bold">
-              {data.uncovered.length} item/station combination(s) are not in Screw
-              Master.xlsx
-            </span>{" "}
-            <span
-              title={data.uncovered
-                .map(
-                  (u) =>
-                    `${u.line} ${u.operation} ${u.item} — ${u.boards} board(s)`,
-                )
-                .join("\n")}
-              className="underline decoration-dotted cursor-help"
-            >
-              ({data.uncovered.map((u) => u.item).join(", ")})
-            </span>{" "}
-            — their screw count is unknown, so those boards are excluded here
-            rather than counted as zero.
-          </>
-        ) : (
-          " Every item that ran is in the screw master."
-        )}
-      </div>
+      {/* The gap this table exists to expose. An item missing from the master
+          has an UNKNOWN screw count, so its boards are absent from the
+          denominator while its failures still happen on the floor. Only shown
+          when there is a gap — the explanatory footer that used to sit here was
+          removed on request. */}
+      {data.uncovered.length > 0 && (
+        <div className="flex-shrink-0 px-4 py-2.5 border-t border-line bg-page/40 text-[10px] text-ink-dim leading-relaxed">
+          <span className="text-warning font-bold">
+            {data.uncovered.length} item/station combination(s) are not in Screw
+            Master.xlsx
+          </span>{" "}
+          <span
+            title={data.uncovered
+              .map(
+                (u) =>
+                  `${u.line} ${u.operation} ${u.item} — ${u.boards} board(s)`,
+              )
+              .join("\n")}
+            className="underline decoration-dotted cursor-help"
+          >
+            ({data.uncovered.map((u) => u.item).join(", ")})
+          </span>{" "}
+          — their screw count is unknown, so those boards are excluded here
+          rather than counted as zero.
+        </div>
+      )}
 
       {/* Stations for the selected line, in the same shell every process
           drill-down uses. */}
