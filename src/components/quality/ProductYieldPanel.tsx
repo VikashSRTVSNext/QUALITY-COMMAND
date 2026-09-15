@@ -16,11 +16,11 @@ import { useProcessProducts } from "./useProcessProducts";
 import { DEFECT_DRILLDOWN_STEPS } from "./useProductDefects";
 import { yieldRowTone } from "./metrics";
 import PlaceholderPane from "./PlaceholderPane";
+import SpiDefectsModal from "./SpiDefectsModal";
 import {
   DPMOI_TAB,
   SCREW_DEFECTS_TAB,
   SMT_DEFECTS_TAB,
-  SPI_TAB,
   STEP_TABS,
   type YieldStepRequest,
 } from "./yieldTabs";
@@ -82,6 +82,44 @@ const StepPane = ({ step, shift }: { step: string; shift: string | null }) => {
     </>
   );
 };
+// SPI's step tab: the same level-one table as every other step, but its own
+// level two.
+//
+// Separate from StepPane rather than a branch inside it, because the only thing
+// the two share is the products table -- the modal, the click gate and the
+// tooltip verb all differ, and threading three props through StepPane to pick
+// between two modals reads worse than two small panes.
+const SpiStepPane = ({ shift }: { shift: string | null }) => {
+  const query = useProcessProducts("SPI", shift);
+  const [selected, setSelected] = useState<{
+    item: string;
+    product_name: string | null;
+  } | null>(null);
+
+  return (
+    <>
+      <ProcessProductsTable
+        query={query}
+        onRowClick={setSelected}
+        // A product with no failed boards has no NG boards, so its level two
+        // answers 404. Those rows stay inert instead of opening an error.
+        isRowClickable={(row) => (row.failed ?? 0) > 0}
+        rowActionLabel="Show the pad defects"
+      />
+      {selected && (
+        <SpiDefectsModal
+          item={selected.item}
+          productName={selected.product_name}
+          // The day the table itself is showing, so both levels describe one
+          // window -- a mismatch here is what turns level two into a 404.
+          businessDate={query.data?.business_date ?? null}
+          onClose={() => setSelected(null)}
+        />
+      )}
+    </>
+  );
+};
+
 type SortKey = "name" | "tested" | "failed";
 
 const ITEMS_PER_PAGE = 10;
@@ -296,8 +334,8 @@ export const ProductYieldPanel = ({
           )}
         </div>
 
-        {activeStep === SPI_TAB ? (
-          <PlaceholderPane label="SPI" />
+        {activeStep === "SPI" ? (
+          <SpiStepPane shift={shift} />
         ) : activeStep === SMT_DEFECTS_TAB ? (
           <PlaceholderPane label="SMT DEFECTS @ MFT" />
         ) : activeStep === DPMOI_TAB ? (

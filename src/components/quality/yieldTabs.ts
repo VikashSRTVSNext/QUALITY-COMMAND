@@ -11,10 +11,14 @@ export const SCREW_DEFECTS_TAB = "__SCREW_DEFECTS__";
 // Same reasoning: DPMOI's denominator is OPPORTUNITIES (solder joints, components,
 // placements), so /process/{step}/products cannot answer it either.
 export const DPMOI_TAB = "__DPMOI__";
-// SPI and SMT DEFECTS @ MFT are not built from the production log either, so
-// neither has a per-product endpoint yet. Both tabs show a placeholder pane
-// until the API exists; the sentinels keep them off the process-step path.
-export const SPI_TAB = "__SPI__";
+// SMT DEFECTS @ MFT is not built from the production log either, so it has no
+// per-product endpoint yet. Its tab shows a placeholder pane until the API
+// exists; the sentinel keeps it off the process-step path.
+//
+// SPI used to have a sentinel here for the same reason. It no longer does:
+// /process/SPI/products answers with the same keys as every other step, so SPI
+// is a real process step at level one. Only its level TWO differs (pads, not
+// non-conformance records), which is why it gets its own pane and modal.
 export const SMT_DEFECTS_TAB = "__SMT_DEFECTS__";
 
 // The process steps that can be shown as a tab, in process order.
@@ -22,8 +26,7 @@ export const SMT_DEFECTS_TAB = "__SMT_DEFECTS__";
 // `label` is what the tile calls it, `step` is the mart name the endpoint takes
 // (or a sentinel above for the tabs that have their own pane).
 export const STEP_TABS: { label: string; step: string }[] = [
-  // Placeholder — no endpoint yet, see SPI_TAB.
-  { label: "SPI", step: SPI_TAB },
+  { label: "SPI", step: "SPI" },
   { label: "AXI-S", step: "AXI" },
   // Placeholder — no endpoint yet, see SMT_DEFECTS_TAB.
   { label: "SMT DEFECTS @ MFT", step: SMT_DEFECTS_TAB },
@@ -50,7 +53,7 @@ export const STEP_TABS: { label: string; step: string }[] = [
 // The FPY/SPY UNIT and MODULE tiles are KPI cards, not process cards, so they
 // never reach this map — they stay inert on purpose.
 const TAB_BY_TILE: Record<string, string> = {
-  SPI: SPI_TAB,
+  SPI: "SPI",
   DPMOI: DPMOI_TAB,
   "AXI - S": "AXI",
   "SMT DEFECTS @ MFT": SMT_DEFECTS_TAB,

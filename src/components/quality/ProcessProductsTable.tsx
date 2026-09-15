@@ -3,6 +3,7 @@ import { palette } from "../../theme/palette";
 import {
   fmtCount,
   fmtPct,
+  type ProcessProductRow,
   type ProcessProductsQuery,
 } from "./useProcessProducts";
 
@@ -14,17 +15,27 @@ interface ProcessProductsTableProps {
    *  absent the rows are inert, which is what a step with no rework mapping
    *  needs — offering a click that cannot resolve is worse than none. */
   onRowClick?: (row: { item: string; product_name: string | null }) => void;
+  /** Per-ROW gate, on top of `onRowClick`. SPI needs it: a product at 100% has
+   *  no failed boards, so its level two answers 404 — those rows must not look
+   *  clickable. Omit to let every row open when `onRowClick` is supplied. */
+  isRowClickable?: (row: ProcessProductRow) => boolean;
+  /** Verb for the row tooltip. Steps open different things — an NC log, a pad
+   *  log — and the tooltip should say which. */
+  rowActionLabel?: string;
 }
 
 // Per-product breakdown for one process step: operations line, the table, and
 // totals with server-side pagination.
 //
 // Presentational only. Rendered inline in the Product Yield panel when a step
-// tab is selected. When `onRowClick` is supplied a row opens ProductDrilldownModal
-// — the NC log for that product, which is the level this table cannot show.
+// tab is selected. When `onRowClick` is supplied a row opens that step's level
+// two -- the NC log for the MES steps, the pad log for SPI -- which is the level
+// this table cannot show. The caller owns which modal that is.
 export const ProcessProductsTable = ({
   query,
   onRowClick,
+  isRowClickable,
+  rowActionLabel = "Show the NC log",
 }: ProcessProductsTableProps) => {
   const {
     data,
@@ -118,44 +129,41 @@ export const ProcessProductsTable = ({
                     : row.meets_target
                       ? palette.healthy
                       : palette.critical;
+                // A row is only a control when there is something to open, so
+                // the tabIndex, the role and the cursor all come and go with
+                // this rather than advertising an interaction that does nothing.
+                const clickable = Boolean(
+                  onRowClick && (!isRowClickable || isRowClickable(row)),
+                );
+                const open = () =>
+                  onRowClick?.({
+                    item: row.item,
+                    product_name: row.product_name,
+                  });
                 return (
                   <tr
                     key={row.item}
                     className={`hover:bg-white/[0.05] ${
-                      onRowClick
+                      clickable
                         ? "cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:outline-info"
                         : ""
                     }`}
-                    // A row is only a control when there is something to open,
-                    // so the tabIndex and the roles come and go with the handler
-                    // rather than advertising an interaction that does nothing.
-                    onClick={
-                      onRowClick
-                        ? () =>
-                            onRowClick({
-                              item: row.item,
-                              product_name: row.product_name,
-                            })
-                        : undefined
-                    }
+                    onClick={clickable ? open : undefined}
                     onKeyDown={
-                      onRowClick
+                      clickable
                         ? (e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
-                              onRowClick({
-                                item: row.item,
-                                product_name: row.product_name,
-                              });
+                              open();
                             }
                           }
                         : undefined
                     }
-                    tabIndex={onRowClick ? 0 : undefined}
-                    role={onRowClick ? "button" : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    role={clickable ? "button" : undefined}
                     title={
-                      onRowClick
-                        ? `Show the NC log for ${row.product_name ?? row.item}`
+                      clickable
+                        ? `${rowActionLabel} for ${row.product_name ?? row.item}`
                         : undefined
                     }
                   >
@@ -211,12 +219,17 @@ export const ProcessProductsTable = ({
               {fmtCount(data?.totals?.failed)}
             </span>{" "}
             failed ·{" "}
+            {/* Dashed, never 0.00%, when nothing was done. No measurement and a
+                bad measurement are different things, and a day with no boards
+                inspected must not read as a day that failed everything. */}
             <span className="text-white font-mono">
-              {fmtPct(
-                metric === "failure"
-                  ? data?.totals?.failure_pct
-                  : data?.totals?.yield_pct,
-              )}
+              {(data?.totals?.done ?? 0) > 0
+                ? fmtPct(
+                    metric === "failure"
+                      ? data?.totals?.failure_pct
+                      : data?.totals?.yield_pct,
+                  )
+                : "—"}
             </span>
           </span>
           {/* Only shown when there IS unattributed production. */}

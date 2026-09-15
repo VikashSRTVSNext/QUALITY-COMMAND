@@ -64,14 +64,17 @@ type ProcessProductsResponse = {
 // tile or tab becomes clickable by accident.
 //
 // Keys are mart step names (the endpoint's path segment), NOT tile labels — the
-// two differ for most steps. SPI, DPMOI and SMT_DEFECTS can never appear here:
-// they are not built from the production log, so they have no per-product split.
+// two differ for most steps. DPMOI and SMT_DEFECTS cannot appear here: they are
+// not built from the production log, so they have no per-product split. SPI now
+// can and does — /process/SPI/products answers with the same keys as the rest;
+// only its level two differs.
 //
 // Lives here rather than beside the modal, because it describes the LEVEL ONE
 // data this hook loads. The modal it used to sit in now shows the NC log, which
 // is a different question with its own, shorter list of supported steps.
 export const DRILLDOWN_STEPS: Record<string, true> = {
   AXI: true, // tile "AXI - S"
+  SPI: true, // level two is the pad log, not the NC log
   AUTO_OGI: true, // tile "AUTO OGI"
   BURN_IN: true, // tile "BURN-IN - S"
   IP: true,
