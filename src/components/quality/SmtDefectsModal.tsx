@@ -105,6 +105,9 @@ export const SmtDefectsModal: React.FC<Props> = ({
   return (
     <DrilldownModalShell
       onClose={onClose}
+      // Covers a refilter as well as the first load: the breakdowns stay on
+      // screen while a chip refetches, so this is the only sign it is working.
+      busy={state === "loading"}
       onBack={sfc ? () => setSfc(null) : null}
       header={
         <>

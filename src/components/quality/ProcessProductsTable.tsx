@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { palette } from "../../theme/palette";
+import LoadingBar from "../common/LoadingBar";
 import {
   fmtCount,
   fmtPct,
@@ -70,7 +71,11 @@ export const ProcessProductsTable = ({
 
   return (
     <>
-      <div className="flex items-center justify-between px-6 py-2 border-b border-line-modal/50 flex-shrink-0">
+      {/* Paging and sorting are SERVER-side, so both refetch while the previous
+          page is still on screen. Without this the table just sits there for a
+          second after a header click and looks like it ignored it. */}
+      <div className="relative flex items-center justify-between px-6 py-2 border-b border-line-modal/50 flex-shrink-0">
+        <LoadingBar active={state === "loading" && Boolean(data)} className="top-auto bottom-0" />
         <span className="text-[10px] font-bold text-ink-dim uppercase tracking-wider">
           {data?.operations?.like
             ? `Operations like ${data.operations.like}`

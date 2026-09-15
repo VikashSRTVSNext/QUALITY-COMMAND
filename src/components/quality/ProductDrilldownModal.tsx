@@ -109,6 +109,11 @@ export const ProductDrilldownModal: React.FC<Props> = ({
     <>
     <DrilldownModalShell
       onClose={onClose}
+      // Either level can be in flight: the tester table on open, the NC log on
+      // a drill, and the chart view refetches the log when the dimension changes.
+      busy={
+        testers.state === "loading" || (needsLog && defects.state === "loading")
+      }
       // Escape steps back to the tester list first, and only closes from there.
       onBack={selection ? () => setSelection(null) : null}
       header={

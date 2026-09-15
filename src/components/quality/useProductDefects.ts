@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiUrl } from "../../core/api/config";
 
 // Steps whose failures can be broken down to the NC log. Kept in step with the
@@ -171,6 +171,14 @@ export const useProductDefects = (
   );
   const [error, setError] = useState<string | null>(null);
 
+  // What the log is ABOUT, as opposed to how it is displayed. Changing scope
+  // must blank the rows -- showing the previous tester's events under the new
+  // tester's header is worse than showing nothing. Changing only a display
+  // filter must NOT, or the plant's two toggles wipe the table on every click
+  // and a slow day leaves it blank for a minute.
+  const scopeKey = `${step}|${item}|${businessDate}|${resource}|${category}`;
+  const lastScope = useRef(scopeKey);
+
   useEffect(() => {
     if (!step || !item) {
       setState("idle");
@@ -223,7 +231,8 @@ export const useProductDefects = (
     };
 
     setState("loading");
-    setData(null);
+    if (lastScope.current !== scopeKey) setData(null);
+    lastScope.current = scopeKey;
     fetchLog();
     return () => {
       cancelled = true;

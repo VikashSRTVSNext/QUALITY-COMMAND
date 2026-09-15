@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import LoadingBar, { useSlowHint } from "../common/LoadingBar";
 
 type Props = {
   onClose: () => void;
@@ -11,6 +12,11 @@ type Props = {
   meta?: React.ReactNode;
   /** Tailwind max-width class. Wide tables want more room than narrow ones. */
   maxWidth?: string;
+  /** True while ANY request behind this modal is in flight — the first load and
+   *  every refilter alike. The refilter case is the one that matters: the panel
+   *  keeps showing the previous answer while the new one loads, so without this
+   *  a click on a filter chip looks like it did nothing. */
+  busy?: boolean;
   children: React.ReactNode;
 };
 
@@ -30,8 +36,10 @@ export const DrilldownModalShell = ({
   header,
   meta,
   maxWidth = "max-w-[1400px]",
+  busy = false,
   children,
 }: Props) => {
+  const slow = useSlowHint(busy);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -52,9 +60,23 @@ export const DrilldownModalShell = ({
         className={`relative w-full ${maxWidth} max-h-[88vh] bg-panel/95 border border-line-soft rounded-2xl overflow-hidden flex flex-col shadow-[0_24px_70px_rgba(0,0,0,0.75)]`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center bg-white/[0.04] px-6 py-4 border-b border-line-modal flex-shrink-0 gap-3">
+        {/* Under the header strip rather than at the very top of the panel, so it
+            reads as belonging to the content being replaced rather than to the
+            title, which does not change. */}
+        <div className="flex justify-between items-center bg-white/[0.04] px-6 py-4 border-b border-line-modal flex-shrink-0 gap-3 relative">
+          <LoadingBar active={busy} className="top-auto bottom-0" />
           <div className="flex items-center gap-2 min-w-0">{header}</div>
           <div className="flex items-center gap-3 flex-shrink-0">
+            {/* The text half of the indicator. Carries the meaning on its own,
+                which is what makes the bar safe to freeze under reduced motion. */}
+            {busy && (
+              <span
+                className="text-[10px] font-bold text-info uppercase tracking-wider whitespace-nowrap"
+                aria-live="polite"
+              >
+                {slow ? "Still loading…" : "Loading…"}
+              </span>
+            )}
             {meta}
             <button
               onClick={onClose}

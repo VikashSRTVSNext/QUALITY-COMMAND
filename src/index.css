@@ -31,128 +31,129 @@
 
     /* The page itself. The deepest value on screen, so cards read as floating
        above it rather than sitting flush. */
-    --c-page:          3 8 16;          /* #030810 */
+    --c-page: 3 8 16; /* #030810 */
     /* Sunken tracks and hairlines inside a card: progress-bar troughs, the
        breadcrumb separator, detail-panel outlines. */
-    --c-inset:         20 35 55;        /* #142337 */
+    --c-inset: 20 35 55; /* #142337 */
     /* Cards and panels — the workhorse surface. */
-    --c-panel:         16 28 43;        /* #101c2b */
+    --c-panel: 16 28 43; /* #101c2b */
     /* Gradient tops, hover states, the raised edge of a card. */
-    --c-raised:        22 37 58;        /* #16253a */
+    --c-raised: 22 37 58; /* #16253a */
 
     /* --- borders ----------------------------------------------------------- */
 
     /* Default hairline between regions. Also doubles as a subtle fill for
        hovered tabs, which is why it appears as both border- and bg-. */
-    --c-line:          28 49 73;        /* #1c3149 */
+    --c-line: 28 49 73; /* #1c3149 */
     /* Emphasised divider: card outlines, focused inputs, table header rules. */
-    --c-line-strong:   38 64 90;        /* #26405a */
+    --c-line-strong: 38 64 90; /* #26405a */
     /* Modal chrome — header, footer and sticky column rules. */
-    --c-line-modal:    43 68 99;        /* #2b4463 */
+    --c-line-modal: 43 68 99; /* #2b4463 */
     /* Lighter rule used where a border sits against a pale fill. Shared by the
        quality layout and the products modal. */
-    --c-line-soft:     58 90 125;       /* #3a5a7d */
+    --c-line-soft: 58 90 125; /* #3a5a7d */
 
     /* --- text, brightest to dimmest --------------------------------------- */
 
     /* Card titles and headline values. */
-    --c-ink:           248 250 252;     /* #f8fafc */
+    --c-ink: 248 250 252; /* #f8fafc */
     /* Table cells and body copy. */
-    --c-ink-secondary: 200 214 228;     /* #c8d6e4 */
+    --c-ink-secondary: 200 214 228; /* #c8d6e4 */
     /* Column headers and field labels — the most-used text colour in the app. */
-    --c-ink-muted:     143 160 181;     /* #8fa0b5 */
+    --c-ink-muted: 143 160 181; /* #8fa0b5 */
     /* De-emphasised metadata: units, timestamps, footnotes, inactive tabs. */
-    --c-ink-dim:       99 120 143;      /* #63788f */
+    --c-ink-dim: 99 120 143; /* #63788f */
 
     /* --- status ------------------------------------------------------------ */
 
     /* These drive every range-based judgement on screen: gauges, sparklines,
        status pills, trend arrows, zone outlines. Keep them in step with
        STATUS_CSS in src/components/factory/zones.ts. */
-    --c-healthy:       34 197 94;       /* #22c55e */
-    --c-warning:       234 179 8;       /* #eab308 */
-    --c-critical:      255 76 76;       /* #ff4c4c */
-    --c-unknown:       100 116 139;     /* #64748b */
-    --c-info:          6 182 212;       /* #06b6d4 */
+    --c-healthy: 34 197 94; /* #22c55e */
+    --c-warning: 234 179 8; /* #eab308 */
+    --c-critical: 255 76 76; /* #ff4c4c */
+    --c-unknown: 100 116 139; /* #64748b */
+    --c-info: 6 182 212; /* #06b6d4 */
 
     /* --- accents ----------------------------------------------------------- */
 
-    --c-accent:        0 90 255;        /* #005aff — primary action blue */
-    --c-accent-rail:   0 145 255;       /* #0091ff — group rails above cards  */
+    --c-accent: 0 90 255; /* #005aff — primary action blue */
+    --c-accent-rail: 0 145 255; /* #0091ff — group rails above cards  */
     /* Selected tab: a deep navy fill with a brighter border on top. */
-    --c-tab-active:    30 58 138;       /* #1e3a8a */
-    --c-tab-border:    59 130 246;      /* #3b82f6 */
+    --c-tab-active: 30 58 138; /* #1e3a8a */
+    --c-tab-border: 59 130 246; /* #3b82f6 */
 
     /* --- elevation and glow ------------------------------------------------ */
 
     /* Derived from the status channels above, so a fill and its bloom can never
        drift apart. Previously these were hand-written rgba() duplicates. */
-    --glow-healthy:    0 0 15px rgb(var(--c-healthy) / 0.35);
-    --glow-warning:    0 0 15px rgb(var(--c-warning) / 0.35);
-    --glow-critical:   0 0 15px rgb(var(--c-critical) / 0.5);
-    --glow-info:       0 0 15px rgb(var(--c-info) / 0.35);
-    --glow-accent:     0 0 15px rgb(var(--c-accent) / 0.35);
+    --glow-healthy: 0 0 15px rgb(var(--c-healthy) / 0.35);
+    --glow-warning: 0 0 15px rgb(var(--c-warning) / 0.35);
+    --glow-critical: 0 0 15px rgb(var(--c-critical) / 0.5);
+    --glow-info: 0 0 15px rgb(var(--c-info) / 0.35);
+    --glow-accent: 0 0 15px rgb(var(--c-accent) / 0.35);
 
-    --shadow-panel:    0 4px 20px rgb(0 0 0 / 0.5);
-    --shadow-float:    0 10px 30px rgb(0 0 0 / 0.7);
+    --shadow-panel: 0 4px 20px rgb(0 0 0 / 0.5);
+    --shadow-float: 0 10px 30px rgb(0 0 0 / 0.7);
 
     /* --- radius ------------------------------------------------------------ */
 
     /* Mirrors Tailwind's default scale, so `rounded` and `var(--radius-sm)`
        agree. Exposed for raw CSS and inline styles. */
-    --radius-sm:       4px;
-    --radius-md:       8px;
-    --radius-lg:       12px;
-    --radius-full:     9999px;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-full: 9999px;
 
     /* --- spacing ----------------------------------------------------------- */
 
-    --space-xs:        4px;
-    --space-sm:        8px;
-    --space-md:        16px;
-    --space-lg:        24px;
-    --space-xl:        32px;
-    --grid-gap:        16px;
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+    --grid-gap: 16px;
 
     /* --- typography -------------------------------------------------------- */
 
-    --font-sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    --font-sans:
+      "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
 
     /* A dense control-room scale — this dashboard's body text is 11-12px, not
        16px. Named by role because "sm/base/lg" stops meaning anything when the
        whole range lives between 9 and 24px. The counts are how many arbitrary
        text-[Npx] literals each step replaces. */
-    --fs-micro:        9px;             /* 21 uses — axis ticks, dense legends */
-    --fs-tiny:         10px;            /* 30 uses — chips, badges            */
-    --fs-small:        11px;            /* 45 uses — the workhorse            */
-    --fs-body:         12px;            /* 34 uses — table cells, body copy   */
-    --fs-label:        13px;            /* 11 uses — field labels             */
-    --fs-lead:         15px;            /* 10 uses — card titles              */
-    --fs-title:        17px;            /*  9 uses — section headings         */
-    --fs-metric:       24px;            /*  7 uses — KPI numbers              */
-    --fs-hero:         42px;            /* headline metrics (OEE, yield %)    */
+    --fs-micro: 9px; /* 21 uses — axis ticks, dense legends */
+    --fs-tiny: 10px; /* 30 uses — chips, badges            */
+    --fs-small: 11px; /* 45 uses — the workhorse            */
+    --fs-body: 12px; /* 34 uses — table cells, body copy   */
+    --fs-label: 13px; /* 11 uses — field labels             */
+    --fs-lead: 15px; /* 10 uses — card titles              */
+    --fs-title: 17px; /*  9 uses — section headings         */
+    --fs-metric: 24px; /*  7 uses — KPI numbers              */
+    --fs-hero: 42px; /* headline metrics (OEE, yield %)    */
 
     /* --- z-index layers ---------------------------------------------------- */
 
     /* Named stops so stacking is a decision rather than an arms race. The one
        z-[9999] in the codebase is a tooltip that belongs at --z-tooltip. */
-    --z-base:          1;
-    --z-raised:        10;   /* sticky table headers, card overlays */
-    --z-sticky:        20;
-    --z-overlay:       40;   /* floating editor panels              */
-    --z-modal:         50;
-    --z-popover:       60;
-    --z-tooltip:       70;
-    --z-toast:         80;
+    --z-base: 1;
+    --z-raised: 10; /* sticky table headers, card overlays */
+    --z-sticky: 20;
+    --z-overlay: 40; /* floating editor panels              */
+    --z-modal: 50;
+    --z-popover: 60;
+    --z-tooltip: 70;
+    --z-toast: 80;
 
     /* --- motion ------------------------------------------------------------ */
 
-    --dur-fast:        150ms;
-    --dur-base:        200ms;
-    --dur-slow:        300ms;
-    --dur-slower:      500ms;
-    --ease-out:        cubic-bezier(0.16, 1, 0.3, 1);
-    --ease-in-out:     cubic-bezier(0.4, 0, 0.2, 1);
+    --dur-fast: 150ms;
+    --dur-base: 200ms;
+    --dur-slow: 300ms;
+    --dur-slower: 500ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* --- base elements ------------------------------------------------------- */
@@ -326,6 +327,22 @@
 }
 .animate-fade-in {
   animation: fade-in var(--dur-base) var(--ease-out) both;
+}
+
+@keyframes indeterminate-slide {
+  0% {
+    transform: translateX(-100%) scaleX(0.35);
+  }
+  50% {
+    transform: translateX(20%) scaleX(0.6);
+  }
+  100% {
+    transform: translateX(200%) scaleX(0.35);
+  }
+}
+.animate-indeterminate {
+  transform-origin: left center;
+  animation: indeterminate-slide 1.25s var(--ease-out) infinite;
 }
 
 /* Sparkline draw-on and marker bloom. These previously lived in an inline
