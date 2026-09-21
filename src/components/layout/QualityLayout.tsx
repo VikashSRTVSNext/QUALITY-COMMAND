@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   ChevronDown,
   Maximize2,
@@ -18,6 +18,19 @@ import { useNavigate } from "react-router-dom";
 import qualityData from "../../data/qualityData.json";
 import { apiUrl, DASHBOARD_STREAM_URLS } from "../../core/api/config";
 import { filterYieldRows } from "../quality/productYieldFilter";
+import {
+  EMPTY_RANGE,
+  LEVEL_PARAM,
+  comparisonLabel,
+  isRangeActive,
+  type DateRange,
+} from "../quality/dashboardFilters";
+import {
+  useProductOptions,
+  useRangeKpis,
+  useRangeProductYield,
+} from "../quality/useDashboardFilters";
+import DateRangeFilter from "../quality/DateRangeFilter";
 import { ZONES, ZoneDef, STATUS_CSS, STATUS_LABEL } from "../factory/zones";
 import FactoryLayoutOverlay from "../factory/FactoryLayoutOverlay";
 import { palette } from "../../theme/palette";
@@ -524,9 +537,6 @@ const PROCESS_NAME_ALIASES: Record<string, string> = {
   LBTS: "LBTS - S",
 };
 
-// TEMPORARY: hard-coded UNIT-HFTPY actual, overriding the live feed value.
-const HFTPY_HARDCODED_VALUE = "88.9%";
-
 const LARGE_KPI_LABEL_ALIASES: Record<string, string> = {
   CUSTOMER: "CUSTOMER QUALITY AUDIT (%)",
   UNITHFTPY: "UNIT-HFTPY (%)",
@@ -789,6 +799,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const [activeYieldTab, setActiveYieldTab] = useState<"UNITS" | "TRX" | "PA">(
     "UNITS",
   );
+  // Both null on open, on purpose: with no date parameters the dashboard reads
+  // the live SSE snapshot, which is the fast path for first paint. Setting
+  // either date moves every panel below onto the database instead.
+  const [dateRange, setDateRange] = useState<DateRange>(EMPTY_RANGE);
+  // Item codes. Empty selects every product, matching an absent ?product=.
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  // Read inside the SSE handler, which is mounted once and cannot see the
+  // current state. See the guard in handleData.
+  const rangeActiveRef = useRef(false);
   // Last Process Performance tile click, forwarded to the Product Yield panel
   // so it can select the matching step tab. Nonce, not just step: see
   // YieldStepRequest.
@@ -925,14 +944,63 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     return () => clearInterval(id);
   }, []);
 
-  // Product-yield rows now arrive on /dashboard/stream/product-yield, unfiltered
-  // and for every shift and level at once. Filtering and shaping them is cheap
-  // and local, so switching a tab costs no request — it used to refetch.
-  const productYield = React.useMemo(() => {
-    const shiftMatch = activeShift.match(/Shift\s+([A-C])/i);
-    const targetShift = shiftMatch ? shiftMatch[1].toUpperCase() : null;
+  // "A" | "B" | "C", or null for the whole production day. Derived once here
+  // rather than re-parsed at each consumer: it is now a request parameter on
+  // three endpoints as well as a client-side filter, and a fourth copy of the
+  // regex is a fourth place for the two to disagree.
+  const shiftLetter = React.useMemo<"A" | "B" | "C" | null>(() => {
+    const match = activeShift.match(/Shift\s+([A-C])/i);
+    return match ? (match[1].toUpperCase() as "A" | "B" | "C") : null;
+  }, [activeShift]);
 
-    return filterYieldRows(rawProductYield, activeYieldTab, targetShift).map(
+  const rangeActive = isRangeActive(dateRange);
+  rangeActiveRef.current = rangeActive;
+
+  // The three range-aware queries. All inert until a date is set, at which
+  // point they take over from the snapshot; see useDashboardFilters.ts.
+  const rangedYield = useRangeProductYield({
+    range: dateRange,
+    shift: shiftLetter,
+    level: LEVEL_PARAM[activeYieldTab],
+    products: selectedProducts,
+  });
+  const rangedKpis = useRangeKpis(dateRange, shiftLetter);
+  const productOptions = useProductOptions(dateRange);
+
+  // Product-yield rows come from one of two sources with an identical row
+  // shape: the SSE snapshot for the current day, or /dashboard/product-yield
+  // once a date range is set. One mapper serves both.
+  //
+  // The snapshot arrives unfiltered — every shift and level at once — so shift
+  // and level filtering is local, which is why switching a tab costs no request.
+  // Re-running the same filter over the ranged rows is intentional and cheap:
+  // the endpoint has already applied it, and passing both through one path means
+  // the two sources cannot drift into rendering differently.
+  const productYield = React.useMemo(() => {
+    const targetShift = shiftLetter;
+    const sourceRows = rangeActive
+      ? (rangedYield.rows ?? [])
+      : rawProductYield;
+
+    // The product filter is a request parameter on the ranged source, so those
+    // rows arrive filtered. The snapshot has no such parameter, so the same
+    // selection is applied here — otherwise the control would appear to do
+    // nothing on the default view.
+    const selected = new Set(selectedProducts);
+    const productFiltered =
+      rangeActive || selected.size === 0
+        ? sourceRows
+        : sourceRows.filter(
+            (row: any) =>
+              selected.has(row?.item) ||
+              // The endpoint accepts the base code before the dot as well, so a
+              // selection made in one window still matches in another where the
+              // suffix differs.
+              selected.has(String(row?.item ?? "").split(".")[0]) ||
+              selected.has(row?.product),
+          );
+
+    return filterYieldRows(productFiltered, activeYieldTab, targetShift).map(
       (row: any) => ({
         id: row.id,
         name: row.product,
@@ -955,9 +1023,21 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         rec: row.ai_recommendation,
         shift: row.shift,
         sub_module: row.sub_module,
+        // Range source only: how many days of the range THIS product ran, which
+        // is not the length of the range. Two days inside a fortnight is a much
+        // weaker signal than fifteen, so the table surfaces it rather than
+        // letting a thin yield read as a solid one.
+        days: isNum(row.days) ? row.days : null,
       }),
     );
-  }, [rawProductYield, activeShift, activeYieldTab]);
+  }, [
+    rawProductYield,
+    rangedYield.rows,
+    rangeActive,
+    selectedProducts,
+    shiftLetter,
+    activeYieldTab,
+  ]);
 
   useEffect(() => {
     const fetchSafetyData = async () => {
@@ -1038,7 +1118,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       setAlertsFeedState("ready");
 
       if (data.meta) {
-        if (data.meta.shift) {
+        // The feed reports which shift is live and normally moves the selector
+        // with it, which is right for the always-on current-day view.
+        //
+        // It must not do that while a date range is applied. The range query
+        // takes the shift as a parameter, so a push at a shift boundary would
+        // silently refetch a historical window for a different shift than the
+        // one the user picked — the numbers would change with nothing on screen
+        // having been touched.
+        if (data.meta.shift && !rangeActiveRef.current) {
           const s = data.meta.shift;
           if (s.name && s.start && s.end) {
             setActiveShift(`${s.name} (${s.start} - ${s.end})`);
@@ -1247,7 +1335,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   }, []);
 
   useEffect(() => {
-    if (!rawKpiData) return;
+    // The snapshot feed only ever describes the current production day, so it
+    // must not write over cards that a date range now owns. Clearing the range
+    // re-runs this effect and hands them straight back.
+    if (rangeActive || !rawKpiData) return;
 
     setKpiCards((prev) => {
       return prev.map((card) => {
@@ -1390,7 +1481,113 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         return card;
       });
     });
-  }, [activeShift, rawKpiData, hftpyBlock]);
+  }, [activeShift, rawKpiData, hftpyBlock, rangeActive]);
+
+  // The same five cards, over a date range, from /dashboard/kpis.
+  //
+  // A separate effect rather than a branch inside the one above because almost
+  // nothing is shared: the range response has no trend buckets, no per-shift
+  // fallback chain and a comparison window that moves, so the only common step
+  // is writing a formatted string onto the card.
+  useEffect(() => {
+    if (!rangeActive) return;
+    const kpis = rangedKpis.data;
+    if (!kpis) return;
+
+    // days_with_data: 0 means nothing ran in the window. Rendering the zeroed
+    // totals here would read as a catastrophic yield rather than no production,
+    // so the cards go blank and say so instead.
+    const nothingRan = kpis.range.days_with_data === 0;
+    const label = comparisonLabel(kpis.previous);
+
+    setKpiCards((prev) =>
+      prev.map((card) => {
+        // UNIT-HFTPY is projection-against-plan for the current day and has no
+        // range equivalent on this endpoint. Blanking it is the honest option:
+        // leaving the last snapshot figure in place would label a current-day
+        // number with a historical range.
+        if (card.id === 9) {
+          return {
+            ...card,
+            value: "—",
+            projectedValue: "—",
+            change: "Current day only",
+            delta_vs_yesterday: 0,
+          };
+        }
+
+        const keyMap: Record<
+          number,
+          "fpy_unit" | "spy_unit" | "fpy_module" | "spy_module" | "customer_audit"
+        > = {
+          1: "fpy_unit",
+          2: "spy_unit",
+          3: "fpy_module",
+          4: "spy_module",
+          5: "customer_audit",
+        };
+        const key = keyMap[card.id];
+        if (!key) return card;
+
+        if (nothingRan) {
+          return {
+            ...card,
+            value: "—",
+            change: "No production in range",
+            points: card.points.map(() => null),
+            yesterdayPoints: card.yesterdayPoints?.map(() => null),
+            delta_vs_yesterday: 0,
+          };
+        }
+
+        // Never averaged from by_date: a range figure is the raw board counts
+        // added up with the percentage taken once at the end, so a day that
+        // tested nine times as many boards carries nine times the weight.
+        // `totals` is already that arithmetic — re-deriving it from the daily
+        // percentages would disagree with the backend exactly on the weeks where
+        // volume swung.
+        const value = kpis.totals[key];
+
+        // Customer Audit is signed off the day after the shift it covers, so
+        // the newest day in a range is normally unaudited and days that were
+        // never audited are left out of the average rather than scored zero.
+        // A null score means nothing in the range was audited at all.
+        if (key === "customer_audit" && !isNum(value)) {
+          return {
+            ...card,
+            value: "—",
+            change: "Not audited",
+            delta_vs_yesterday: 0,
+          };
+        }
+
+        if (!isNum(value)) {
+          return { ...card, value: "—", change: label, delta_vs_yesterday: 0 };
+        }
+
+        const delta = kpis.delta_vs_previous?.[key];
+        // Daily percentages are fine for the sparkline's SHAPE, which is all
+        // they are used for here — the headline figure above comes from totals.
+        const points = kpis.by_date?.length
+          ? kpis.by_date.map((d) => (isNum(d[key]) ? (d[key] as number) : null))
+          : card.points;
+
+        return {
+          ...card,
+          value: `${value.toFixed(1)}%`,
+          change: isNum(delta)
+            ? `${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(1)}% ${label}`
+            : label,
+          points,
+          // No equivalent series on the range source, and leaving the
+          // current-day comparison line in place would plot yesterday against a
+          // fortnight.
+          yesterdayPoints: card.yesterdayPoints?.map(() => null),
+          delta_vs_yesterday: isNum(delta) ? delta : 0,
+        };
+      }),
+    );
+  }, [rangeActive, rangedKpis.data]);
 
   useEffect(() => {
     if (!rawProcessPerformance) return;
@@ -1685,14 +1882,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     );
     if (!kpiItem) return null;
 
-    // TEMPORARY: UNIT-HFTPY actual is pinned to a fixed value until the feed
-    // supplies a trustworthy number. Remove this override to go back live.
-    const item =
-      kpiItem.id === 9 ? { ...kpiItem, value: HFTPY_HARDCODED_VALUE } : kpiItem;
-
     return (
       <LargeKpiCard
-        item={item}
+        item={kpiItem}
         title={customTitle || metricName}
         projectionIsHardcoded={hftpyBlock?.projection_is_hardcoded}
       />
@@ -1843,6 +2035,21 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             />
             {liveStatus}
           </div>
+
+          {/* Dashboard-wide, because a range moves the KPI strip and the yield
+              table together. The product filter is NOT here: it only reaches the
+              yield table, so it lives on that panel. */}
+          <DateRangeFilter
+            value={dateRange}
+            onChange={setDateRange}
+            appliedLabel={
+              rangedKpis.error
+                ? rangedKpis.error
+                : rangedKpis.data
+                  ? `${rangedKpis.data.range.from} – ${rangedKpis.data.range.to} · ${rangedKpis.data.range.days_with_data} of ${rangedKpis.data.range.days} days with data`
+                  : null
+            }
+          />
 
           <div className="relative">
             <div
@@ -2004,14 +2211,28 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           rows={productYield}
           activeTab={activeYieldTab}
           onTabChange={setActiveYieldTab}
-          fetchState={yieldFetchState}
+          fetchState={
+            // While a range is applied the table's freshness is the REST query's,
+            // not the stream's.
+            rangeActive
+              ? rangedYield.state === "ready"
+                ? "ready"
+                : rangedYield.state === "error"
+                  ? "error"
+                  : "loading"
+              : yieldFetchState
+          }
           recommendations={yieldRecommendations}
           recsLoading={yieldRecsLoading}
           planStatus={yieldPlanStatus}
-          shift={
-            activeShift.match(/Shift\s+([A-C])/i)?.[1].toUpperCase() ?? null
-          }
+          shift={shiftLetter}
           requestedStep={yieldStepRequest}
+          productOptions={productOptions.options}
+          productOptionsState={productOptions.state}
+          selectedProducts={selectedProducts}
+          onProductsChange={setSelectedProducts}
+          rangeMeta={rangedYield.meta}
+          rangeError={rangedYield.error}
         />
 
         <AttentionCenterPanel

@@ -23,6 +23,8 @@ import {
   STEP_TABS,
   type YieldStepRequest,
 } from "./yieldTabs";
+import ProductFilter from "./ProductFilter";
+import type { ProductOption, ProductYieldMeta } from "./dashboardFilters";
 
 export type YieldTab = "UNITS" | "TRX" | "PA";
 
@@ -177,6 +179,19 @@ interface ProductYieldPanelProps {
    *  tab to show. The panel still owns the selection — this only nudges it, so
    *  the user can click another tab afterwards without fighting the prop. */
   requestedStep?: YieldStepRequest | null;
+  /** Products that actually ran in the selected window, from
+   *  /dashboard/products. Follows the date picker, so it can shrink. */
+  productOptions?: ProductOption[];
+  productOptionsState?: "idle" | "loading" | "ready" | "error";
+  /** Selected item codes. Lives in the dashboard because it is a request
+   *  parameter on the ranged source, not just a client-side filter. */
+  selectedProducts?: string[];
+  onProductsChange?: (items: string[]) => void;
+  /** Present only when a date range produced these rows. Its `days` is the
+   *  length of the range, unlike rows[].days which is per product. */
+  rangeMeta?: ProductYieldMeta | null;
+  /** Backend's own wording for a rejected range, shown verbatim. */
+  rangeError?: string | null;
 }
 
 // Product Yield panel: level tabs, a sortable and paginated table, and the AI
@@ -194,6 +209,12 @@ export const ProductYieldPanel = ({
   planStatus,
   shift,
   requestedStep,
+  productOptions = [],
+  productOptionsState = "ready",
+  selectedProducts = [],
+  onProductsChange,
+  rangeMeta = null,
+  rangeError = null,
 }: ProductYieldPanelProps) => {
   // Product opened from a UNITS row. Lives here rather than in StepPane because
   // the UNITS tab is the panel's own table, not a step pane.
@@ -314,11 +335,46 @@ export const ProductYieldPanel = ({
     setLevelSelection(null);
   }, [activeTab]);
 
+  // A narrower product selection or a shorter range can leave the current page
+  // past the end of the result. safePage already clamps the render, but the
+  // control would sit on "page 4" of a one-page table until something else reset
+  // it.
+  useEffect(() => {
+    setPage(1);
+  }, [selectedProducts, rangeMeta?.from, rangeMeta?.to]);
+
   return (
       <section className="bg-panel border border-line rounded-xl p-4 flex flex-col h-[380px]">
-        <span className="text-[12px] font-black tracking-widest text-ink-muted uppercase mb-1.5">
-          PRODUCT YIELD
-        </span>
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-[12px] font-black tracking-widest text-ink-muted uppercase">
+              PRODUCT YIELD
+            </span>
+            {/* Names the window the rows came from. Worth showing because the
+                source changed with it: no range means the live snapshot, a range
+                means the database. */}
+            {rangeMeta && (
+              <span
+                className="text-[10px] font-bold text-ink-dim truncate"
+                title={`${rangeMeta.source} · shift ${rangeMeta.shift ?? "D"} · ${rangeMeta.days} days`}
+              >
+                {rangeMeta.from} – {rangeMeta.to} · {rangeMeta.days}d
+              </span>
+            )}
+          </div>
+
+          {/* Only on the level tabs. The step panes read
+              /process/{step}/products, which takes no product parameter, so the
+              control would be inert there. */}
+          {activeStep === null && onProductsChange && (
+            <ProductFilter
+              options={productOptions}
+              optionsState={productOptionsState}
+              value={selectedProducts}
+              onChange={onProductsChange}
+            />
+          )}
+        </div>
         {/* One row, horizontally scrollable: three level tabs then one per
             process step. A step is its own view and level does not apply to it,
             because /process/{step}/products takes no level parameter. */}
@@ -433,9 +489,27 @@ export const ProductYieldPanel = ({
                   >
                     {fetchState === "loading" ? (
                       <span className="text-ink-dim">Loading…</span>
+                    ) : rangeError ? (
+                      // The backend's own wording. Its 400s name the field to
+                      // fix (dates reversed, range over the 400-day ceiling),
+                      // which a generic failure message would throw away.
+                      <span className="text-warning">{rangeError}</span>
                     ) : fetchState === "error" ? (
                       <span className="text-warning">
                         Product yield unavailable — API unreachable
+                      </span>
+                    ) : selectedProducts.length > 0 ? (
+                      // Distinguished from a genuinely empty window: the filter
+                      // is the likelier cause, and it is the thing the user can
+                      // undo.
+                      <span className="text-ink-dim">
+                        No records for the selected product
+                        {selectedProducts.length === 1 ? "" : "s"} in this window
+                      </span>
+                    ) : rangeMeta ? (
+                      // An empty range is a 200, not an error: nothing ran.
+                      <span className="text-ink-dim">
+                        No production between {rangeMeta.from} and {rangeMeta.to}
                       </span>
                     ) : (
                       <span className="text-ink-dim">No records found</span>
@@ -476,6 +550,19 @@ export const ProductYieldPanel = ({
                   </td>
                   <td className="py-[2.5px] text-center text-white">
                     {row.tested}
+                    {/* Range source only: the days THIS product ran, out of the
+                        days asked for. A yield off two days of a fortnight is a
+                        much weaker signal than one off fifteen, and without this
+                        the two rows look equally trustworthy. Shown only when the
+                        product was quiet, so a full-range row stays uncluttered. */}
+                    {rangeMeta && isNum(row.days) && row.days < rangeMeta.days && (
+                      <span
+                        className="ml-1 text-[9px] font-sans font-bold text-ink-dim"
+                        title={`Ran on ${row.days} of the ${rangeMeta.days} days in this range`}
+                      >
+                        {row.days}/{rangeMeta.days}d
+                      </span>
+                    )}
                   </td>
                   <td className="py-[2.5px] text-center text-white">
                     {row.failed}
