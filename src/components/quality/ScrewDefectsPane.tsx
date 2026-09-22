@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { isNum } from "../../core/format";
 import DrilldownModalShell from "./DrilldownModalShell";
+import ScrewPositionsModal from "./ScrewPositionsModal";
 import { useScrewDefects, type ScrewRow } from "./useScrewDefects";
 
 const fmtPct = (v: number | null | undefined) =>
@@ -56,6 +57,10 @@ export const ScrewDefectsPane = ({
   // a modal implies -- the trade-off against the accordion this replaced is that
   // two lines can no longer be compared station by station on one screen.
   const [openLine, setOpenLine] = useState<string | null>(null);
+  // The station whose screw POSITIONS are open, layered over the station list.
+  // Closing it returns to that list rather than dismissing both, so the drill
+  // path is walkable in either direction.
+  const [openStation, setOpenStation] = useState<ScrewRow | null>(null);
 
   if (state === "loading") {
     return (
@@ -306,10 +311,23 @@ export const ScrewDefectsPane = ({
                       .map((r: ScrewRow) => (
                         <tr
                           key={`${r.operation}-${r.item}`}
-                          className="hover:bg-white/[0.03]"
+                          className="cursor-pointer hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-info"
+                          onClick={() => setOpenStation(r)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              setOpenStation(r);
+                            }
+                          }}
+                          tabIndex={0}
+                          role="button"
+                          title={`Which screw positions failed at ${stationLabel(r.operation)}`}
                         >
                           <td className={`${TD} text-left text-white font-bold`}>
-                            {stationLabel(r.operation)}
+                            <span className="inline-flex items-center gap-1.5">
+                              {stationLabel(r.operation)}
+                              <ChevronRight size={12} className="text-ink-dim" />
+                            </span>
                           </td>
                           {/* Name over code, matching the products table: two products can
                               share a name, and a supervisor quotes the code to the floor. */}
@@ -366,6 +384,19 @@ export const ScrewDefectsPane = ({
             </DrilldownModalShell>
           );
         })()}
+
+      {/* Level three, rendered AFTER the station list so it stacks over it.
+          Closing returns to the stations, which are still mounted behind. */}
+      {openStation && (
+        <ScrewPositionsModal
+          line={openStation.line ?? ""}
+          operation={openStation.operation ?? ""}
+          item={openStation.item}
+          productName={openStation.product_name}
+          businessDate={data.business_date}
+          onClose={() => setOpenStation(null)}
+        />
+      )}
     </div>
   );
 };
