@@ -1,4 +1,7 @@
+import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { isNum } from "../../core/format";
+import DpmoiDetailModal from "./DpmoiDetailModal";
 import { useDpmoiProducts, type DpmoiRow } from "./useDpmoiProducts";
 
 const fmtNum = (v: number | null | undefined) =>
@@ -41,6 +44,9 @@ export const DpmoiPane = ({
   businessDate?: string | null;
 }) => {
   const { data, state, error } = useDpmoiProducts(businessDate);
+  // The (item, operation) whose AOI defects are open. One at a time, which is
+  // what a modal implies.
+  const [openRow, setOpenRow] = useState<DpmoiRow | null>(null);
 
   if (state === "loading") {
     return (
@@ -102,12 +108,25 @@ export const DpmoiPane = ({
               return (
                 <tr
                   key={`${r.item}-${r.operation}`}
-                  className={`hover:bg-white/[0.04] ${
+                  className={`cursor-pointer hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-info ${
                     noDenominator ? "opacity-70" : ""
                   }`}
+                  onClick={() => setOpenRow(r)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setOpenRow(r);
+                    }
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  title={`What the ${opLabel(r.operation)} defects on ${r.item} were, and which process they came from`}
                 >
                   <td className={`${TD} text-left text-white font-bold`}>
-                    {r.item ?? "—"}
+                    <span className="inline-flex items-center gap-1.5">
+                      {r.item ?? "—"}
+                      <ChevronRight size={12} className="text-ink-dim" />
+                    </span>
                   </td>
                   <td className={`${TD} text-left text-ink-secondary`}>
                     {opLabel(r.operation)}
@@ -194,6 +213,15 @@ export const DpmoiPane = ({
         </table>
       </div>
 
+      {openRow && (
+        <DpmoiDetailModal
+          item={openRow.item ?? ""}
+          operation={openRow.operation ?? ""}
+          description={openRow.description}
+          businessDate={data.business_date}
+          onClose={() => setOpenRow(null)}
+        />
+      )}
     </div>
   );
 };
