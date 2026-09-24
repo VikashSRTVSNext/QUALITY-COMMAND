@@ -4,6 +4,7 @@ import { isNum } from "../../core/format";
 import DrilldownModalShell from "./DrilldownModalShell";
 import ScrewPositionsModal from "./ScrewPositionsModal";
 import { useScrewDefects, type ScrewRow } from "./useScrewDefects";
+import type { DateRange } from "./dashboardFilters";
 
 const fmtPct = (v: number | null | undefined) =>
   isNum(v) ? `${v.toFixed(2)}%` : "—";
@@ -49,10 +50,14 @@ const rateColour = (pct: number | null) => {
  */
 export const ScrewDefectsPane = ({
   businessDate,
+  range,
+  shift,
 }: {
   businessDate?: string | null;
+  range?: DateRange | null;
+  shift?: string | null;
 }) => {
-  const { data, state, error } = useScrewDefects(businessDate);
+  const { data, state, error } = useScrewDefects(businessDate, range, shift);
   // The line whose stations are open in the modal. One at a time, which is what
   // a modal implies -- the trade-off against the accordion this replaced is that
   // two lines can no longer be compared station by station on one screen.

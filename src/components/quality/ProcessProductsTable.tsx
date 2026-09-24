@@ -256,6 +256,18 @@ export const ProcessProductsTable = ({
                 : "—"}
             </span>
           </span>
+          {/* Which window these totals cover. Only when it is more than one
+              day: the single-day case is the dashboard's default and saying so
+              on every step tab would be noise. Without it a range table is
+              indistinguishable from a today table with a busy day. */}
+          {(data?.range?.days ?? 1) > 1 && (
+            <span
+              className="text-info whitespace-nowrap"
+              title={`Every production day from ${data?.range?.from} to ${data?.range?.to}, inclusive`}
+            >
+              {data?.range?.days} days · {data?.range?.from} → {data?.range?.to}
+            </span>
+          )}
           {/* Only shown when there IS unattributed production. */}
           {data?.unattributed && (
             <span

@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import { isNum } from "../../core/format";
 import DpmoiDetailModal from "./DpmoiDetailModal";
 import { useDpmoiProducts, type DpmoiRow } from "./useDpmoiProducts";
+import type { DateRange } from "./dashboardFilters";
 
 const fmtNum = (v: number | null | undefined) =>
   isNum(v) ? v.toLocaleString("en-US") : "—";
@@ -40,10 +41,14 @@ const opLabel = (op: string | null) =>
  */
 export const DpmoiPane = ({
   businessDate,
+  range,
+  shift,
 }: {
   businessDate?: string | null;
+  range?: DateRange | null;
+  shift?: string | null;
 }) => {
-  const { data, state, error } = useDpmoiProducts(businessDate);
+  const { data, state, error } = useDpmoiProducts(businessDate, range, shift);
   // The (item, operation) whose AOI defects are open. One at a time, which is
   // what a modal implies.
   const [openRow, setOpenRow] = useState<DpmoiRow | null>(null);

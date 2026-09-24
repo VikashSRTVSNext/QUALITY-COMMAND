@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
+import type { DateRange } from "./dashboardFilters";
 
 export type DpmoiRow = {
   item: string | null;
@@ -22,6 +23,12 @@ export type DpmoiRow = {
 export type DpmoiResponse = {
   step: string;
   business_date: string;
+  /** What the rows cover. A single day is a range of one. */
+  range: { from: string; to: string; days: number };
+  /** The shift the rows were narrowed to, or null for the whole production
+   *  day — which reads the mart's own precomputed 'D' row rather than adding
+   *  A + B + C up. mart_dpmo gained this grain on 2026-09-23. */
+  shift: string | null;
   operations: string[];
   rows: DpmoiRow[];
   totals: {
@@ -41,10 +48,21 @@ export type DpmoiResponse = {
 };
 
 /** DPMOI per item and operation, as the plant's Daily DPMOi screen lists it. */
-export const useDpmoiProducts = (businessDate?: string | null) => {
+export const useDpmoiProducts = (
+  businessDate?: string | null,
+  /** Dashboard date range. Both ends null = the live current production day. */
+  range?: DateRange | null,
+  /** "A" | "B" | "C", or null for the whole production day. */
+  shift?: string | null,
+) => {
   const [data, setData] = useState<DpmoiResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
+
+  // The two strings, not the object: the dashboard rebuilds the range object
+  // on every render and an object dependency would refetch on each one.
+  const rangeFrom = range?.from ?? null;
+  const rangeTo = range?.to ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +71,9 @@ export const useDpmoiProducts = (businessDate?: string | null) => {
       try {
         const params = new URLSearchParams();
         if (businessDate) params.set("business_date", businessDate);
+        if (range?.from) params.set("date_from", range.from);
+        if (range?.to) params.set("date_to", range.to);
+        if (shift) params.set("shift", shift);
         const qs = params.toString();
         const res = await fetch(
           apiUrl(`/process/dpmoi/breakdown${qs ? `?${qs}` : ""}`),
@@ -76,7 +97,7 @@ export const useDpmoiProducts = (businessDate?: string | null) => {
     return () => {
       cancelled = true;
     };
-  }, [businessDate]);
+  }, [businessDate, rangeFrom, rangeTo, shift]);
 
   return { data, state, error };
 };

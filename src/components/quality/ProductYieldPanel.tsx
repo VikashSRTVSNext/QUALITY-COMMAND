@@ -24,7 +24,11 @@ import {
   type YieldStepRequest,
 } from "./yieldTabs";
 import ProductFilter from "./ProductFilter";
-import type { ProductOption, ProductYieldMeta } from "./dashboardFilters";
+import type {
+  DateRange,
+  ProductOption,
+  ProductYieldMeta,
+} from "./dashboardFilters";
 
 export type YieldTab = "UNITS" | "TRX" | "PA";
 
@@ -52,8 +56,16 @@ const TAB_OFF = "bg-page text-ink-dim border-line hover:bg-line";
 // The selected product lives here rather than in the panel so switching tabs
 // clears it: an NC log belongs to one step, and carrying a selection across a
 // tab change would ask a different step about a product it may not have run.
-const StepPane = ({ step, shift }: { step: string; shift: string | null }) => {
-  const query = useProcessProducts(step, shift);
+const StepPane = ({
+  step,
+  shift,
+  range,
+}: {
+  step: string;
+  shift: string | null;
+  range?: DateRange | null;
+}) => {
+  const query = useProcessProducts(step, shift, range);
   const [selected, setSelected] = useState<{
     item: string;
     product_name: string | null;
@@ -90,8 +102,14 @@ const StepPane = ({ step, shift }: { step: string; shift: string | null }) => {
 // the two share is the products table -- the modal, the click gate and the
 // tooltip verb all differ, and threading three props through StepPane to pick
 // between two modals reads worse than two small panes.
-const SpiStepPane = ({ shift }: { shift: string | null }) => {
-  const query = useProcessProducts("SPI", shift);
+const SpiStepPane = ({
+  shift,
+  range,
+}: {
+  shift: string | null;
+  range?: DateRange | null;
+}) => {
+  const query = useProcessProducts("SPI", shift, range);
   const [selected, setSelected] = useState<{
     item: string;
     product_name: string | null;
@@ -125,8 +143,14 @@ const SpiStepPane = ({ shift }: { shift: string | null }) => {
 //
 // Same split as SpiStepPane and for the same reason -- only the products table
 // is shared; the modal, the click gate and the tooltip verb all differ.
-const SmtStepPane = ({ shift }: { shift: string | null }) => {
-  const query = useProcessProducts("SMT_DEFECTS", shift);
+const SmtStepPane = ({
+  shift,
+  range,
+}: {
+  shift: string | null;
+  range?: DateRange | null;
+}) => {
+  const query = useProcessProducts("SMT_DEFECTS", shift, range);
   const [selected, setSelected] = useState<{
     item: string;
     product_name: string | null;
@@ -192,6 +216,10 @@ interface ProductYieldPanelProps {
   rangeMeta?: ProductYieldMeta | null;
   /** Backend's own wording for a rejected range, shown verbatim. */
   rangeError?: string | null;
+  /** The dashboard's date range. Passed to the STEP tabs so they cover the same
+   *  window the UNITS table does — before this they always read the live current
+   *  production day while the rest of the screen showed a range. */
+  dateRange?: DateRange | null;
 }
 
 // Product Yield panel: level tabs, a sortable and paginated table, and the AI
@@ -215,6 +243,7 @@ export const ProductYieldPanel = ({
   onProductsChange,
   rangeMeta = null,
   rangeError = null,
+  dateRange = null,
 }: ProductYieldPanelProps) => {
   // Product opened from a UNITS row. Lives here rather than in StepPane because
   // the UNITS tab is the panel's own table, not a step pane.
@@ -424,17 +453,21 @@ export const ProductYieldPanel = ({
         </div>
 
         {activeStep === "SPI" ? (
-          <SpiStepPane shift={shift} />
+          <SpiStepPane shift={shift} range={dateRange} />
         ) : activeStep === "SMT_DEFECTS" ? (
-          <SmtStepPane shift={shift} />
+          <SmtStepPane shift={shift} range={dateRange} />
         ) : activeStep === DPMOI_TAB ? (
-          <DpmoiPane businessDate={null} />
+          <DpmoiPane businessDate={null} range={dateRange} shift={shift} />
         ) : activeStep === SCREW_DEFECTS_TAB ? (
           // Its own pane: screws-driven denominator, and a line/station/item
           // grouping the per-product table has no column for.
-          <ScrewDefectsPane businessDate={null} />
+          <ScrewDefectsPane
+            businessDate={null}
+            range={dateRange}
+            shift={shift}
+          />
         ) : activeStep ? (
-          <StepPane step={activeStep} shift={shift} />
+          <StepPane step={activeStep} shift={shift} range={dateRange} />
         ) : (
           <>
         <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar">

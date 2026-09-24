@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
+import type { DateRange } from "./dashboardFilters";
 
 export type ProcessProductRow = {
   item: string;
@@ -35,6 +36,9 @@ type ProcessProductsResponse = {
   metric: "yield" | "failure";
   business_date: string;
   shift: string | null;
+  /** What the rows actually cover. Always present — a single day is a range of
+   *  one — so a caller never has to choose between this and `business_date`. */
+  range: { from: string; to: string; days: number };
   operations: { in?: string[]; like?: string };
   target: number | null;
   target_unit: string | null;
@@ -119,13 +123,25 @@ export const SORTABLE: Record<string, string> = {
 //
 // Returns the raw response too, because the modal shows the step's own headline
 // figure (`card`) beside the table.
-export const useProcessProducts = (step: string, shift: string | null) => {
+export const useProcessProducts = (
+  step: string,
+  shift: string | null,
+  /** Dashboard date range. Both ends null = the live current production day,
+   *  which is what every caller did before ranges existed. */
+  range?: DateRange | null,
+) => {
   const [data, setData] = useState<ProcessProductsResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [page, setPage] = useState(1);
   // null lets the server choose: worst-first on whichever metric the step
   // reports, which is the ordering that makes this useful on open.
   const [sort, setSort] = useState<string | null>(null);
+
+  // Depend on the two STRINGS, not the object. The dashboard rebuilds the range
+  // object on every render, and an object in the dependency list would refetch
+  // the table on each one.
+  const rangeFrom = range?.from ?? null;
+  const rangeTo = range?.to ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -141,6 +157,10 @@ export const useProcessProducts = (step: string, shift: string | null) => {
         });
         if (shift) params.set("shift", shift);
         if (sort) params.set("sort", sort);
+        // Sent only when set. Omitting both is what asks for the live current
+        // day, so a range of nulls must NOT become empty query parameters.
+        if (range?.from) params.set("date_from", range.from);
+        if (range?.to) params.set("date_to", range.to);
 
         const res = await fetch(
           apiUrl(`/process/${encodeURIComponent(step)}/products?${params}`),
@@ -162,7 +182,7 @@ export const useProcessProducts = (step: string, shift: string | null) => {
     return () => {
       cancelled = true;
     };
-  }, [step, shift, page, sort]);
+  }, [step, shift, rangeFrom, rangeTo, page, sort]);
 
   // Reset paging whenever the query's subject changes. Shift is a
   // dashboard-wide control, and step changes when the Product Yield panel
@@ -171,7 +191,9 @@ export const useProcessProducts = (step: string, shift: string | null) => {
   useEffect(() => {
     setPage(1);
     setSort(null);
-  }, [step, shift]);
+    // Range belongs here with step and shift: a narrower window can have fewer
+    // pages than the one before it, so page 4 may simply not exist any more.
+  }, [step, shift, rangeFrom, rangeTo]);
 
   const metric = data?.metric ?? "yield";
   const valueSort = metric === "failure" ? "failure" : "yield";

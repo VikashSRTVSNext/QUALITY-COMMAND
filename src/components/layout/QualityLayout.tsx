@@ -2267,6 +2267,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           onProductsChange={setSelectedProducts}
           rangeMeta={rangedYield.meta}
           rangeError={rangedYield.error}
+          // The step tabs read this too, so a date range narrows IP, RTWP and
+          // the rest the same way it narrows UNITS.
+          dateRange={dateRange}
         />
 
         <AttentionCenterPanel

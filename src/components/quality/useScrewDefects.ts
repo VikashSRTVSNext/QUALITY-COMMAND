@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
+import type { DateRange } from "./dashboardFilters";
 
 export type ScrewRow = {
   /** MAC_LINE02 etc, taken from the resource prefix (MAC_LINE02_SCREW_01). */
@@ -24,6 +25,10 @@ export type ScrewRow = {
 export type ScrewDefectsResponse = {
   step: string;
   business_date: string;
+  /** What the rows cover. A single day is a range of one. */
+  range: { from: string; to: string; days: number };
+  /** The shift the rows were narrowed to, or null for the whole day. */
+  shift: string | null;
   operations: string[];
   rows: ScrewRow[];
   totals: {
@@ -51,10 +56,20 @@ export type ScrewDefectsResponse = {
  * screws is 18 chances to fail, so "which products make up this figure" is a
  * different question with a different divisor.
  */
-export const useScrewDefects = (businessDate?: string | null) => {
+export const useScrewDefects = (
+  businessDate?: string | null,
+  /** Dashboard date range. Both ends null = the live current production day. */
+  range?: DateRange | null,
+  /** "A" | "B" | "C", or null for the whole production day. */
+  shift?: string | null,
+) => {
   const [data, setData] = useState<ScrewDefectsResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
+
+  // The two strings, not the object — see the DPMOI hook for why.
+  const rangeFrom = range?.from ?? null;
+  const rangeTo = range?.to ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +78,9 @@ export const useScrewDefects = (businessDate?: string | null) => {
       try {
         const params = new URLSearchParams();
         if (businessDate) params.set("business_date", businessDate);
+        if (range?.from) params.set("date_from", range.from);
+        if (range?.to) params.set("date_to", range.to);
+        if (shift) params.set("shift", shift);
         const qs = params.toString();
         const res = await fetch(
           apiUrl(`/process/screw-defects/breakdown${qs ? `?${qs}` : ""}`),
@@ -86,7 +104,7 @@ export const useScrewDefects = (businessDate?: string | null) => {
     return () => {
       cancelled = true;
     };
-  }, [businessDate]);
+  }, [businessDate, rangeFrom, rangeTo, shift]);
 
   return { data, state, error };
 };
