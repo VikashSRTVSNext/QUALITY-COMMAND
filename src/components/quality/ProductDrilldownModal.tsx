@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { isNum } from "../../core/format";
 import DrilldownModalShell from "./DrilldownModalShell";
+import DateRangeFilter from "./DateRangeFilter";
+import { EMPTY_RANGE, type DateRange } from "./dashboardFilters";
 import FailedStepChart from "./FailedStepChart";
 import NcLogTable from "./NcLogTable";
 import TesterYieldTable from "./TesterYieldTable";
@@ -20,6 +22,9 @@ type Props = {
   /** Production day the parent table is showing, so every level agrees on the
    *  window. */
   businessDate?: string | null;
+  /** The dashboard's date range at the moment the modal was opened. Seeds
+   *  the picker below; the modal then owns its own copy. */
+  range?: DateRange | null;
   onClose: () => void;
 };
 
@@ -58,8 +63,18 @@ export const ProductDrilldownModal: React.FC<Props> = ({
   item,
   productName,
   businessDate,
+  range = null,
   onClose,
 }) => {
+  /**
+   * The window this modal is looking at.
+   *
+   * Seeded from the dashboard but owned here, so narrowing the range inside the
+   * drill-down does NOT move the table underneath it. Opening a row, widening to
+   * a fortnight to see whether a fault repeats, then closing, leaves the screen
+   * behind exactly as it was — which is what a modal should do.
+   */
+  const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
   const [selection, setSelection] = useState<Selection>(null);
   const [view, setView] = useState<Level2View>("table");
   // The plant's two NC-log filters. Off by default: their screen hides later
@@ -71,7 +86,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
   // Which unit's inspection images are open, if any.
   const [imagesFor, setImagesFor] = useState<string | null>(null);
 
-  const testers = useProductTesters(step, item, businessDate);
+  const testers = useProductTesters(step, item, businessDate, modalRange);
   // The NC log loads once a tester or cause is chosen -- or once the chart view
   // is opened, which needs the same rows unfiltered to break them down. `null`
   // item keeps the hook idle, so opening the modal on the table still costs one
@@ -85,6 +100,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
     selection?.category ?? null,
     firstAttemptOnly ? 1 : null,
     verifiedOnly,
+    modalRange,
   );
 
   // Inspection images for the whole product and day, in ONE request, loaded
@@ -209,9 +225,19 @@ export const ProductDrilldownModal: React.FC<Props> = ({
               ))}
             </div>
           )}
-          <span className="text-[11px] font-bold text-ink-dim">
-            {testers.data?.business_date ?? businessDate ?? ""}
-          </span>
+          {/* The same control the dashboard header uses, so the range reads
+              and behaves identically in both places. With no range set it shows
+              the day the data is for, which is what the static label used to
+              say. */}
+          <DateRangeFilter
+            value={modalRange}
+            onChange={setModalRange}
+            appliedLabel={
+              modalRange.from || modalRange.to
+                ? null
+                : (testers.data?.business_date ?? businessDate ?? null)
+            }
+          />
           {selection && (
             <button
               onClick={() => setSelection(null)}

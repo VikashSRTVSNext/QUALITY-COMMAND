@@ -1,6 +1,5 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { palette } from "../../theme/palette";
-import LoadingBar from "../common/LoadingBar";
 import {
   fmtCount,
   fmtPct,
@@ -58,10 +57,30 @@ export const ProcessProductsTable = ({
   //   - the scroll container has NO padding-top. Padding above the stick point
   //     leaves a strip that rows scroll into and remain visible in, which reads
   //     as the header clipping them mid-row.
+  // Lifted verbatim from the UNITS table so the two are the same object to the
+  // eye: same weight, same sticky treatment, same rule under it.
   const th =
-    "pb-2 pt-1 font-black sticky top-0 bg-panel border-b border-line-modal z-10 select-none";
+    "pb-2 font-black sticky top-0 bg-panel border-b border-line z-10 select-none";
   const sortable = "cursor-pointer hover:text-white transition-colors";
   const caret = (key: string) => (activeSort === key ? " ▾" : "");
+
+  // UNITS colours its FPY % and draws a small trend mark beside it. Same idea
+  // here, off `meets_target` -- which the rows already carry, so this is a
+  // restyle rather than a new figure. Null means no target was agreed for the
+  // step: neutral and flat, never red, because an unjudged number must not read
+  // as a breach.
+  const toneFor = (meets: boolean | null) =>
+    meets === null
+      ? palette.inkMuted
+      : meets
+        ? palette.healthy
+        : palette.critical;
+  const sparkFor = (meets: boolean | null) =>
+    meets === null
+      ? "0,6 5,6 10,6 15,6 20,6"
+      : meets
+        ? "0,10 5,5 10,8 15,2 20,4"
+        : "0,2 5,8 10,4 15,10 20,6";
 
   // SMT_DEFECTS sends defect_records beside `failed`; no other step does, so the
   // column appears only where it means something rather than being a prop every
@@ -71,22 +90,10 @@ export const ProcessProductsTable = ({
 
   return (
     <>
-      {/* Paging and sorting are SERVER-side, so both refetch while the previous
-          page is still on screen. Without this the table just sits there for a
-          second after a header click and looks like it ignored it. */}
-      <div className="relative flex items-center justify-between px-6 py-2 border-b border-line-modal/50 flex-shrink-0">
-        <LoadingBar active={state === "loading" && Boolean(data)} className="top-auto bottom-0" />
-        <span className="text-[10px] font-bold text-ink-dim uppercase tracking-wider">
-          {data?.operations?.like
-            ? `Operations like ${data.operations.like}`
-            : (data?.operations?.in ?? []).join(", ")}
-          <span className="text-[#4a5c72]"> · first attempts only</span>
-        </span>
-        <span className="text-[11px] font-bold text-ink-dim">
-          {totalProducts} {totalProducts === 1 ? "product" : "products"}
-        </span>
-      </div>
-
+      {/* No operations strip and no product count above the table: the UNITS
+          table has neither, and this one is meant to read as the same table with
+          a different step behind it. Both facts are still available -- the
+          operations on the card, the product count in the footer's "of N". */}
       <div className="flex-1 min-h-0 overflow-auto custom-scrollbar px-6 pb-3">
         {state === "loading" && !data ? (
           <div className="flex items-center justify-center py-16 text-[12px] font-bold text-ink-dim">
@@ -101,33 +108,34 @@ export const ProcessProductsTable = ({
             No production for this step in the selected window
           </div>
         ) : (
-          <table className="w-full text-left border-collapse relative">
-            <thead className="text-[10px] text-ink-dim uppercase tracking-wider">
-              <tr>
+          <table className="w-full min-w-[720px] text-left text-[12px] border-collapse relative">
+            <thead>
+              <tr className="text-ink-dim font-bold text-[10px] uppercase">
+                <th className={`${th} pl-2`}>S.No</th>
                 <th
                   className={`${th} ${sortable}`}
                   onClick={() => applySort("product")}
                 >
-                  Product{caret("product")}
+                  Product name{caret("product")}
                 </th>
-                <th className={`${th} text-right`}>Done</th>
-                <th className={`${th} text-right`}>OK</th>
+                <th className={`${th} text-center`}>Done</th>
+                <th className={`${th} text-center`}>OK</th>
                 <th
-                  className={`${th} ${sortable} text-right`}
+                  className={`${th} ${sortable} text-center`}
                   onClick={() => applySort("failed")}
                 >
-                  Failed{caret("failed")}
+                  Failed count{caret("failed")}
                 </th>
                 {hasRecords && (
                   <th
-                    className={`${th} text-right`}
+                    className={`${th} text-center`}
                     title="Defect records behind the failed boards. Several bad joints on one board is one failed board and several records."
                   >
                     Records
                   </th>
                 )}
                 <th
-                  className={`${th} ${sortable} text-right`}
+                  className={`${th} ${sortable} text-center`}
                   onClick={() => applySort("value")}
                 >
                   {metric === "failure" ? "Failure %" : "Yield %"}
@@ -135,19 +143,14 @@ export const ProcessProductsTable = ({
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.06]">
-              {(data?.rows ?? []).map((row) => {
+            <tbody className="divide-y divide-line/45 font-mono text-[11px]">
+              {(data?.rows ?? []).map((row, idx) => {
                 const value =
                   metric === "failure" ? row.failure_pct : row.yield_pct;
                 // Null verdict means no target agreed for the step, or this
                 // product produced nothing. Neutral, never red — an unjudged
                 // figure must not read as a breach.
-                const valueColor =
-                  row.meets_target === null
-                    ? palette.inkMuted
-                    : row.meets_target
-                      ? palette.healthy
-                      : palette.critical;
+                const valueColor = toneFor(row.meets_target);
                 // A row is only a control when there is something to open, so
                 // the tabIndex, the role and the cursor all come and go with
                 // this rather than advertising an interaction that does nothing.
@@ -162,7 +165,7 @@ export const ProcessProductsTable = ({
                 return (
                   <tr
                     key={row.item}
-                    className={`hover:bg-white/[0.05] ${
+                    className={`hover:bg-panel/40 ${
                       clickable
                         ? "cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:outline-info"
                         : ""
@@ -186,41 +189,47 @@ export const ProcessProductsTable = ({
                         : undefined
                     }
                   >
-                    <td className="py-2">
-                      {row.product_name ? (
-                        <>
-                          <div className="text-[12px] font-bold text-white leading-tight">
-                            {row.product_name}
-                          </div>
-                          <div className="text-[10px] text-ink-dim font-mono leading-tight">
-                            {row.item}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="text-[12px] font-bold text-white font-mono leading-tight">
-                          {row.item}
-                        </div>
-                      )}
+                    <td className="py-[2.5px] text-ink-muted pl-2">
+                      {first + idx}.
                     </td>
-                    <td className="py-2 text-[12px] text-right text-ink-muted font-mono">
+                    {/* The name alone, exactly as the UNITS table does it. The
+                        item code only appears when there is no name to show --
+                        a row has to be identifiable, but a second line under
+                        every product made these rows half again as tall as the
+                        UNITS ones and broke the match. The code is still in the
+                        row's tooltip for anyone who needs to quote it. */}
+                    <td
+                      className="py-[2.5px] text-white font-sans font-bold"
+                      title={row.product_name ? row.item : undefined}
+                    >
+                      {row.product_name ?? row.item}
+                    </td>
+                    <td className="py-[2.5px] text-center text-white">
                       {fmtCount(row.done)}
                     </td>
-                    <td className="py-2 text-[12px] text-right text-ink-muted font-mono">
+                    <td className="py-[2.5px] text-center text-white">
                       {fmtCount(row.ok)}
                     </td>
-                    <td className="py-2 text-[12px] text-right font-mono font-bold text-[#e0e7ef]">
+                    <td className="py-[2.5px] text-center text-white">
                       {fmtCount(row.failed)}
                     </td>
                     {hasRecords && (
-                      <td className="py-2 text-[12px] text-right text-ink-dim font-mono">
+                      <td className="py-[2.5px] text-center text-ink-dim">
                         {fmtCount(row.defect_records)}
                       </td>
                     )}
-                    <td
-                      className="py-2 text-[12.5px] text-right font-mono font-black"
-                      style={{ color: valueColor }}
-                    >
-                      {fmtPct(value)}
+                    <td className="py-[2.5px] text-center font-bold">
+                      <span style={{ color: valueColor }}>{fmtPct(value)}</span>
+                      <span className="ml-1 opacity-80 inline-block w-4 h-3 overflow-hidden align-middle mb-0.5">
+                        <svg viewBox="0 0 20 10" className="w-full h-full">
+                          <polyline
+                            fill="none"
+                            stroke={valueColor}
+                            strokeWidth="1.5"
+                            points={sparkFor(row.meets_target)}
+                          />
+                        </svg>
+                      </span>
                     </td>
                   </tr>
                 );
@@ -230,56 +239,17 @@ export const ProcessProductsTable = ({
         )}
       </div>
 
-      {/* Totals are over EVERY product, not just this page. */}
-      <div className="flex justify-between items-center px-6 py-3 border-t border-line-modal flex-shrink-0 gap-4">
-        <div className="flex items-center gap-4 text-[11px] font-bold text-ink-muted min-w-0">
-          <span>
-            Total{" "}
-            <span className="text-white font-mono">
-              {fmtCount(data?.totals?.done)}
-            </span>{" "}
-            done ·{" "}
-            <span className="text-white font-mono">
-              {fmtCount(data?.totals?.failed)}
-            </span>{" "}
-            failed ·{" "}
-            {/* Dashed, never 0.00%, when nothing was done. No measurement and a
-                bad measurement are different things, and a day with no boards
-                inspected must not read as a day that failed everything. */}
-            <span className="text-white font-mono">
-              {(data?.totals?.done ?? 0) > 0
-                ? fmtPct(
-                    metric === "failure"
-                      ? data?.totals?.failure_pct
-                      : data?.totals?.yield_pct,
-                  )
-                : "—"}
-            </span>
-          </span>
-          {/* Which window these totals cover. Only when it is more than one
-              day: the single-day case is the dashboard's default and saying so
-              on every step tab would be noise. Without it a range table is
-              indistinguishable from a today table with a busy day. */}
-          {(data?.range?.days ?? 1) > 1 && (
-            <span
-              className="text-info whitespace-nowrap"
-              title={`Every production day from ${data?.range?.from} to ${data?.range?.to}, inclusive`}
-            >
-              {data?.range?.days} days · {data?.range?.from} → {data?.range?.to}
-            </span>
-          )}
-          {/* Only shown when there IS unattributed production. */}
-          {data?.unattributed && (
-            <span
-              className="text-ink-dim truncate"
-              title="Production the source did not attribute to a product. Counted in the total and in the card, but it has no item code to list."
-            >
-              + {fmtCount(data.unattributed.done)} unattributed
-            </span>
-          )}
-        </div>
+      {/* Pagination only, like the UNITS footer. The totals line that used to
+          sit on the left is gone: it is the same figure the process card above
+          already carries, and the UNITS table does not repeat it either.
 
-        <div className="flex items-center gap-3 text-[11px] text-white flex-shrink-0">
+          No progress bar either. Paging and sorting are SERVER-side, so a
+          refetch happens with the previous page still on screen and goes
+          unmarked -- that is accepted: the centred "Loading…" on first load is
+          the only loading state this table shows, which is one more than the
+          UNITS table has. */}
+      <div className="flex justify-end items-center gap-3 mt-1.5 pt-2 px-6 text-[11px] text-white border-t border-line flex-shrink-0">
+        <div className="flex items-center gap-3">
           <span className="text-ink-muted font-bold">
             {first} - {last} of {totalProducts}
           </span>

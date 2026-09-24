@@ -86,9 +86,11 @@ const StepPane = ({
           step={step}
           item={selected.item}
           productName={selected.product_name}
-          // The day the table itself is showing, so the log cannot describe a
-          // different window from the row that opened it.
+          // The window the table itself is showing, so the log opens on the
+          // same data the row was read from. `range` is the live one; the
+          // business date still covers the no-range case.
           businessDate={query.data?.business_date ?? null}
+          range={range}
           onClose={() => setSelected(null)}
         />
       )}
@@ -863,6 +865,7 @@ export const ProductYieldPanel = ({
             item={levelSelection.item}
             productName={levelSelection.name}
             businessDate={null}
+            range={dateRange}
             onClose={() => setLevelSelection(null)}
           />
         )}

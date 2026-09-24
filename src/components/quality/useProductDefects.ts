@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { apiUrl } from "../../core/api/config";
+import type { DateRange } from "./dashboardFilters";
 
 // Steps whose failures can be broken down to the NC log. Kept in step with the
 // backend's _REWORK_OPS map: a step's failures are only explainable when its
@@ -164,6 +165,10 @@ export const useProductDefects = (
   timesProcessed?: number | null,
   /** Only verified records, as the plant's screen shows. */
   verifiedOnly?: boolean,
+  /** Dashboard date range. When set, the endpoint covers that whole window
+   *  instead of one production day — so a log opened from a ranged table can
+   *  account for the failures that table shows. */
+  range?: DateRange | null,
 ) => {
   const [data, setData] = useState<ProductDefectsResponse | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error" | "unsupported">(
@@ -176,7 +181,7 @@ export const useProductDefects = (
   // tester's header is worse than showing nothing. Changing only a display
   // filter must NOT, or the plant's two toggles wipe the table on every click
   // and a slow day leaves it blank for a minute.
-  const scopeKey = `${step}|${item}|${businessDate}|${resource}|${category}`;
+  const scopeKey = `${step}|${item}|${businessDate}|${range?.from ?? ""}|${range?.to ?? ""}|${resource}|${category}`;
   const lastScope = useRef(scopeKey);
 
   useEffect(() => {
@@ -192,6 +197,8 @@ export const useProductDefects = (
       try {
         const params = new URLSearchParams();
         if (businessDate) params.set("business_date", businessDate);
+        if (range?.from) params.set("date_from", range.from);
+        if (range?.to) params.set("date_to", range.to);
         if (resource) params.set("resource", resource);
         if (category) params.set("category", category);
         if (timesProcessed != null)

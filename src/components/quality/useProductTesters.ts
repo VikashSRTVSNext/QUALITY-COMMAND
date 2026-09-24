@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
+import type { DateRange } from "./dashboardFilters";
 
 export type CauseCell = {
   /** FCR / SMT / PPH / PPF / PPA / SQA / MOD_REJ. */
@@ -90,6 +91,10 @@ export const useProductTesters = (
   step: string | null,
   item: string | null,
   businessDate?: string | null,
+  /** Dashboard date range. When set, the endpoint covers that whole window
+   *  instead of one production day — so a log opened from a ranged table can
+   *  account for the failures that table shows. */
+  range?: DateRange | null,
 ) => {
   const [data, setData] = useState<ProductTestersResponse | null>(null);
   const [state, setState] = useState<
@@ -110,6 +115,8 @@ export const useProductTesters = (
       try {
         const params = new URLSearchParams();
         if (businessDate) params.set("business_date", businessDate);
+        if (range?.from) params.set("date_from", range.from);
+        if (range?.to) params.set("date_to", range.to);
         const qs = params.toString();
         const res = await fetch(
           apiUrl(
@@ -148,7 +155,9 @@ export const useProductTesters = (
     return () => {
       cancelled = true;
     };
-  }, [step, item, businessDate]);
+    // The two range STRINGS, not the object: the caller rebuilds it each
+    // render and an object dependency would refetch on every one.
+  }, [step, item, businessDate, range?.from, range?.to]);
 
   return { data, state, error };
 };

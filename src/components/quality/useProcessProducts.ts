@@ -143,6 +143,33 @@ export const useProcessProducts = (
   const rangeFrom = range?.from ?? null;
   const rangeTo = range?.to ?? null;
 
+  /**
+   * Drop the previous answer the moment the QUESTION changes.
+   *
+   * Without this, switching tabs left the outgoing step's rows on screen for the
+   * whole of the new request — and because the table only shows its centred
+   * "Loading…" when it has no data at all, nothing marked that a fetch was in
+   * flight. On a fast step it flickered; on a slow one it read as a tab that had
+   * switched and then frozen showing the wrong step's products.
+   *
+   * Done during render rather than in an effect, which is React's documented way
+   * to reset state when a prop changes: an effect would commit one frame of the
+   * old rows under the new tab's heading first.
+   *
+   * Page and sort deliberately do NOT clear it. Paging is the one case where
+   * keeping the previous page visible is right — it is the same question, one
+   * page further on, and blanking the table between pages would be worse.
+   */
+  const subject = `${step}\u0000${shift ?? ""}\u0000${rangeFrom ?? ""}\u0000${rangeTo ?? ""}`;
+  const [lastSubject, setLastSubject] = useState(subject);
+  if (subject !== lastSubject) {
+    setLastSubject(subject);
+    setData(null);
+    setState("loading");
+    setPage(1);
+    setSort(null);
+  }
+
   useEffect(() => {
     let cancelled = false;
     // The guard covers more than unmount: shift, page and sort can all change
@@ -184,16 +211,10 @@ export const useProcessProducts = (
     };
   }, [step, shift, rangeFrom, rangeTo, page, sort]);
 
-  // Reset paging whenever the query's subject changes. Shift is a
-  // dashboard-wide control, and step changes when the Product Yield panel
-  // switches tabs without remounting — in both cases page 4 of the old result
-  // may not exist in the new one.
-  useEffect(() => {
-    setPage(1);
-    setSort(null);
-    // Range belongs here with step and shift: a narrower window can have fewer
-    // pages than the one before it, so page 4 may simply not exist any more.
-  }, [step, shift, rangeFrom, rangeTo]);
+  // The page/sort reset that used to live here is now part of the subject check
+  // above, which runs a frame earlier. It mattered for the same reason the data
+  // clear does: the panel switches tabs WITHOUT remounting this hook, so page 4
+  // of the old step would otherwise be requested against the new one.
 
   const metric = data?.metric ?? "yield";
   const valueSort = metric === "failure" ? "failure" : "yield";
