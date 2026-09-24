@@ -1775,7 +1775,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       return (card.delta_vs_yesterday ?? 0) < 0; // trending down → red
     };
 
-    const SMT_CARD_NAMES = ["SPI", "DPMOI", "AXI - S", "SMT DEFECTS @ MFT"];
+    // AXI - S is deliberately NOT here. It still renders as its own tile in the
+    // SMT strip; it just does not vote on the heat map, so an amber or red AXI
+    // cannot turn the SMT zone. The zone is driven by SPI, DPMOI and SMT
+    // DEFECTS @ MFT alone.
+    //
+    // Names are the FEED's, not the display labels -- the dashboard renames a
+    // few tiles on screen, so "AXI - S" keeps its spaces here even though the
+    // strip shows "AXI-S". Adding a tile to the SMT zone means adding it to this
+    // list; RFM works the other way and takes everything with section "RFM".
+    const SMT_CARD_NAMES = ["SPI", "DPMOI", "SMT DEFECTS @ MFT"];
     const smtCards = processPerformance.filter((p) =>
       SMT_CARD_NAMES.includes(p.name),
     );
@@ -1803,7 +1812,20 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       ),
     );
 
-    const rfmCards = processPerformance.filter((p) => p.section === "RFM");
+    // Tiles that sit in the RFM strip but do not vote on the heat map. They keep
+    // their own colour; they just cannot turn the zone.
+    //
+    // An EXCLUDE list rather than an include list, because RFM is selected by
+    // section: membership follows the tile config, so a new RFM tile joins the
+    // zone automatically and only the deliberate opt-outs are named here. SMT
+    // above works the opposite way, off an explicit list of names.
+    //
+    // Feed names, not display labels -- the strip shows "BURN-IN-S" and
+    // "LBTS-S", but the card carries the spaced form.
+    const RFM_EXCLUDED_FROM_ZONE = ["BURN-IN - S", "LBTS - S"];
+    const rfmCards = processPerformance.filter(
+      (p) => p.section === "RFM" && !RFM_EXCLUDED_FROM_ZONE.includes(p.name),
+    );
     const rfmZoneStatus = bandedZoneStatus(rfmCards);
 
     const packagingZoneStatus = zoneStatusFromGrades([
