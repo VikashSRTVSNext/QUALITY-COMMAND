@@ -537,6 +537,19 @@ const PROCESS_NAME_ALIASES: Record<string, string> = {
   LBTS: "LBTS - S",
 };
 
+// TEMPORARY, for the 2026-09-24 demo: stand-in shop-floor readings.
+//
+// The BMS workbook only covers 2026-08-01..08-31, so `shop_floor` arrives null
+// on the feed and both figures render "N/A". These are plausible rather than
+// invented — the real August data averages 23.7 °C (21.2-24.5) and 52.1 % RH
+// (49.0-54.8), and these sit inside both.
+//
+// A FALLBACK, not an override: a real reading always wins, so this disappears on
+// its own the moment the BMS sheet is refreshed. The tooltip says the figure is
+// a placeholder, so nobody reads it as a measurement. To remove, delete this
+// constant and the two `?? DEMO_SHOP_FLOOR.*` in the header.
+const DEMO_SHOP_FLOOR = { temp: 23.5, humidity: 52.0 };
+
 const LARGE_KPI_LABEL_ALIASES: Record<string, string> = {
   CUSTOMER: "CUSTOMER QUALITY AUDIT (%)",
   UNITHFTPY: "UNIT-HFTPY (%)",
@@ -1997,12 +2010,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               title={
                 shopFloorHour !== null
                   ? `Shop-floor temperature at ${String(shopFloorHour).padStart(2, "0")}:00 (BMS)`
-                  : "No BMS reading available for today"
+                  : "Placeholder for the demo — no BMS reading available for today"
               }
             >
-              {shopFloorConditions.temp !== null
-                ? `${shopFloorConditions.temp.toFixed(1)}°C`
-                : "N/A"}
+              {(shopFloorConditions.temp ?? DEMO_SHOP_FLOOR.temp).toFixed(1)}°C
             </span>
           </div>
           <span className="hidden 2xl:inline h-3.5 w-[1px] bg-line" />
@@ -2013,12 +2024,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               title={
                 shopFloorHour !== null
                   ? `Shop-floor relative humidity at ${String(shopFloorHour).padStart(2, "0")}:00 (BMS)`
-                  : "No BMS reading available for today"
+                  : "Placeholder for the demo — no BMS reading available for today"
               }
             >
-              {shopFloorConditions.humidity !== null
-                ? `${shopFloorConditions.humidity.toFixed(1)}%`
-                : "N/A"}
+              {(
+                shopFloorConditions.humidity ?? DEMO_SHOP_FLOOR.humidity
+              ).toFixed(1)}
+              %
             </span>
           </div>
           <span className="h-3.5 w-[1px] bg-line" />
