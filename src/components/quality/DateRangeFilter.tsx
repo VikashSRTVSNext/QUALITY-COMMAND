@@ -22,7 +22,9 @@ import { CalendarDays, ChevronDown, X } from "lucide-react";
 import {
   MAX_RANGE_DAYS,
   rangeDayCount,
+  rangeEarliest,
   rangeError,
+  rangeLatest,
   type DateRange,
 } from "./dashboardFilters";
 
@@ -95,11 +97,16 @@ const pillLabel = (range: DateRange): string => {
 };
 
 // Inclusive spans, so "last 7 days" ends today and starts six days back.
+//
+// No 90D any more: MAX_RANGE_DAYS is 30, so that button could only ever produce
+// a range the picker then refuses. Offering a control that is always invalid is
+// worse than not offering it. Every preset here is filtered against the ceiling
+// below, so raising MAX_RANGE_DAYS is the only edit needed to bring one back.
 const PRESETS: { label: string; span: number }[] = [
   { label: "7D", span: 7 },
   { label: "30D", span: 30 },
   { label: "90D", span: 90 },
-];
+].filter((p) => p.span <= MAX_RANGE_DAYS);
 
 interface DateRangeFilterProps {
   /** The committed range — what is actually being fetched. */
@@ -199,7 +206,13 @@ export const DateRangeFilter = ({
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, from: e.target.value || null }))
                 }
-                max={draft.to ?? undefined}
+                // The window is a ROLLING one — today back MAX_RANGE_DAYS —
+                // so both ends are pinned to it as well as to each other. The
+                // native calendar then greys out every day it cannot answer,
+                // which is the difference between a control that refuses you and
+                // one that never offers the mistake.
+                min={rangeEarliest()}
+                max={draft.to ?? rangeLatest()}
               />
               <span className="text-ink-dim text-[11px]">–</span>
               <input
@@ -210,7 +223,10 @@ export const DateRangeFilter = ({
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, to: e.target.value || null }))
                 }
-                min={draft.from ?? undefined}
+                // Today at the latest: there is no data after it, and a
+                // future date is a request that can only come back empty.
+                max={rangeLatest()}
+                min={draft.from ?? rangeEarliest()}
               />
             </div>
 

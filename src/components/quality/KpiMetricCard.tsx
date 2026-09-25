@@ -1,6 +1,6 @@
 import { isNum } from "../../core/format";
 import { palette } from "../../theme/palette";
-import MetricSparkline from "./MetricSparkline";
+import TileSparkline from "./TileSparkline";
 import { getKpiIcon } from "./kpiIcons";
 import { GRADE_CSS, kpiCardGrade } from "./metrics";
 
@@ -8,12 +8,28 @@ interface KpiMetricCardProps {
   /** The matching entry from the feed's kpiCards list. */
   item: any;
   title: string;
+  /** What one trend point is: "hr" live, "day" under a date range. */
+  bucketLabel?: string;
 }
 
 // A Process Performance slot filled from the KPI feed instead of the process
 // feed — the FPY/SPY module and unit tiles, which the process payload does not
 // carry. Shows a target and yesterday's delta, which process tiles do not.
-export const KpiMetricCard = ({ item, title }: KpiMetricCardProps) => {
+//
+// The trend line is TileSparkline, the same one the process tiles use, so every
+// card in the strip hovers the same way: a marker on the nearest point, its
+// value, and the distance from target. It used to be MetricSparkline, which
+// draws the line but has no hover at all — so four cards in the middle of the
+// row silently did nothing under the pointer.
+//
+// Nothing is lost in the swap. MetricSparkline's one extra feature is a faint
+// dashed line for yesterday, and it draws that ONLY when there is no target to
+// compare against — these four all carry one, so it was never being drawn here.
+export const KpiMetricCard = ({
+  item,
+  title,
+  bucketLabel,
+}: KpiMetricCardProps) => {
   const target = (item as any).target as number | null | undefined;
 
   const kpiGrade = kpiCardGrade(item);
@@ -61,13 +77,20 @@ export const KpiMetricCard = ({ item, title }: KpiMetricCardProps) => {
         </span>
       </div>
 
-      <div className="h-[22px] 2xl:h-[28px] w-full flex-shrink-0 mt-auto mb-1 2xl:mb-1.5 overflow-hidden relative">
+      {/* overflow-VISIBLE, matching the process tiles: the hover marker and
+          its label sit slightly outside the line's box, and clipping them is
+          what makes the hover look broken rather than absent. */}
+      <div className="h-[22px] 2xl:h-[28px] w-full flex-shrink-0 mt-auto mb-1 2xl:mb-1.5 overflow-visible relative">
         {item.id !== 9 && (
-          <MetricSparkline
+          <TileSparkline
             points={item.points}
-            yesterdayPoints={item.yesterdayPoints}
-            stroke={trendColor}
+            // These four are all pass-rate percentages, so they read against
+            // target the same way a process yield tile does.
+            type="yield"
+            bucketLabel={bucketLabel}
+            color={trendColor}
             target={target}
+            targetDirection="higher"
           />
         )}
       </div>

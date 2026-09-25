@@ -28,6 +28,7 @@ import {
 import {
   useProductOptions,
   useRangeKpis,
+  useRangeProcessPerformance,
   useRangeProductYield,
 } from "../quality/useDashboardFilters";
 import DateRangeFilter from "../quality/DateRangeFilter";
@@ -978,6 +979,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     products: selectedProducts,
   });
   const rangedKpis = useRangeKpis(dateRange, shiftLetter);
+  // The process tiles' equivalent of rangedKpis. Inert until a date is set, at
+  // which point it takes over from the snapshot for the whole strip — before
+  // this only the four KPI tiles followed the picker.
+  const rangedProcess = useRangeProcessPerformance(dateRange);
   const productOptions = useProductOptions(dateRange);
 
   // Product-yield rows come from one of two sources with an identical row
@@ -1405,10 +1410,23 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         }
 
         if (rawKpiData.trend && Array.isArray(rawKpiData.trend.buckets)) {
-          trend = rawKpiData.trend.buckets.map(
-            (b: any) => b.today?.[sseKey] ?? null,
-          );
-          yesterdayPoints = rawKpiData.trend.buckets.map(
+          // Slice the buckets to the selected shift for the four KPIs that ARE
+          // per-shift, so the line under the number covers the same hours the
+          // number does. Before this the value followed the shift selector and
+          // the sparkline stayed on the whole day, which made the two disagree
+          // on the same card.
+          //
+          // Gated on isShiftSpecificKpi: the customer-audit KPI is a daily
+          // figure with no shift dimension, and cutting its trend to a third of
+          // the day would misreport it rather than narrow it.
+          const buckets: any[] =
+            isShiftSpecificKpi && shiftLetter
+              ? rawKpiData.trend.buckets.filter(
+                  (b: any) => (b.shift || "").toUpperCase() === shiftLetter,
+                )
+              : rawKpiData.trend.buckets;
+          trend = buckets.map((b: any) => b.today?.[sseKey] ?? null);
+          yesterdayPoints = buckets.map(
             (b: any) => b.yesterday?.[sseKey] ?? null,
           );
         }
@@ -1603,7 +1621,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   }, [rangeActive, rangedKpis.data]);
 
   useEffect(() => {
-    if (!rawProcessPerformance) return;
+    // One mapping, two sources. The ranged endpoint returns the same per-step
+    // shape the snapshot publishes precisely so this stays a single code path —
+    // a second mapping is a second place for the two to disagree about what a
+    // card means.
+    const processSource = rangeActive
+      ? rangedProcess.data
+      : rawProcessPerformance;
+    if (!processSource) return;
 
     const shiftMatch = activeShift.match(/Shift\s+([A-C])/i);
     const shiftLetter = shiftMatch ? shiftMatch[1].toUpperCase() : null;
@@ -1612,9 +1637,50 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
       return prev.map((prevItem) => {
         const apiKey =
           API_KEY_BY_TILE[prevItem.name] ?? prevItem.name.replace(/\s+/g, "_");
-        const incoming = rawProcessPerformance[apiKey];
+        const incoming = processSource[apiKey];
 
-        const item = { ...prevItem, trend: incoming?.trend ?? null };
+        /**
+         * The line under the number.
+         *
+         * Live, that is the snapshot's hourly buckets and it arrives ready to
+         * use. Over a RANGE there is no hourly series — the equivalent grain is
+         * a day — so one is built here from the `by_date` the ranged endpoint
+         * attaches to whichever block is being shown. That is the same thing the
+         * ranged KPI cards already do with `kpis.by_date`, which is why FPY and
+         * SPY have had a working line under a range while these did not.
+         *
+         * Each point is tagged with the SELECTED shift so getProcessTrendData's
+         * filter passes it through: the series is already for that shift, and
+         * the tag is what stops the filter discarding it. With no shift selected
+         * the points carry none and the filter does not run.
+         *
+         * The whole-day fallback to `incoming` is for DPMOI, which comes from a
+         * different mart and so publishes its day figures at the top level
+         * rather than under `day`. Same shape underneath, one level up.
+         */
+        const rangeBlock = rangeActive
+          ? shiftLetter
+            ? (incoming?.by_shift ?? []).find(
+                (b: any) => (b.shift || "").toUpperCase() === shiftLetter,
+              )
+            : (incoming?.day ?? incoming)
+          : null;
+        const rangeTrend = rangeBlock?.by_date?.length
+          ? {
+              metric: "value",
+              buckets: rangeBlock.by_date.map((d: any, i: number) => ({
+                index: i,
+                label: d.business_date,
+                shift: shiftLetter ?? undefined,
+                value: d.value,
+              })),
+            }
+          : null;
+
+        const item = {
+          ...prevItem,
+          trend: rangeActive ? rangeTrend : (incoming?.trend ?? null),
+        };
         if (incoming) {
           const target = incoming.target !== undefined ? incoming.target : null;
           const targetUnit = incoming.target_unit || null;
@@ -1638,7 +1704,25 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           }
 
           if (item.name === "DPMOI") {
-            const actual = incoming.index;
+            /**
+             * DPMOI publishes its whole-day figures at the top level, with the
+             * shifts alongside in `by_shift` — so unlike the yield tiles there
+             * is no `day` block to choose between. Picked here rather than
+             * read straight off `incoming` so the number agrees with the line,
+             * which is already the selected shift's series.
+             *
+             * The fallback is what the LIVE path takes: the snapshot carries no
+             * `by_shift` for DPMOI, so with a shift selected this lands on the
+             * whole-day figures exactly as it did before.
+             */
+            const dpmoBlock =
+              (shiftLetter
+                ? (incoming.by_shift ?? []).find(
+                    (b: any) => (b.shift || "").toUpperCase() === shiftLetter,
+                  )
+                : null) ?? incoming;
+
+            const actual = dpmoBlock.index;
             let meets = null;
             if (target !== null && targetDirection && isNum(actual)) {
               meets =
@@ -1655,9 +1739,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             return {
               ...item,
               data: {
-                defects: fmtCount(incoming.defects),
-                opportunities: fmtCount(incoming.opportunities),
-                index: fmtFixed(incoming.index, 2),
+                defects: fmtCount(dpmoBlock.defects),
+                opportunities: fmtCount(dpmoBlock.opportunities),
+                index: fmtFixed(dpmoBlock.index, 2),
               },
               status: statusMapped,
               color: colorMapped,
@@ -1759,7 +1843,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         return item;
       });
     });
-  }, [activeShift, rawProcessPerformance]);
+  }, [activeShift, rawProcessPerformance, rangeActive, rangedProcess.data]);
 
   useEffect(() => {
     const isKpiRed = (label: string): boolean => {
@@ -1891,6 +1975,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           item={procItem}
           title={title}
           activeShift={activeShift}
+          // One point is an hour live and a production day over a range.
+          bucketLabel={rangeActive ? "day" : "hr"}
           onDrill={({ step }) =>
             setYieldStepRequest({ step, nonce: Date.now() })
           }
@@ -1903,7 +1989,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         k.label === metricName || KPI_LABEL_ALIASES[metricName] === k.label,
     );
     if (kpiItem) {
-      return <KpiMetricCard item={kpiItem} title={title} />;
+      return (
+        <KpiMetricCard
+          item={kpiItem}
+          title={title}
+          bucketLabel={rangeActive ? "day" : "hr"}
+        />
+      );
     }
 
     return null;
@@ -2143,7 +2235,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               PROCESS PERFORMANCE
             </span>
             <span className="text-[10px] font-bold tracking-wider text-ink-dim normal-case">
-              [Hourly]
+              {/* The grain of the tiles' trend lines, which changes with the
+                  source: hourly buckets for the live day, one point per
+                  production day once a range is applied. */}
+              {rangeActive ? "[Daily]" : "[Hourly]"}
             </span>
           </div>
           <div className="flex flex-col gap-3 flex-grow justify-between relative">

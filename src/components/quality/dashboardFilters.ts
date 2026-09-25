@@ -21,8 +21,20 @@
 //     must go through buildDashboardParams rather than hand-rolling a query
 //     string.
 
-/** Hard ceiling from the backend: a longer span is rejected with a 400. */
-export const MAX_RANGE_DAYS = 400;
+/**
+ * Hard ceiling from the backend: a longer span is rejected with a 400.
+ *
+ * 30 days, not the 400 it used to be. The drill-downs read bronze directly and a
+ * long window turns that into a full scan — a 90-day tester breakdown measured
+ * 30s in production. Indexing the two scans fixes it properly and the migrations
+ * for that are written (sql/migrate_plcm_op_dt_index.sql and
+ * sql/migrate_rfm_defect_op_dt_index.sql); until they are applied this cap is
+ * what keeps the window inside what the current schema can answer quickly.
+ *
+ * Raise it here AND in app/dashboard.py — the two are checked independently and
+ * the client is the one that has to stop the request being made at all.
+ */
+export const MAX_RANGE_DAYS = 30;
 
 /** Both null = no range selected = live snapshot. */
 export interface DateRange {
@@ -66,6 +78,38 @@ export const rangeDayCount = (range: DateRange): number | null => {
  * firing a request that is certain to fail, and it lets the message name the
  * field the user has to fix instead of surfacing a raw `detail` string.
  */
+/**
+ * A production-day label `n` days from today, in the viewer's own calendar.
+ *
+ * Only ever used for the two ends of the selectable window, which is why the
+ * 06:15 production-day boundary is not chased here: between midnight and 06:15
+ * this names the day the backend would call yesterday, which shifts the window
+ * edge by one day at most. The server checks the same rule and is the authority;
+ * guessing the boundary client-side would just be a second, worse answer.
+ */
+const dayOffsetLabel = (n: number): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  const month = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+};
+
+/** The newest day that can be asked for: today. There is no data after it. */
+export const rangeLatest = (): string => dayOffsetLabel(0);
+
+/**
+ * The oldest day that can be asked for: MAX_RANGE_DAYS - 1 back, so the window
+ * is today plus the 29 days before it — 30 inclusive.
+ *
+ * This is a ROLLING window, not just a span limit. A 30-day range nine months
+ * ago is the right LENGTH but still refused: the drill-downs read bronze
+ * directly and that far back is exactly the unindexed scan the cap exists to
+ * avoid. Both rules are needed — the span stops a long window, this stops a
+ * distant one.
+ */
+export const rangeEarliest = (): string => dayOffsetLabel(-(MAX_RANGE_DAYS - 1));
+
 export const rangeError = (range: DateRange): string | null => {
   if (range.from && range.to && range.from > range.to) {
     return `Start date (${range.from}) is after end date (${range.to}).`;
@@ -73,6 +117,20 @@ export const rangeError = (range: DateRange): string | null => {
   const days = rangeDayCount(range);
   if (days !== null && days > MAX_RANGE_DAYS) {
     return `Range of ${days} days exceeds the ${MAX_RANGE_DAYS}-day maximum.`;
+  }
+  // Compared as strings, which is safe and exact for YYYY-MM-DD: the format is
+  // fixed-width and zero-padded, so lexical order IS date order. No parsing, so
+  // no timezone to get wrong.
+  const latest = rangeLatest();
+  const earliest = rangeEarliest();
+  for (const day of [range.from, range.to]) {
+    if (!day) continue;
+    if (day > latest) {
+      return `${day} is in the future — there is no data after ${latest}.`;
+    }
+    if (day < earliest) {
+      return `Only the last ${MAX_RANGE_DAYS} days are available (from ${earliest}).`;
+    }
   }
   return null;
 };

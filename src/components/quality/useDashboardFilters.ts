@@ -196,6 +196,77 @@ export const useRangeKpis = (
 };
 
 /**
+ * The Process Performance strip over a date range.
+ *
+ * The strip is normally fed by the SSE snapshot, which only ever describes the
+ * current production day. The four KPI-sourced tiles already had a ranged source
+ * (useRangeKpis) and followed the picker; the twelve process tiles beside them
+ * did not, so applying a range moved four cards and left the rest on today —
+ * one strip showing two different windows with nothing saying so.
+ *
+ * Returns the SAME per-step shape the snapshot publishes, so the dashboard swaps
+ * one for the other and keeps a single mapping. `trend` is null on every step:
+ * the sparkline is hourly buckets for one day and there is no such thing for a
+ * range, which is the same reason the ranged KPI cards lose their line.
+ */
+export const useRangeProcessPerformance = (range: DateRange) => {
+  const [data, setData] = useState<Record<string, any> | null>(null);
+  const [state, setState] = useState<QueryState>("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Inert without a range: the snapshot is the source then, and firing this
+    // anyway would race it to write the same cards.
+    if (!isRangeActive(range)) {
+      setData(null);
+      setState("idle");
+      setError(null);
+      return;
+    }
+    const invalid = rangeError(range);
+    if (invalid) {
+      setData(null);
+      setState("error");
+      setError(invalid);
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      setState("loading");
+      setError(null);
+      try {
+        // No shift in the request: the response carries every shift and the
+        // dashboard picks, the same way it does with the snapshot. Switching
+        // shift therefore costs no round trip.
+        const params = buildDashboardParams({ range, shift: null });
+        const res = await fetch(
+          apiUrl(`/dashboard/process-performance?${params}`),
+        );
+        if (!res.ok) throw new Error(await readError(res));
+        const json = await res.json();
+        if (cancelled) return;
+        setData(json?.steps ?? null);
+        setState("ready");
+      } catch (err) {
+        if (cancelled) return;
+        console.error("Error fetching ranged process performance:", err);
+        setData(null);
+        setState("error");
+        setError(err instanceof Error ? err.message : "Request failed.");
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [range.from, range.to]);
+
+  return { data, state, error };
+};
+
+/**
  * Options for the product dropdown: products that actually produced something
  * in the window.
  *

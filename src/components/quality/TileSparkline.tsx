@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { palette } from "../../theme/palette";
 
-// Hourly trend line inside a Process Performance tile. Hover shows the value
-// and how far it sits from target.
+// Trend line inside a Process Performance tile. Hover shows the value and how
+// far it sits from target.
+//
+// One point is one HOUR live and one production DAY under a date range, which is
+// why the tooltip's unit is a prop: the shape is identical, but a tooltip that
+// says "hr" over a week of daily points is simply wrong.
 //
 // When a target exists the y-axis is a fixed band centred on the target rather
 // than a fit to the data, so a small miss looks small and two tiles can be
@@ -13,12 +17,15 @@ export const TileSparkline = ({
   color,
   target,
   targetDirection,
+  bucketLabel = "hr",
 }: {
   points: (number | null)[];
   type: string;
   color: string;
   target?: number | null;
   targetDirection?: string | null;
+  /** What one point is. "hr" live, "day" over a range. */
+  bucketLabel?: string;
 }) => {
   const width = 100;
   const height = 24;
@@ -178,7 +185,7 @@ export const TileSparkline = ({
           }}
         >
           <span className="text-ink-muted text-[8.5px] font-bold uppercase mr-1">
-            hr
+            {bucketLabel}
           </span>
           <span className="text-white text-[9.5px] font-mono font-bold">
             {hovered.toFixed(2)}

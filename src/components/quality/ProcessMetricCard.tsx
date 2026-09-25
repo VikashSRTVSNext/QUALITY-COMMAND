@@ -10,6 +10,8 @@ interface ProcessMetricCardProps {
   title: string;
   /** Shift selected in the header — decides which hourly buckets to plot. */
   activeShift: string;
+  /** What one trend point is: "hr" live, "day" under a date range. */
+  bucketLabel?: string;
   /** Called with the Product Yield tab this tile maps to (see yieldTabs.ts)
    *  when the tile is clicked. Tiles with no tab stay inert. */
   onDrill?: (card: { step: string; title: string }) => void;
@@ -24,6 +26,7 @@ export const ProcessMetricCard = ({
   item,
   title,
   activeShift,
+  bucketLabel,
   onDrill,
 }: ProcessMetricCardProps) => {
   const { color: cardColor, red: cardIsRed } = cardVerdict(item);
@@ -122,6 +125,7 @@ export const ProcessMetricCard = ({
       color={cardColor}
       target={item.target}
       targetDirection={item.targetDirection}
+      bucketLabel={bucketLabel}
     />
       </div>
 
