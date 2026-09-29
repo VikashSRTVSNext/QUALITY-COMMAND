@@ -3,6 +3,8 @@ import { isNum } from "../../core/format";
 import RankedBarChart from "../charts/RankedBarChart.lazy";
 import type { RankedBar } from "../charts/RankedBarChart";
 import DrilldownModalShell from "./DrilldownModalShell";
+import SortableTh, { type SortState } from "./SortableTh";
+import { sortRows } from "./tableSort";
 import DateRangeFilter from "./DateRangeFilter";
 import { EMPTY_RANGE, type DateRange } from "./dashboardFilters";
 import {
@@ -129,6 +131,17 @@ type Props = {
  * modal. `records` is larger, because one screw failing both the torque and the
  * angle check is two records and one screw.
  */
+/** Sortable columns of the failure log. No `#`: that is the row ordinal, so
+ *  sorting by it is the unsorted order the header's third click already gives
+ *  back -- the same reason UNITS leaves its S.No column alone. */
+type LogKey =
+  | "sfc"
+  | "position"
+  | "check"
+  | "achieved"
+  | "failure_id"
+  | "date_time";
+
 export const ScrewPositionsModal: React.FC<Props> = ({
   line,
   operation,
@@ -146,6 +159,13 @@ export const ScrewPositionsModal: React.FC<Props> = ({
    * it. Same rule as the product drill-down, so both read the same way.
    */
   const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
+
+  /** Column sorting for the failure log. The whole log is already here, so it
+   *  sorts client-side like every other unpaginated table. */
+  const [logSort, setLogSort] = useState<SortState<LogKey>>({
+    key: null,
+    order: "asc",
+  });
 
   const { data, state, error } = useScrewPositions({
     line,
@@ -224,10 +244,15 @@ export const ScrewPositionsModal: React.FC<Props> = ({
 
   const shownLog: ScrewLogRow[] = useMemo(() => {
     if (!data) return [];
-    return position === null
-      ? data.log
-      : data.log.filter((r) => r.position === position);
-  }, [data, position]);
+    const rows =
+      position === null
+        ? data.log
+        : data.log.filter((r) => r.position === position);
+    // Sorted after the position filter, so picking a position on the map and
+    // then sorting narrows first and orders second -- the other way round would
+    // sort rows that are about to be thrown away.
+    return sortRows(rows, logSort, (r, key) => r[key]);
+  }, [data, position, logSort]);
 
   const stationPct =
     parent?.total_screws && isNum(parent.fail_count)
@@ -543,23 +568,55 @@ export const ScrewPositionsModal: React.FC<Props> = ({
             <table className="w-full border-collapse text-[11px]">
               <thead>
                 <tr>
+                  {/* The ordinal stays a plain header -- see LogKey. */}
                   <th className={`${TH} text-right w-10`}>#</th>
-                  <th className={`${TH} text-left`}>Board</th>
-                  <th className={`${TH} text-right`}>Screw</th>
-                  <th className={`${TH} text-left`}>Check</th>
-                  <th
+                  <SortableTh
+                    column="sfc"
+                    label="Board"
+                    sort={logSort}
+                    onSortChange={setLogSort}
+                    className={`${TH} text-left`}
+                  />
+                  <SortableTh
+                    column="position"
+                    label="Screw"
+                    sort={logSort}
+                    onSortChange={setLogSort}
+                    align="right"
+                    className={`${TH} text-right`}
+                  />
+                  <SortableTh
+                    column="check"
+                    label="Check"
+                    sort={logSort}
+                    onSortChange={setLogSort}
+                    className={`${TH} text-left`}
+                  />
+                  <SortableTh
+                    column="achieved"
+                    label="Achieved"
+                    sort={logSort}
+                    onSortChange={setLogSort}
+                    align="right"
                     className={`${TH} text-right`}
                     title="What the driver reached. 0 means the screw never bit."
-                  >
-                    Achieved
-                  </th>
-                  <th
+                  />
+                  <SortableTh
+                    column="failure_id"
+                    label="Fail ID"
+                    sort={logSort}
+                    onSortChange={setLogSort}
+                    align="right"
                     className={`${TH} text-right`}
                     title="The raw MES failure id the position is derived from"
-                  >
-                    Fail ID
-                  </th>
-                  <th className={`${TH} text-left`}>Time</th>
+                  />
+                  <SortableTh
+                    column="date_time"
+                    label="Time"
+                    sort={logSort}
+                    onSortChange={setLogSort}
+                    className={`${TH} text-left`}
+                  />
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/45 font-mono">

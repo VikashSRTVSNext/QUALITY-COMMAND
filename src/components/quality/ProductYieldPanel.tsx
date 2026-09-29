@@ -8,6 +8,7 @@ import {
 import { isNum } from "../../core/format";
 import { palette } from "../../theme/palette";
 import SortableTh, { SortState } from "./SortableTh";
+import { sortRows } from "./tableSort";
 import ProcessProductsTable from "./ProcessProductsTable";
 import ProductDrilldownModal from "./ProductDrilldownModal";
 import DpmoiPane from "./DpmoiPane";
@@ -187,7 +188,7 @@ const SmtStepPane = ({
   );
 };
 
-type SortKey = "name" | "tested" | "failed";
+type SortKey = "name" | "tested" | "failed" | "fpy" | "target" | "status";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -323,31 +324,19 @@ export const ProductYieldPanel = ({
       ?.scrollIntoView({ inline: "nearest", block: "nearest" });
   }, [requestedStep]);
 
-  const sortedRows = React.useMemo(() => {
-    if (!sort.key) return rows;
-    return [...rows].sort((a, b) => {
-      const key = sort.key!;
-      const order = sort.order;
-
-      if (key === "name") {
-        const valA = (a.name || "").toString().toLowerCase();
-        const valB = (b.name || "").toString().toLowerCase();
-        return order === "asc"
-          ? valA.localeCompare(valB)
-          : valB.localeCompare(valA);
-      } else {
-        const parseNum = (val: any) => {
-          if (val === null || val === undefined) return 0;
-          const clean = val.toString().replace(/,/g, "");
-          const num = parseFloat(clean);
-          return isNaN(num) ? 0 : num;
-        };
-        const valA = parseNum(a[key]);
-        const valB = parseNum(b[key]);
-        return order === "asc" ? valA - valB : valB - valA;
-      }
-    });
-  }, [rows, sort]);
+  /**
+   * Sorted client-side because this table holds every row and pages locally.
+   *
+   * The comparator is the shared one, so this table and the drill-down tables
+   * order identically. It replaced a local one that pushed every non-name column
+   * through parseFloat: that turned a missing value into 0 -- floating every
+   * product with no target to the top of an ascending sort -- and would have
+   * made the status column, which is text, sort as a screen of zeroes.
+   */
+  const sortedRows = React.useMemo(
+    () => sortRows(rows, sort, (row, key) => row[key]),
+    [rows, sort],
+  );
 
   const totalPages = Math.ceil(sortedRows.length / ITEMS_PER_PAGE) || 1;
 
@@ -505,15 +494,32 @@ export const ProductYieldPanel = ({
                   onSortChange={setSort}
                   align="center"
                 />
-                <th className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10">
-                  FPY %
-                </th>
-                <th className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10">
-                  TARGET YIELD %
-                </th>
-                <th className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10">
-                  FPY STATUS
-                </th>
+                <SortableTh
+                  column="fpy"
+                  label="FPY %"
+                  sort={sort}
+                  onSortChange={setSort}
+                  align="center"
+                />
+                <SortableTh
+                  column="target"
+                  label="TARGET YIELD %"
+                  sort={sort}
+                  onSortChange={setSort}
+                  align="center"
+                />
+                {/* Sorts by the status TEXT, which groups the table into
+                    Critical / Healthy / No Target / Warning blocks. Not by
+                    severity: that would be a second, invisible ordering of the
+                    same column, and the FPY % beside it already ranks by how
+                    bad. */}
+                <SortableTh
+                  column="status"
+                  label="FPY STATUS"
+                  sort={sort}
+                  onSortChange={setSort}
+                  align="center"
+                />
                 {activeTab === "UNITS" && (
                   <th className="pb-2 font-black text-center sticky top-0 bg-panel border-b border-line z-10">
                     AI RECOMMENDATION HFTPY

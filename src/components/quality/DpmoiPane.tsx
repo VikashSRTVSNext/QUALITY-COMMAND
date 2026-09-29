@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { isNum } from "../../core/format";
 import DpmoiDetailModal from "./DpmoiDetailModal";
+import SortableTh from "./SortableTh";
+import { useTableSort } from "./tableSort";
 import { useDpmoiProducts, type DpmoiRow } from "./useDpmoiProducts";
 import type { DateRange } from "./dashboardFilters";
 
@@ -49,6 +51,22 @@ export const DpmoiPane = ({
   shift?: string | null;
 }) => {
   const { data, state, error } = useDpmoiProducts(businessDate, range, shift);
+
+  /**
+   * Column sorting. Every row is already here -- this pane is not paginated --
+   * so it sorts client-side and the feed's own worst-first order is one more
+   * click away.
+   *
+   * `operation` sorts by the LABEL the cell shows, not the raw
+   * AOI_TOP_REWORK_IN04. A column that sorts by something the reader cannot see
+   * looks broken.
+   */
+  const { sort, setSort, sorted: sortedRows } = useTableSort<
+    DpmoiRow,
+    "item" | "operation" | "description" | "qty" | "dpmo"
+  >(data?.rows ?? [], (r, key) =>
+    key === "operation" ? opLabel(r.operation) : r[key],
+  );
   // The (item, operation) whose AOI defects are open. One at a time, which is
   // what a modal implies.
   const [openRow, setOpenRow] = useState<DpmoiRow | null>(null);
@@ -84,12 +102,36 @@ export const DpmoiPane = ({
         <table className="w-full border-collapse text-[11px]">
           <thead>
             <tr>
-              <th className={`${TH} text-left`}>Item</th>
-              <th className={`${TH} text-left`}>Op</th>
-              <th className={`${TH} text-left`}>Description</th>
-              <th className={`${TH} text-right`} title="Boards — a lot can carry several">
-                Qty
-              </th>
+              <SortableTh
+                column="item"
+                label="Item"
+                sort={sort}
+                onSortChange={setSort}
+                className={`${TH} text-left`}
+              />
+              <SortableTh
+                column="operation"
+                label="Op"
+                sort={sort}
+                onSortChange={setSort}
+                className={`${TH} text-left`}
+              />
+              <SortableTh
+                column="description"
+                label="Description"
+                sort={sort}
+                onSortChange={setSort}
+                className={`${TH} text-left`}
+              />
+              <SortableTh
+                column="qty"
+                label="Qty"
+                sort={sort}
+                onSortChange={setSort}
+                align="right"
+                className={`${TH} text-right`}
+                title="Boards — a lot can carry several"
+              />
               {/* Defects and Opportunities hidden on request. The data is
                   still in the payload (defects_total, opportunities), so
                   uncommenting these three blocks and putting the footer colSpan
@@ -100,13 +142,19 @@ export const DpmoiPane = ({
                 Opportunities
               </th>
               */}
-              <th className={`${TH} text-right`} title="Defects per million opportunities">
-                DPMOI
-              </th>
+              <SortableTh
+                column="dpmo"
+                label="DPMOI"
+                sort={sort}
+                onSortChange={setSort}
+                align="right"
+                className={`${TH} text-right`}
+                title="Defects per million opportunities"
+              />
             </tr>
           </thead>
           <tbody className="divide-y divide-line/45 font-mono">
-            {data.rows.map((r: DpmoiRow) => {
+            {sortedRows.map((r: DpmoiRow) => {
               // No opportunity row for this board: the rate is UNKNOWN, not zero.
               // Dimmed and dashed so it cannot be read as a clean result.
               const noDenominator = !r.opportunities;

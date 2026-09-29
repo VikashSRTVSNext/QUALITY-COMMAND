@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-r
 import { palette } from "../../theme/palette";
 import { defectCountTone } from "./metrics";
 import {
+  DEFAULT_DESC,
   fmtCount,
   fmtPct,
   type ProcessProductRow,
@@ -47,6 +48,7 @@ export const ProcessProductsTable = ({
     valueSort,
     applySort,
     activeSort,
+    activeOrder,
     totalPages,
     totalProducts,
     first,
@@ -63,7 +65,16 @@ export const ProcessProductsTable = ({
   const th =
     "pb-2 font-black sticky top-0 bg-panel border-b border-line z-10 select-none";
   const sortable = "cursor-pointer hover:text-white transition-colors";
-  const caret = (key: string) => (activeSort === key ? " ▾" : "");
+  // Same three glyphs SortableTh draws, for the same three states: the two
+  // halves of this panel must not indicate a sort differently. `activeOrder` is
+  // null while the server's default ordering is in force, which still counts as
+  // sorted -- that is the direction the key opens on.
+  const caret = (key: string) => {
+    if (activeSort !== key) return " ↕";
+    const desc =
+      activeOrder === null ? DEFAULT_DESC.has(key) : activeOrder === "desc";
+    return desc ? " ▼" : " ▲";
+  };
 
   // UNITS colours its FPY % and draws a small trend mark beside it. Same idea
   // here, off `meets_target` -- which the rows already carry, so this is a
@@ -119,8 +130,18 @@ export const ProcessProductsTable = ({
                 >
                   Product name{caret("product")}
                 </th>
-                <th className={`${th} text-center`}>Done</th>
-                <th className={`${th} text-center`}>OK</th>
+                <th
+                  className={`${th} ${sortable} text-center`}
+                  onClick={() => applySort("done")}
+                >
+                  Done{caret("done")}
+                </th>
+                <th
+                  className={`${th} ${sortable} text-center`}
+                  onClick={() => applySort("ok")}
+                >
+                  OK{caret("ok")}
+                </th>
                 <th
                   className={`${th} ${sortable} text-center`}
                   onClick={() => applySort("failed")}

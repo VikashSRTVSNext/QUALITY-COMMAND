@@ -3,6 +3,8 @@ import { ChevronRight } from "lucide-react";
 import { isNum } from "../../core/format";
 import DrilldownModalShell from "./DrilldownModalShell";
 import ScrewPositionsModal from "./ScrewPositionsModal";
+import SortableTh, { type SortState } from "./SortableTh";
+import { sortRows } from "./tableSort";
 import { useScrewDefects, type ScrewRow } from "./useScrewDefects";
 import type { DateRange } from "./dashboardFilters";
 
@@ -48,6 +50,18 @@ const rateColour = (pct: number | null) => {
  * Mirrors the plant's Power BI view column for column, so the two can be read
  * side by side.
  */
+/** Sortable columns of the line rollup. No `screws`: that is a per-station
+ *  attribute and the line row shows a dash for it. */
+type LineKey = "line" | "stations" | "boards" | "screws_total" | "fails" | "pct";
+type StationKey =
+  | "station"
+  | "product"
+  | "screws"
+  | "boards"
+  | "total_screws"
+  | "fails"
+  | "pct";
+
 export const ScrewDefectsPane = ({
   businessDate,
   range,
@@ -66,6 +80,25 @@ export const ScrewDefectsPane = ({
   // Closing it returns to that list rather than dismissing both, so the drill
   // path is walkable in either direction.
   const [openStation, setOpenStation] = useState<ScrewRow | null>(null);
+
+  /**
+   * Column sorting for the two tables here: the LINE rollup below and the
+   * station list inside the modal. Two states, because they are two tables and
+   * a sort chosen on one says nothing about the other.
+   *
+   * Declared up here with the other hooks, not beside the tables, because the
+   * loading and error branches return before that point -- a hook called after
+   * them would change the hook order between renders. The sorting itself is the
+   * pure `sortRows`, applied where the rows are actually built.
+   */
+  const [lineSort, setLineSort] = useState<SortState<LineKey>>({
+    key: null,
+    order: "asc",
+  });
+  const [stationSort, setStationSort] = useState<SortState<StationKey>>({
+    key: null,
+    order: "asc",
+  });
 
   if (state === "loading") {
     return (
@@ -114,12 +147,25 @@ export const ScrewDefectsPane = ({
     g.fails += r.fail_count ?? 0;
     byLine.set(key, g);
   }
-  // Worst rate first: the line to look at should not need finding.
-  const lines = [...byLine.entries()].sort(
-    (a, b) =>
-      (b[1].screws ? b[1].fails / b[1].screws : 0) -
-      (a[1].screws ? a[1].fails / a[1].screws : 0),
-  );
+  // Worst rate first: the line to look at should not need finding. That stays
+  // the DEFAULT; a column sort replaces it, and SortableTh's third click brings
+  // it back.
+  const lineRows = [...byLine.entries()]
+    .map(([line, g]) => ({
+      line,
+      g,
+      // Flattened so a column sorts on the figure the cell actually shows --
+      // "7 stations" sorts by 7, and the rate by the recomputed percentage
+      // rather than by fails, which would order a busy line above a bad one.
+      stations: g.stations.length,
+      boards: g.boards,
+      screws_total: g.screws,
+      fails: g.fails,
+      pct: g.screws ? (100 * g.fails) / g.screws : null,
+    }))
+    .sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0));
+
+  const lines = sortRows(lineRows, lineSort, (r, key) => r[key]);
 
   return (
     <div className="flex flex-col min-h-0">
@@ -127,26 +173,65 @@ export const ScrewDefectsPane = ({
         <table className="w-full border-collapse text-[11px]">
           <thead>
             <tr>
-              <th className={`${TH} text-left`}>Line / Station</th>
-              <th className={`${TH} text-left`}>Product</th>
+              <SortableTh
+                column="line"
+                label="Line / Station"
+                sort={lineSort}
+                onSortChange={setLineSort}
+                className={`${TH} text-left`}
+              />
+              <SortableTh
+                column="stations"
+                label="Product"
+                sort={lineSort}
+                onSortChange={setLineSort}
+                className={`${TH} text-left`}
+                title="Stations on this line"
+              />
+              {/* Not sortable: the line row shows a dash here, because stations
+                  on one line carry different screw counts. */}
               <th className={`${TH} text-right`} title="Screws per board at this station">
                 Screws
               </th>
-              <th className={`${TH} text-right`} title="Boards through the station">
-                Passed
-              </th>
-              <th className={`${TH} text-right`} title="Screws x Passed — the denominator">
-                Total screws
-              </th>
-              <th className={`${TH} text-right`}>Fails</th>
-              <th className={`${TH} text-right`} title="Fails / Total screws">
-                Defects %
-              </th>
+              <SortableTh
+                column="boards"
+                label="Passed"
+                sort={lineSort}
+                onSortChange={setLineSort}
+                align="right"
+                className={`${TH} text-right`}
+                title="Boards through the station"
+              />
+              <SortableTh
+                column="screws_total"
+                label="Total screws"
+                sort={lineSort}
+                onSortChange={setLineSort}
+                align="right"
+                className={`${TH} text-right`}
+                title="Screws x Passed — the denominator"
+              />
+              <SortableTh
+                column="fails"
+                label="Fails"
+                sort={lineSort}
+                onSortChange={setLineSort}
+                align="right"
+                className={`${TH} text-right`}
+              />
+              <SortableTh
+                column="pct"
+                label="Defects %"
+                sort={lineSort}
+                onSortChange={setLineSort}
+                align="right"
+                className={`${TH} text-right`}
+                title="Fails / Total screws"
+              />
             </tr>
           </thead>
           <tbody className="divide-y divide-line/45 font-mono">
-            {lines.map(([line, g]) => {
-              const linePct = g.screws ? (100 * g.fails) / g.screws : null;
+            {lines.map(({ line, g, pct: linePct }) => {
               return (
                 <tr
                   key={line}
@@ -307,20 +392,55 @@ export const ScrewDefectsPane = ({
                 <table className="w-full border-collapse text-[11px]">
                   <thead>
                     <tr>
-                      <th className={`${TH} text-left`}>Station</th>
-                      <th className={`${TH} text-left`}>Product</th>
-                      <th className={`${TH} text-right`}>Screws</th>
-                      <th className={`${TH} text-right`}>Passed</th>
-                      <th className={`${TH} text-right`}>Total screws</th>
-                      <th className={`${TH} text-right`}>Fails</th>
-                      <th className={`${TH} text-right`}>Defects %</th>
+                      {(
+                        [
+                          ["station", "Station", "left"],
+                          ["product", "Product", "left"],
+                          ["screws", "Screws", "right"],
+                          ["boards", "Passed", "right"],
+                          ["total_screws", "Total screws", "right"],
+                          ["fails", "Fails", "right"],
+                          ["pct", "Defects %", "right"],
+                        ] as [StationKey, string, "left" | "right"][]
+                      ).map(([col, label, align]) => (
+                        <SortableTh
+                          key={col}
+                          column={col}
+                          label={label}
+                          sort={stationSort}
+                          onSortChange={setStationSort}
+                          align={align}
+                          className={`${TH} text-${align}`}
+                        />
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line/45 font-mono">
-                    {/* Worst first: the station to look at should not need
-                        finding. */}
-                    {[...g.stations]
-                      .sort((a, b) => (b.defect_pct ?? 0) - (a.defect_pct ?? 0))
+                    {/* Worst first by default: the station to look at should
+                        not need finding. A column sort replaces that order, and
+                        the header's third click restores it. `station` and
+                        `product` sort by the LABELS the cells show, not by the
+                        raw operation code or the bare item. */}
+                    {sortRows(
+                      [...g.stations].sort(
+                        (a, b) => (b.defect_pct ?? 0) - (a.defect_pct ?? 0),
+                      ),
+                      stationSort,
+                      (r, key) =>
+                        key === "station"
+                          ? stationLabel(r.operation)
+                          : key === "product"
+                            ? (r.product_name ?? r.item)
+                            : key === "screws"
+                              ? r.no_of_screws
+                              : key === "boards"
+                                ? r.boards
+                                : key === "total_screws"
+                                  ? r.total_screws
+                                  : key === "fails"
+                                    ? r.fail_count
+                                    : r.defect_pct,
+                    )
                       .map((r: ScrewRow) => (
                         <tr
                           key={`${r.operation}-${r.item}`}

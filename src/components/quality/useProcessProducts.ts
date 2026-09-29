@@ -105,11 +105,24 @@ export const fmtCount = (v: number | null | undefined) =>
 export const fmtPct = (v: number | null | undefined) =>
   isNum(v) ? `${v.toFixed(2)}%` : "—";
 
+// Sort keys whose server default is DESCENDING, so the second click on them is
+// ascending. Mirrors _SORTS in the backend: counts open on "most first" and the
+// rate columns on "worst first", which for a yield is ascending.
+export const DEFAULT_DESC = new Set([
+  "failure",
+  "boards",
+  "done",
+  "ok",
+  "failed",
+]);
+
 // Column -> the `sort` value the endpoint accepts. Columns absent from here are
 // not sortable: the server owns the ordering and rejects an unknown key with a
 // 400 rather than returning an unsorted table.
 export const SORTABLE: Record<string, string> = {
   product: "product",
+  done: "done",
+  ok: "ok",
   failed: "failed",
   value: "value", // resolved per metric, below
 };
@@ -136,6 +149,9 @@ export const useProcessProducts = (
   // null lets the server choose: worst-first on whichever metric the step
   // reports, which is the ordering that makes this useful on open.
   const [sort, setSort] = useState<string | null>(null);
+  // Direction for that sort. null means "the server's own default for this
+  // key", which is worst-first -- the ordering the table opens on.
+  const [order, setOrder] = useState<"asc" | "desc" | null>(null);
 
   // Depend on the two STRINGS, not the object. The dashboard rebuilds the range
   // object on every render, and an object in the dependency list would refetch
@@ -184,6 +200,7 @@ export const useProcessProducts = (
         });
         if (shift) params.set("shift", shift);
         if (sort) params.set("sort", sort);
+        if (sort && order) params.set("order", order);
         // Sent only when set. Omitting both is what asks for the live current
         // day, so a range of nulls must NOT become empty query parameters.
         if (range?.from) params.set("date_from", range.from);
@@ -209,7 +226,7 @@ export const useProcessProducts = (
     return () => {
       cancelled = true;
     };
-  }, [step, shift, rangeFrom, rangeTo, page, sort]);
+  }, [step, shift, rangeFrom, rangeTo, page, sort, order]);
 
   // The page/sort reset that used to live here is now part of the subject check
   // above, which runs a frame earlier. It mattered for the same reason the data
@@ -219,13 +236,33 @@ export const useProcessProducts = (
   const metric = data?.metric ?? "yield";
   const valueSort = metric === "failure" ? "failure" : "yield";
 
+  /**
+   * Advance one column through the same three states the client-side tables
+   * use: the server's default direction, then the opposite, then back to the
+   * table's own opening order.
+   *
+   * Sorting is SERVER-side here, so each step is a request -- but the cycle has
+   * to match SortableTh's or the two halves of the Product Yield panel would
+   * answer a click differently.
+   */
   const applySort = useCallback(
     (column: keyof typeof SORTABLE) => {
       const key = column === "value" ? valueSort : SORTABLE[column];
-      setSort(key);
+      if (sort !== key) {
+        // First click: the server's own default for this key, which is worst
+        // or most first.
+        setSort(key);
+        setOrder(null);
+      } else if (order === null) {
+        setOrder(DEFAULT_DESC.has(key) ? "asc" : "desc");
+      } else {
+        // Third click: back to the order the table opened on.
+        setSort(null);
+        setOrder(null);
+      }
       setPage(1);
     },
-    [valueSort],
+    [valueSort, sort, order],
   );
 
   const activeSort = data?.sort ?? valueSort;
@@ -253,6 +290,7 @@ export const useProcessProducts = (
     valueSort,
     applySort,
     activeSort,
+    activeOrder: order,
     totalPages,
     totalProducts,
     first,
