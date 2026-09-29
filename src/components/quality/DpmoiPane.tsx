@@ -224,6 +224,9 @@ export const DpmoiPane = ({
           operation={openRow.operation ?? ""}
           description={openRow.description}
           businessDate={data.business_date}
+          // Seeds the modal's own picker, so the drill-down opens on the window
+          // the table was read from rather than snapping back to today.
+          range={range}
           onClose={() => setOpenRow(null)}
         />
       )}

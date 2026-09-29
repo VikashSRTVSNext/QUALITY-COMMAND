@@ -4,6 +4,8 @@ import RankedBarChart from "../charts/RankedBarChart.lazy";
 import type { RankedBar } from "../charts/RankedBarChart";
 import { seriesColor } from "../charts/seriesPalette";
 import DrilldownModalShell from "./DrilldownModalShell";
+import DateRangeFilter from "./DateRangeFilter";
+import { EMPTY_RANGE, type DateRange } from "./dashboardFilters";
 import SpiPadLogTable from "./SpiPadLogTable";
 import { EMPTY_SPI_FILTERS, useSpiDefects, type SpiFilters } from "./useSpiDefects";
 
@@ -25,6 +27,9 @@ type Props = {
   productName?: string | null;
   /** The day the products table is showing, so both levels describe one window. */
   businessDate?: string | null;
+  /** The dashboard's date range when the modal was opened. Seeds the picker
+   *  below; the modal then owns its own copy. */
+  range?: DateRange | null;
   onClose: () => void;
 };
 
@@ -55,14 +60,24 @@ export const SpiDefectsModal: React.FC<Props> = ({
   item,
   productName,
   businessDate,
+  range = null,
   onClose,
 }) => {
+  /**
+   * The window this modal is looking at.
+   *
+   * Seeded from the dashboard but owned here, so narrowing the range inside the
+   * drill-down does NOT move the table underneath it. Same rule as every other
+   * drill-down, so they all read the same way.
+   */
+  const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
+
   const [filters, setFilters] = useState<SpiFilters>(EMPTY_SPI_FILTERS);
   /** Which board's pads to show. Client-side — every board's pads are already in
    *  the one response, so narrowing to an SFC costs no request. */
   const [sfc, setSfc] = useState<string | null>(null);
 
-  const { data, state, error } = useSpiDefects(item, businessDate, filters);
+  const { data, state, error } = useSpiDefects(item, businessDate, filters, modalRange);
 
   const setFilter = (key: keyof SpiFilters, value: string | null) =>
     setFilters((f) => ({ ...f, [key]: f[key] === value ? null : value }));
@@ -150,9 +165,19 @@ export const SpiDefectsModal: React.FC<Props> = ({
               Clear filters
             </button>
           )}
-          <span className="text-[11px] font-bold text-ink-dim">
-            {data?.business_date ?? businessDate ?? ""}
-          </span>
+          {/* Was a static date label. The same control the dashboard header
+              uses, so the range reads and behaves identically in both places —
+              and with no range set it still shows the day the data is for,
+              which is all the label ever said. */}
+          <DateRangeFilter
+            value={modalRange}
+            onChange={setModalRange}
+            appliedLabel={
+              modalRange.from || modalRange.to
+                ? null
+                : (data?.business_date ?? businessDate ?? null)
+            }
+          />
         </>
       }
     >

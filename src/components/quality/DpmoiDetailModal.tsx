@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   BarChart3,
   Box,
-  CalendarDays,
   Cpu,
   Flame,
   Layers,
@@ -16,6 +15,8 @@ import RankedBarChart from "../charts/RankedBarChart.lazy";
 import type { RankedBar } from "../charts/RankedBarChart";
 import { seriesColor } from "../charts/seriesPalette";
 import DrilldownModalShell from "./DrilldownModalShell";
+import DateRangeFilter from "./DateRangeFilter";
+import { EMPTY_RANGE, type DateRange } from "./dashboardFilters";
 import {
   useDpmoiDetail,
   type DpmoiCategory,
@@ -105,6 +106,9 @@ type Props = {
   operation: string;
   description?: string | null;
   businessDate?: string | null;
+  /** The dashboard's date range when the modal was opened. Seeds the picker
+   *  below; the modal then owns its own copy. */
+  range?: DateRange | null;
   onClose: () => void;
 };
 
@@ -142,12 +146,23 @@ export const DpmoiDetailModal: React.FC<Props> = ({
   operation,
   description,
   businessDate,
+  range = null,
   onClose,
 }) => {
+  /**
+   * The window this modal is looking at.
+   *
+   * Seeded from the dashboard but owned here, so narrowing the range inside the
+   * drill-down does NOT move the DPMOI table underneath it. Same rule as the
+   * product drill-down, so both read the same way.
+   */
+  const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
+
   const { data, state, error } = useDpmoiDetail({
     item,
     operation,
     businessDate,
+    range: modalRange,
   });
 
   /** One category's defects. Client-side — the whole log is already here. */
@@ -306,10 +321,19 @@ export const DpmoiDetailModal: React.FC<Props> = ({
         // the sort of clutter this pass exists to remove. Escape still steps out
         // of a category before it closes the modal, via onBack above.
         <>
-          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-line bg-page/50 text-[11px] font-bold text-ink-muted whitespace-nowrap">
-            <CalendarDays size={12} className="text-ink-dim" />
-            {data?.business_date ?? businessDate ?? ""}
-          </span>
+          {/* Was a static date chip. The same control the dashboard header
+              uses, so the range reads and behaves identically in both places —
+              and with no range set it still shows the day the data is for,
+              which is all the chip ever said. */}
+          <DateRangeFilter
+            value={modalRange}
+            onChange={setModalRange}
+            appliedLabel={
+              modalRange.from || modalRange.to
+                ? null
+                : (data?.business_date ?? businessDate ?? null)
+            }
+          />
         </>
       }
     >
@@ -338,7 +362,7 @@ export const DpmoiDetailModal: React.FC<Props> = ({
               <span className="text-[9.5px] font-bold text-ink-dim/70 truncate">
                 {(parent?.defects_total ?? 0) > 0
                   ? `each against its own opportunities — the blended ${fmtIdx(parent?.dpmo)} hides which one is failing`
-                  : "each against its own opportunities — nothing was found on this board today"}
+                  : "each against its own opportunities — nothing was found on this board in this window"}
               </span>
             </div>
 
@@ -605,7 +629,7 @@ export const DpmoiDetailModal: React.FC<Props> = ({
                       className="py-10 text-center text-[11px] font-bold text-ink-dim"
                     >
                       {data.records === 0
-                        ? "No AOI defects on this board today — the index above is zero because nothing was found, not because nothing ran."
+                        ? "No AOI defects on this board in this window — the index above is zero because nothing was found, not because nothing ran."
                         : "No defects in this selection."}
                     </td>
                   </tr>

@@ -14,7 +14,7 @@ import DpmoiPane from "./DpmoiPane";
 import ScrewDefectsPane from "./ScrewDefectsPane";
 import { useProcessProducts } from "./useProcessProducts";
 import { DEFECT_DRILLDOWN_STEPS } from "./useProductDefects";
-import { yieldRowTone } from "./metrics";
+import { defectCountTone, yieldRowTone } from "./metrics";
 import SmtDefectsModal from "./SmtDefectsModal";
 import SpiDefectsModal from "./SpiDefectsModal";
 import {
@@ -134,6 +134,9 @@ const SpiStepPane = ({
           // The day the table itself is showing, so both levels describe one
           // window -- a mismatch here is what turns level two into a 404.
           businessDate={query.data?.business_date ?? null}
+          // Seeds the modal's own picker, so the drill-down opens on the window
+          // the table was read from rather than snapping back to today.
+          range={range}
           onClose={() => setSelected(null)}
         />
       )}
@@ -174,6 +177,9 @@ const SmtStepPane = ({
           item={selected.item}
           productName={selected.product_name}
           businessDate={query.data?.business_date ?? null}
+          // Seeds the modal's own picker, so the drill-down opens on the window
+          // the table was read from rather than snapping back to today.
+          range={range}
           onClose={() => setSelected(null)}
         />
       )}
@@ -599,8 +605,20 @@ export const ProductYieldPanel = ({
                       </span>
                     )}
                   </td>
-                  <td className="py-[2.5px] text-center text-white">
-                    {row.failed}
+                  {/* Red as soon as one board failed, green at zero — the
+                      count is the entry point to the NC log, so it reads before
+                      the percentage does. */}
+                  <td className="py-[2.5px] text-center font-bold">
+                    <span
+                      style={{ color: defectCountTone(row.failedCount) }}
+                      title={
+                        row.failedCount === 0
+                          ? "No failures recorded in this window"
+                          : undefined
+                      }
+                    >
+                      {row.failed}
+                    </span>
                   </td>
                   <td className="py-[2.5px] text-center font-bold">
                     <span style={{ color: yieldRowTone(row.status) }}>

@@ -290,8 +290,16 @@ export const ScrewDefectsPane = ({
                 </>
               }
               meta={
+                /* No picker here: this modal reads the pane's own rows, which
+                   are already fetched for the dashboard's range, so a second
+                   control would have to move the table behind it. It just has
+                   to SAY which window those rows cover -- a single date above a
+                   week of data is the one thing it must not do. The level below
+                   owns its own range. */
                 <span className="text-[11px] font-bold text-ink-dim">
-                  {data.business_date}
+                  {range?.from && range?.to && range.from !== range.to
+                    ? `${range.from} – ${range.to}`
+                    : (range?.from ?? range?.to ?? data.business_date)}
                 </span>
               }
             >
@@ -399,6 +407,9 @@ export const ScrewDefectsPane = ({
           item={openStation.item}
           productName={openStation.product_name}
           businessDate={data.business_date}
+          // Seeds the modal's own picker, so the drill-down opens on the window
+          // the table was read from rather than snapping back to today.
+          range={range}
           onClose={() => setOpenStation(null)}
         />
       )}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
+import type { DateRange } from "./dashboardFilters";
 
 /** One defect code from the inspection machine.
  *
@@ -149,6 +150,9 @@ export const useSpiDefects = (
   item: string | null,
   businessDate?: string | null,
   filters: SpiFilters = EMPTY_SPI_FILTERS,
+  /** Production-day range. When set it REPLACES businessDate -- the endpoint
+   *  ignores the single day once date_from/date_to are given. */
+  range?: DateRange | null,
 ) => {
   const [data, setData] = useState<SpiDefectsResponse | null>(null);
   const [state, setState] = useState<
@@ -171,6 +175,10 @@ export const useSpiDefects = (
       try {
         const params = new URLSearchParams();
         if (businessDate) params.set("business_date", businessDate);
+        // Sent after the single day on purpose: the endpoint ignores
+        // business_date once either of these is present, so a range always wins.
+        if (range?.from) params.set("date_from", range.from);
+        if (range?.to) params.set("date_to", range.to);
         if (resource) params.set("resource", resource);
         if (category) params.set("category", category);
         if (pcbSide) params.set("pcb_side", pcbSide);
@@ -182,15 +190,15 @@ export const useSpiDefects = (
           ),
         );
 
-        // 404 here is not a fault: the item had no boards on that day. Almost
-        // always a business_date that moved between the two calls, so the honest
-        // answer is "re-open it", not a red error.
+        // 404 here is not a fault: the item had no boards in that window.
+        // Almost always a business_date that moved between the two calls, so the
+        // honest answer is "re-open it", not a red error.
         if (res.status === 404) {
           if (cancelled) return;
           const body = await res.json().catch(() => null);
           setError(
             body?.detail ??
-              `No inspected boards for ${item} on this production day.`,
+              `No inspected boards for ${item} in this window.`,
           );
           setState("stale");
           return;
@@ -218,7 +226,7 @@ export const useSpiDefects = (
     // `data` is intentionally NOT cleared before a refetch: the filters change
     // often, and blanking the summary blocks on every chip click would make the
     // panel flicker even though those blocks never change.
-  }, [item, businessDate, resource, category, pcbSide]);
+  }, [item, businessDate, range?.from, range?.to, resource, category, pcbSide]);
 
   return { data, state, error };
 };

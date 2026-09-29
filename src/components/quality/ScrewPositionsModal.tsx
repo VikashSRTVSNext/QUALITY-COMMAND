@@ -3,6 +3,8 @@ import { isNum } from "../../core/format";
 import RankedBarChart from "../charts/RankedBarChart.lazy";
 import type { RankedBar } from "../charts/RankedBarChart";
 import DrilldownModalShell from "./DrilldownModalShell";
+import DateRangeFilter from "./DateRangeFilter";
+import { EMPTY_RANGE, type DateRange } from "./dashboardFilters";
 import {
   useScrewPositions,
   type ScrewLogRow,
@@ -97,6 +99,9 @@ type Props = {
   item?: string | null;
   productName?: string | null;
   businessDate?: string | null;
+  /** The dashboard's date range when the modal was opened. Seeds the picker
+   *  below; the modal then owns its own copy. */
+  range?: DateRange | null;
   onClose: () => void;
 };
 
@@ -130,13 +135,24 @@ export const ScrewPositionsModal: React.FC<Props> = ({
   item,
   productName,
   businessDate,
+  range = null,
   onClose,
 }) => {
+  /**
+   * The window this modal is looking at.
+   *
+   * Seeded from the dashboard but owned here, so widening the range to see
+   * whether a position keeps failing does NOT move the station table underneath
+   * it. Same rule as the product drill-down, so both read the same way.
+   */
+  const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
+
   const { data, state, error } = useScrewPositions({
     line,
     operation,
     item,
     businessDate,
+    range: modalRange,
   });
 
   /** One position's records, filtered client-side — the whole log is already
@@ -260,9 +276,19 @@ export const ScrewPositionsModal: React.FC<Props> = ({
               Clear position
             </button>
           )}
-          <span className="text-[11px] font-bold text-ink-dim">
-            {data?.business_date ?? businessDate ?? ""}
-          </span>
+          {/* Was a static date label. The same control the dashboard header
+              uses, so the range reads and behaves identically in both places —
+              and with no range set it still shows the day the data is for,
+              which is all the label ever said. */}
+          <DateRangeFilter
+            value={modalRange}
+            onChange={setModalRange}
+            appliedLabel={
+              modalRange.from || modalRange.to
+                ? null
+                : (data?.business_date ?? businessDate ?? null)
+            }
+          />
         </>
       }
     >

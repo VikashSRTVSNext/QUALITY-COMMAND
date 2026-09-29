@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { palette } from "../../theme/palette";
+import { defectCountTone } from "./metrics";
 import {
   fmtCount,
   fmtPct,
@@ -210,8 +211,11 @@ export const ProcessProductsTable = ({
                     <td className="py-[2.5px] text-center text-white">
                       {fmtCount(row.ok)}
                     </td>
-                    <td className="py-[2.5px] text-center text-white">
-                      {fmtCount(row.failed)}
+                    {/* Same rule as the UNITS table: one failure is red. */}
+                    <td className="py-[2.5px] text-center font-bold">
+                      <span style={{ color: defectCountTone(row.failed) }}>
+                        {fmtCount(row.failed)}
+                      </span>
                     </td>
                     {hasRecords && (
                       <td className="py-[2.5px] text-center text-ink-dim">

@@ -101,6 +101,23 @@ export const YIELD_STATUS_CSS: Record<string, string> = {
 export const yieldRowTone = (status: string) =>
   YIELD_STATUS_CSS[status] ?? GRADE_CSS.red;
 
+/** Colour for a failed/defect COUNT: red the moment there is one, green at zero.
+ *
+ *  Deliberately not graded against a target the way a yield percentage is. A
+ *  count is not a rate — one failure out of 5,000 is still a board that came off
+ *  the line bad and has an NC record behind it, and a tone that stayed green
+ *  until some threshold would hide exactly the row an operator is looking for.
+ *  The percentage column beside it is where proportion is judged.
+ *
+ *  Null (the count is unknown, shown as "—") is neither: it greys out rather
+ *  than claiming a clean run. */
+export const defectCountTone = (count: number | null | undefined): string =>
+  typeof count !== "number" || !Number.isFinite(count)
+    ? palette.inkMuted
+    : count > 0
+      ? GRADE_CSS.red
+      : GRADE_CSS.green;
+
 export const ERI_STATUS_CSS: Record<string, string> = {
   healthy: GRADE_CSS.green,
   at_risk: GRADE_CSS.yellow,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
+import type { DateRange } from "./dashboardFilters";
 
 /**
  * The AOI defects behind one DPMOI row — level two of the card.
@@ -102,12 +103,16 @@ export type DpmoiDetailQuery = {
   item: string;
   operation: string;
   businessDate?: string | null;
+  /** Production-day range. When set it REPLACES businessDate -- the endpoint
+   *  ignores the single day once date_from/date_to are given. */
+  range?: DateRange | null;
 };
 
 export const useDpmoiDetail = ({
   item,
   operation,
   businessDate,
+  range = null,
 }: DpmoiDetailQuery) => {
   const [data, setData] = useState<DpmoiDetailResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -120,6 +125,10 @@ export const useDpmoiDetail = ({
       try {
         const params = new URLSearchParams({ item, operation });
         if (businessDate) params.set("business_date", businessDate);
+        // Sent after the single day on purpose: the endpoint ignores
+        // business_date once either of these is present, so a range always wins.
+        if (range?.from) params.set("date_from", range.from);
+        if (range?.to) params.set("date_to", range.to);
 
         const res = await fetch(
           apiUrl(`/process/dpmoi/detail?${params.toString()}`),
@@ -155,7 +164,7 @@ export const useDpmoiDetail = ({
     return () => {
       cancelled = true;
     };
-  }, [item, operation, businessDate]);
+  }, [item, operation, businessDate, range?.from, range?.to]);
 
   return { data, state, error };
 };

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
+import type { DateRange } from "./dashboardFilters";
 
 /**
  * Which screw positions failed at one station — level three of the card.
@@ -97,6 +98,9 @@ export type ScrewPositionsQuery = {
   /** Null pools every product run at the station. */
   item?: string | null;
   businessDate?: string | null;
+  /** Production-day range. When set it REPLACES businessDate -- the endpoint
+   *  ignores the single day once date_from/date_to are given. */
+  range?: DateRange | null;
 };
 
 export const useScrewPositions = ({
@@ -104,6 +108,7 @@ export const useScrewPositions = ({
   operation,
   item,
   businessDate,
+  range = null,
 }: ScrewPositionsQuery) => {
   const [data, setData] = useState<ScrewPositionsResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -117,6 +122,10 @@ export const useScrewPositions = ({
         const params = new URLSearchParams({ line, operation });
         if (item) params.set("item", item);
         if (businessDate) params.set("business_date", businessDate);
+        // Sent after the single day on purpose: the endpoint ignores
+        // business_date once either of these is present, so a range always wins.
+        if (range?.from) params.set("date_from", range.from);
+        if (range?.to) params.set("date_to", range.to);
 
         const res = await fetch(
           apiUrl(`/process/screw-defects/positions?${params.toString()}`),
@@ -154,7 +163,7 @@ export const useScrewPositions = ({
     return () => {
       cancelled = true;
     };
-  }, [line, operation, item, businessDate]);
+  }, [line, operation, item, businessDate, range?.from, range?.to]);
 
   return { data, state, error };
 };

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
+import type { DateRange } from "./dashboardFilters";
 
 /** Every breakdown counts BOARDS and RECORDS separately, and they are not
  *  interchangeable: twenty bad joints on one board is one board with a print
@@ -112,6 +113,9 @@ export const useSmtDefects = (
   item: string | null,
   businessDate?: string | null,
   filters: SmtFilters = EMPTY_SMT_FILTERS,
+  /** Production-day range. When set it REPLACES businessDate -- the endpoint
+   *  ignores the single day once date_from/date_to are given. */
+  range?: DateRange | null,
 ) => {
   const [data, setData] = useState<SmtDefectsResponse | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error">(
@@ -134,6 +138,10 @@ export const useSmtDefects = (
       try {
         const params = new URLSearchParams();
         if (businessDate) params.set("business_date", businessDate);
+        // Sent after the single day on purpose: the endpoint ignores
+        // business_date once either of these is present, so a range always wins.
+        if (range?.from) params.set("date_from", range.from);
+        if (range?.to) params.set("date_to", range.to);
         if (resource) params.set("resource", resource);
         // "category", not "nc" -- the route is shared with the MES steps and
         // takes their parameter name, even though the response echoes the value
@@ -172,7 +180,15 @@ export const useSmtDefects = (
     // `data` is deliberately not cleared before a refetch: the filters change
     // often and the breakdowns never do, so blanking them would flicker the
     // panel for no reason.
-  }, [item, businessDate, resource, nc, timesProcessed]);
+  }, [
+    item,
+    businessDate,
+    range?.from,
+    range?.to,
+    resource,
+    nc,
+    timesProcessed,
+  ]);
 
   return { data, state, error };
 };

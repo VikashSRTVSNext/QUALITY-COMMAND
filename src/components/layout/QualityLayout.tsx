@@ -1027,6 +1027,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         item: row.item,
         tested: fmtCount(row.tested, "—"),
         failed: isNum(row.failed) ? row.failed.toString() : "—",
+        // The same number unformatted. The table colours the cell on it, and
+        // "—" cannot be told apart from a genuine zero once it is a string.
+        failedCount: isNum(row.failed) ? row.failed : null,
         fpy: row.fpy,
         spy: row.spy,
         target: row.target_yield,
