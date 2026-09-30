@@ -25,6 +25,7 @@ import {
   rangeEarliest,
   rangeError,
   rangeLatest,
+  shortDay,
   type DateRange,
 } from "./dashboardFilters";
 
@@ -58,30 +59,6 @@ const daysAgoLabel = (n: number): string => {
   const month = `${d.getMonth() + 1}`.padStart(2, "0");
   const day = `${d.getDate()}`.padStart(2, "0");
   return `${d.getFullYear()}-${month}-${day}`;
-};
-
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-/** "2026-09-21" -> "21 Sep". Split, not parsed: these are opaque day labels
- *  owned by the backend, and building a Date from one only invites the timezone
- *  shift that renames the day. */
-const shortDay = (label: string): string => {
-  const [, month, day] = label.split("-");
-  const name = MONTHS[Number(month) - 1];
-  return name ? `${day} ${name}` : label;
 };
 
 /** What the collapsed pill reads. Kept short enough to sit in the header at

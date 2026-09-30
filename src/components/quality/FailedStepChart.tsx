@@ -2,12 +2,16 @@ import { useMemo, useState } from "react";
 import RankedBarChart from "../charts/RankedBarChart.lazy";
 import type { RankedBar } from "../charts/RankedBarChart";
 import StackedBarChart from "../charts/StackedBarChart.lazy";
+import ParetoChart from "../charts/ParetoChart.lazy";
 import type { BarCategory, BarSeries } from "../charts/StackedBarChart";
 import { MAX_SERIES, OTHER_COLOR, seriesColor } from "../charts/seriesPalette";
 import type { NcLogRow, ProductDefectsQuery } from "./useProductDefects";
+import type { ChartView } from "./ChartViewToggle";
+import { defectDateBars } from "./defectDateBars";
+import { productionDayOf, shortDay } from "./dashboardFilters";
 
 /** What goes on the x-axis. */
-type Dimension = "failure" | "nc" | "cause";
+type Dimension = "failure" | "nc" | "cause" | "date";
 
 const DIMENSIONS: { key: Dimension; label: string; hint: string }[] = [
   {
@@ -25,9 +29,17 @@ const DIMENSIONS: { key: Dimension; label: string; hint: string }[] = [
     label: "Cause",
     hint: "What the failure was dispositioned as — FCR, SMT, SQA…",
   },
+  {
+    key: "date",
+    label: "Date",
+    hint: "WHEN it failed — one bar per production day (06:15 to 06:15). Offered once the window holds more than one day",
+  },
 ];
 
 const OTHER_SERIES = "__other_tester__";
+const NO_DATE = "__no_date__";
+
+
 const NO_CAUSE = "__no_cause__";
 const NO_FAILURE_ID = "__no_failure_id__";
 
@@ -35,6 +47,9 @@ type Props = {
   query: ProductDefectsQuery;
   /** Opens the NC log, same signature as everywhere else in the drill-down. */
   onDrill: (resource: string | null, category: string | null) => void;
+  /** Owned by the modal, because its toggle is one control for the whole
+   *  drill-down rather than one per chart. */
+  view?: ChartView;
 };
 
 /**
@@ -56,12 +71,42 @@ type Props = {
  * they are today's rework on an earlier day's failures, and belong to that day's
  * yield.
  */
-export const FailedStepChart = ({ query, onDrill }: Props) => {
+export const FailedStepChart = ({
+  query,
+  onDrill,
+  view = "bars",
+}: Props) => {
   // Failure ID by default. The NC code and its description say what the operator
   // DID ("Retest (False failure)"), which is the answer to a different question
   // and made the bars read as a list of actions rather than of failures.
-  const [dimension, setDimension] = useState<Dimension>("failure");
+  const [dimensionChoice, setDimensionChoice] =
+    useState<Dimension>("failure");
   const { data, state, error } = query;
+
+  /**
+   * Distinct production days present in the log.
+   *
+   * Its own memo, keyed on the DATA only. The big one below is keyed on the
+   * dimension too, and the count has to be known before the dimension is
+   * resolved — it is what decides whether "Date" is a legal choice at all.
+   */
+  const dayCount = useMemo(() => {
+    const days = new Set<string>();
+    for (const r of data?.nc_log ?? []) {
+      // Carried-over rows are excluded here exactly as they are everywhere else
+      // at this level, so the day count matches the bars it gates.
+      if (!r.first_pass_unit) continue;
+      const day = productionDayOf(r.date_time);
+      if (day) days.add(day);
+    }
+    return days.size;
+  }, [data]);
+
+  // Derived, not stored: a log that narrows to one day must not leave the chart
+  // on a dimension its own selector no longer lists.
+  const dimension: Dimension =
+    dimensionChoice === "date" && dayCount <= 1 ? "failure" : dimensionChoice;
+  const setDimension = setDimensionChoice;
 
   const { categories, series, testerBars, excluded } = useMemo(() => {
     const rows: NcLogRow[] = data?.nc_log ?? [];
@@ -100,6 +145,8 @@ export const FailedStepChart = ({ query, onDrill }: Props) => {
     const keyOf = (r: NcLogRow) => {
       if (dimension === "failure") return r.failure_id ?? NO_FAILURE_ID;
       if (dimension === "nc") return r.nc ?? "—";
+      // ISO, so the chronological sort below is a plain string compare.
+      if (dimension === "date") return productionDayOf(r.date_time) ?? NO_DATE;
       return r.category ?? NO_CAUSE;
     };
     const labelOf = (r: NcLogRow) => {
@@ -109,6 +156,10 @@ export const FailedStepChart = ({ query, onDrill }: Props) => {
       // the code is two characters and is what the floor actually says out loud.
       // The description moves to the tooltip, where it has room to be read.
       if (dimension === "nc") return r.nc || r.nc_description || "—";
+      if (dimension === "date") {
+        const day = productionDayOf(r.date_time);
+        return day ? shortDay(day) : "No date";
+      }
       return r.category ?? "No category yet";
     };
 
@@ -165,11 +216,18 @@ export const FailedStepChart = ({ query, onDrill }: Props) => {
             (dimension === "failure" || dimension === "nc" ? actionText : ""),
         };
       })
-      // Pareto order. The chart does not re-sort, so this is the sort.
-      .sort(
-        (a, b) =>
-          Object.values(b.values).reduce((x, y) => x + y, 0) -
-          Object.values(a.values).reduce((x, y) => x + y, 0),
+      // Pareto order, EXCEPT for dates.
+      //
+      // Time is an ordered dimension: ranking days biggest-first throws away the
+      // one thing the date view is for, which is whether the failures are a
+      // spike on one shift or a level that never came down. The Pareto view
+      // re-sorts its own copy descending, so both readings stay available —
+      // chronological in the bars, ranked under the curve.
+      .sort((a, b) =>
+        dimension === "date"
+          ? a.key.localeCompare(b.key)
+          : Object.values(b.values).reduce((x, y) => x + y, 0) -
+            Object.values(a.values).reduce((x, y) => x + y, 0),
       );
 
     // The same testers, the same colours, ranked by how much they contributed.
@@ -199,6 +257,24 @@ export const FailedStepChart = ({ query, onDrill }: Props) => {
     };
   }, [data, dimension]);
 
+  /**
+   * One bar per production day, for the Pareto.
+   *
+   * Independent of `dimension` on purpose: the Pareto answers one question —
+   * which DAYS carry the failures — while the dimension selector belongs to the
+   * bars. Keeping the two apart is what lets the bars stay a category
+   * breakdown split by tester without the Pareto having to be single-series
+   * over the same axis.
+   */
+  const dateBars: RankedBar[] = useMemo(
+    () =>
+      defectDateBars(
+        (data?.nc_log ?? []).filter((r) => r.first_pass_unit),
+        (r) => r.date_time,
+      ),
+    [data],
+  );
+
   // "idle" is the beat between flipping to this view and the request starting.
   // Falling through would blank the panel for a frame.
   if (state === "loading" || state === "idle") {
@@ -223,27 +299,46 @@ export const FailedStepChart = ({ query, onDrill }: Props) => {
     <div className="flex-1 overflow-auto px-6 pt-3 pb-4">
       <div className="flex items-center justify-between gap-4 mb-1">
         <span className="text-[10px] font-black uppercase tracking-wider text-ink-dim">
-          Failures by {label?.label.toLowerCase()}, split by tester
+          {view === "pareto"
+            ? "Failures by date"
+            : `Failures by ${label?.label.toLowerCase()}, split by tester`}
         </span>
-        <div className="flex items-center gap-1">
-          {DIMENSIONS.map((d) => (
-            <button
-              key={d.key}
-              type="button"
-              onClick={() => setDimension(d.key)}
-              title={d.hint}
-              className={`border text-[9.5px] font-bold px-2 py-0.5 rounded uppercase transition-colors cursor-pointer ${
-                dimension === d.key
-                  ? "bg-tab-active text-white border-tab-border/50"
-                  : "bg-page text-ink-dim border-line hover:bg-line"
-              }`}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
+        {/* The dimension selector belongs to the bars. The Pareto is one
+            question — which days carry the failures — so a selector there would
+            offer choices it does not honour. */}
+        {view !== "pareto" && (
+          <div className="flex items-center gap-1">
+            {DIMENSIONS.map((d) => (
+              <button
+                key={d.key}
+                type="button"
+                onClick={() => setDimension(d.key)}
+                title={d.hint}
+                className={`border text-[9.5px] font-bold px-2 py-0.5 rounded uppercase transition-colors cursor-pointer ${
+                  dimension === d.key
+                    ? "bg-tab-active text-white border-tab-border/50"
+                    : "bg-page text-ink-dim border-line hover:bg-line"
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
+      {view === "pareto" ? (
+        <ParetoChart
+          bars={dateBars}
+          unit="events"
+          maxBars={12}
+          height={300}
+          labelChars={12}
+          noun={{ one: "day", many: "days" }}
+          emptyLabel="No failure events recorded for this product in this window."
+        />
+      ) : (
+      <>
       <div className="flex flex-col xl:flex-row gap-5 xl:gap-7">
       <div className="flex-1 min-w-0">
       <StackedBarChart
@@ -293,34 +388,40 @@ export const FailedStepChart = ({ query, onDrill }: Props) => {
         </div>
       </div>
       </div>
+      </>
+      )}
 
-      <div className="text-[10px] text-ink-dim leading-relaxed mt-3">
-        One bar per {label?.label.toLowerCase()}, stacked by the tester the
-        failure happened on. Counts failure EVENTS, so a unit that failed twice
-        counts twice — the distinct-unit figure is in each tooltip.
-        {excluded > 0 && (
-          <>
-            {" "}
-            {excluded} row(s) carried over from an earlier day are excluded, as
-            they are everywhere else at this level.
-          </>
-        )}
-        {dimension === "failure" && (
-          <>
-            {" "}
-            Bars are failure IDs — what failed. The disposition (what was done
-            about it) is in each tooltip. The failed TEST STEP name is still not
-            in this payload; a failure ID is the nearest stable handle on it.
-          </>
-        )}
-        {dimension === "nc" && (
-          <>
-            {" "}
-            NC codes describe the ACTION taken, not the failure — switch to
-            Failure ID for what actually failed.
-          </>
-        )}
-      </div>
+      {/* Bars only. The Pareto is one chart with one caption under it, and a
+          paragraph explaining a picture that explains itself is the clutter
+          this view exists to avoid. */}
+      {view !== "pareto" && (
+        <div className="text-[10px] text-ink-dim leading-relaxed mt-3">
+          One bar per {label?.label.toLowerCase()}, stacked by the tester the
+          failure happened on. Counts failure EVENTS, so a unit that failed twice
+          counts twice — the distinct-unit figure is in each tooltip.
+          {excluded > 0 && (
+            <>
+              {" "}
+              {excluded} row(s) carried over from an earlier day are excluded, as
+              they are everywhere else at this level.
+            </>
+          )}
+          {dimension === "failure" && (
+            <>
+              {" "}
+              Bars are failure IDs — what failed. The disposition (what was done
+              about it) is in each tooltip.
+            </>
+          )}
+          {dimension === "nc" && (
+            <>
+              {" "}
+              NC codes describe the ACTION taken, not the failure — switch to
+              Failure ID for what actually failed.
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };

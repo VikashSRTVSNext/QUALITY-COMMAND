@@ -16,7 +16,17 @@ import type { RankedBar } from "../charts/RankedBarChart";
 import { seriesColor } from "../charts/seriesPalette";
 import DrilldownModalShell from "./DrilldownModalShell";
 import DateRangeFilter from "./DateRangeFilter";
-import { EMPTY_RANGE, type DateRange } from "./dashboardFilters";
+import ParetoChart from "../charts/ParetoChart.lazy";
+import { defectDateBars } from "./defectDateBars";
+import ChartViewToggle, {
+  paretoAvailable,
+  type ChartView,
+} from "./ChartViewToggle";
+import {
+  EMPTY_RANGE,
+  rangeDayCount,
+  type DateRange,
+} from "./dashboardFilters";
 import {
   useDpmoiDetail,
   type DpmoiCategory,
@@ -157,6 +167,8 @@ export const DpmoiDetailModal: React.FC<Props> = ({
    * product drill-down, so both read the same way.
    */
   const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
+  /** Bars or Pareto for the three cuts. */
+  const [chartView, setChartView] = useState<ChartView>("bars");
 
   const { data, state, error } = useDpmoiDetail({
     item,
@@ -164,6 +176,18 @@ export const DpmoiDetailModal: React.FC<Props> = ({
     businessDate,
     range: modalRange,
   });
+
+  const canPareto = paretoAvailable(modalRange);
+  const rangeDays = rangeDayCount(modalRange);
+  // Derived, not stored: narrowing back to one day must not leave the modal on
+  // a view its own toggle no longer offers.
+  const view: ChartView = canPareto ? chartView : "bars";
+
+  /** One bar per production day, for the Pareto view. */
+  const dateBars = useMemo(
+    () => defectDateBars(data?.log ?? [], (r) => r.date_time),
+    [data],
+  );
 
   /** One category's defects. Client-side — the whole log is already here. */
   const [category, setCategory] = useState<string | null>(null);
@@ -325,6 +349,13 @@ export const DpmoiDetailModal: React.FC<Props> = ({
               uses, so the range reads and behaves identically in both places —
               and with no range set it still shows the day the data is for,
               which is all the chip ever said. */}
+          {canPareto && (
+            <ChartViewToggle
+              value={view}
+              onChange={setChartView}
+              days={rangeDays}
+            />
+          )}
           <DateRangeFilter
             value={modalRange}
             onChange={setModalRange}
@@ -470,6 +501,19 @@ export const DpmoiDetailModal: React.FC<Props> = ({
           <div
             className={`flex-shrink-0 max-h-[30vh] overflow-y-auto ${BAND} pt-0`}
           >
+            {view === "pareto" ? (
+              // One chart, one question: which production days carry the
+              // defects. The three category cuts stay in the bars view.
+              <ParetoChart
+                bars={dateBars}
+                unit="defects"
+                maxBars={12}
+                height={210}
+                labelChars={12}
+                noun={{ one: "day", many: "days" }}
+                emptyLabel="No dated defects in this window."
+              />
+            ) : (
             <div className="flex flex-col lg:flex-row gap-2.5 items-stretch">
               {cut(
                 BarChart3,
@@ -497,6 +541,7 @@ export const DpmoiDetailModal: React.FC<Props> = ({
                 "No components in this selection.",
               )}
             </div>
+            )}
           </div>
 
           {/* ---- 3. the table's own toolbar ----------------------------- */}

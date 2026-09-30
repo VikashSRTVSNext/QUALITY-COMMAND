@@ -5,7 +5,17 @@ import type { RankedBar } from "../charts/RankedBarChart";
 import { seriesColor } from "../charts/seriesPalette";
 import DrilldownModalShell from "./DrilldownModalShell";
 import DateRangeFilter from "./DateRangeFilter";
-import { EMPTY_RANGE, type DateRange } from "./dashboardFilters";
+import ParetoChart from "../charts/ParetoChart.lazy";
+import { defectDateBars } from "./defectDateBars";
+import ChartViewToggle, {
+  paretoAvailable,
+  type ChartView,
+} from "./ChartViewToggle";
+import {
+  EMPTY_RANGE,
+  rangeDayCount,
+  type DateRange,
+} from "./dashboardFilters";
 import SmtLogTable from "./SmtLogTable";
 import {
   EMPTY_SMT_FILTERS,
@@ -68,10 +78,28 @@ export const SmtDefectsModal: React.FC<Props> = ({
   const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
 
   const [filters, setFilters] = useState<SmtFilters>(EMPTY_SMT_FILTERS);
+  /** Bars or Pareto for the cuts below. Reset to bars whenever the Pareto stops
+   *  being offered, so narrowing to a single day cannot leave the modal showing
+   *  a view its own toggle no longer lists. */
+  const [chartView, setChartView] = useState<ChartView>("bars");
   /** One board's records, filtered client-side — the whole log is already here. */
   const [sfc, setSfc] = useState<string | null>(null);
 
   const { data, state, error } = useSmtDefects(item, businessDate, filters, modalRange);
+
+  const canPareto = paretoAvailable(modalRange);
+  const rangeDays = rangeDayCount(modalRange);
+  // Derived during render rather than in an effect: the toggle and the charts
+  // must never disagree for a frame about which view is showing.
+  const view: ChartView = canPareto ? chartView : "bars";
+
+  /** One bar per production day. Built from `log`, which is the only row-level
+   *  array here — so unlike the cuts above it, this does follow an active
+   *  filter. With no filter set (the default) the two cover the same rows. */
+  const dateBars = useMemo(
+    () => defectDateBars(data?.log ?? [], (r) => r.date_time),
+    [data],
+  );
 
   const setFilter = (key: "resource" | "nc", value: string | null) =>
     setFilters((f) => ({ ...f, [key]: f[key] === value ? null : value }));
@@ -160,6 +188,13 @@ export const SmtDefectsModal: React.FC<Props> = ({
               Clear filters
             </button>
           )}
+          {canPareto && (
+            <ChartViewToggle
+              value={view}
+              onChange={setChartView}
+              days={rangeDays}
+            />
+          )}
           {/* Was a static date label. The same control the dashboard header
               uses, so the range reads and behaves identically in both places —
               and with no range set it still shows the day the data is for,
@@ -191,6 +226,20 @@ export const SmtDefectsModal: React.FC<Props> = ({
         <>
           {/* ---- the four cuts. Always the product's FULL figures ---------- */}
           <div className="flex-shrink-0 px-6 pt-3 pb-3 border-b border-line/60 bg-page/25">
+            {view === "pareto" ? (
+              // One chart, one question: which production days carry the
+              // defects. The category cuts stay in the bars view.
+              <ParetoChart
+                bars={dateBars}
+                unit="records"
+                maxBars={12}
+                height={230}
+                labelChars={12}
+                noun={{ one: "day", many: "days" }}
+                emptyLabel="No dated records in this window."
+              />
+            ) : (
+              <>
             <div className="flex flex-col xl:flex-row gap-5 xl:gap-7">
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] font-black uppercase tracking-wider text-ink-dim mb-2">
@@ -263,7 +312,10 @@ export const SmtDefectsModal: React.FC<Props> = ({
                 </span>
               )}
             </div>
+              </>
+            )}
           </div>
+
 
           {/* ---- boards, filtered client-side ------------------------------ */}
           {(() => {

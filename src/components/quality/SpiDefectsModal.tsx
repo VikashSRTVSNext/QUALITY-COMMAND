@@ -5,7 +5,17 @@ import type { RankedBar } from "../charts/RankedBarChart";
 import { seriesColor } from "../charts/seriesPalette";
 import DrilldownModalShell from "./DrilldownModalShell";
 import DateRangeFilter from "./DateRangeFilter";
-import { EMPTY_RANGE, type DateRange } from "./dashboardFilters";
+import ParetoChart from "../charts/ParetoChart.lazy";
+import { defectDateBars } from "./defectDateBars";
+import ChartViewToggle, {
+  paretoAvailable,
+  type ChartView,
+} from "./ChartViewToggle";
+import {
+  EMPTY_RANGE,
+  rangeDayCount,
+  type DateRange,
+} from "./dashboardFilters";
 import SpiPadLogTable from "./SpiPadLogTable";
 import { EMPTY_SPI_FILTERS, useSpiDefects, type SpiFilters } from "./useSpiDefects";
 
@@ -73,11 +83,35 @@ export const SpiDefectsModal: React.FC<Props> = ({
   const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
 
   const [filters, setFilters] = useState<SpiFilters>(EMPTY_SPI_FILTERS);
+  /** Bars or Pareto for the cuts below. */
+  const [chartView, setChartView] = useState<ChartView>("bars");
   /** Which board's pads to show. Client-side — every board's pads are already in
    *  the one response, so narrowing to an SFC costs no request. */
   const [sfc, setSfc] = useState<string | null>(null);
 
   const { data, state, error } = useSpiDefects(item, businessDate, filters, modalRange);
+
+  const canPareto = paretoAvailable(modalRange);
+  const rangeDays = rangeDayCount(modalRange);
+  // Derived, not stored: narrowing back to one day must not leave the modal on
+  // a view its own toggle no longer offers.
+  const view: ChartView = canPareto ? chartView : "bars";
+
+  /**
+   * One bar per production day, for the Pareto view.
+   *
+   * A pad row carries no time of its own, so each is dated through the BOARD it
+   * sits on. Boards are the only thing here with a timestamp; joining on sfc is
+   * what makes a pad datable at all.
+   */
+  const dateBars = useMemo(() => {
+    const timeBySfc = new Map<string, string | null>();
+    for (const b of data?.boards ?? []) timeBySfc.set(b.sfc, b.board_time);
+    return defectDateBars(
+      data?.pad_log ?? [],
+      (r) => timeBySfc.get(r.sfc) ?? null,
+    );
+  }, [data]);
 
   const setFilter = (key: keyof SpiFilters, value: string | null) =>
     setFilters((f) => ({ ...f, [key]: f[key] === value ? null : value }));
@@ -165,6 +199,13 @@ export const SpiDefectsModal: React.FC<Props> = ({
               Clear filters
             </button>
           )}
+          {canPareto && (
+            <ChartViewToggle
+              value={view}
+              onChange={setChartView}
+              days={rangeDays}
+            />
+          )}
           {/* Was a static date label. The same control the dashboard header
               uses, so the range reads and behaves identically in both places —
               and with no range set it still shows the day the data is for,
@@ -211,6 +252,20 @@ export const SpiDefectsModal: React.FC<Props> = ({
         <>
           {/* ---- summary: always the product's FULL figures ---------------- */}
           <div className="flex-shrink-0 px-6 pt-3 pb-3 border-b border-line/60 bg-page/25">
+            {view === "pareto" ? (
+              // One chart, one question: which production days carry the
+              // defects. The category cuts stay in the bars view.
+              <ParetoChart
+                bars={dateBars}
+                unit="pads"
+                maxBars={12}
+                height={230}
+                labelChars={12}
+                noun={{ one: "day", many: "days" }}
+                emptyLabel="No dated pads in this window."
+              />
+            ) : (
+              <>
             <div className="flex flex-col xl:flex-row gap-5 xl:gap-7">
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] font-black uppercase tracking-wider text-ink-dim mb-2">
@@ -286,6 +341,8 @@ export const SpiDefectsModal: React.FC<Props> = ({
                 </button>
               ))}
             </div>
+              </>
+            )}
           </div>
 
           {/* ---- boards: the SFC level, filtered client-side --------------- */}

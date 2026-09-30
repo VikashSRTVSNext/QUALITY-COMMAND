@@ -3,7 +3,15 @@ import { ChevronRight } from "lucide-react";
 import { isNum } from "../../core/format";
 import DrilldownModalShell from "./DrilldownModalShell";
 import DateRangeFilter from "./DateRangeFilter";
-import { EMPTY_RANGE, type DateRange } from "./dashboardFilters";
+import {
+  EMPTY_RANGE,
+  rangeDayCount,
+  type DateRange,
+} from "./dashboardFilters";
+import ChartViewToggle, {
+  paretoAvailable,
+  type ChartView,
+} from "./ChartViewToggle";
 import FailedStepChart from "./FailedStepChart";
 import NcLogTable from "./NcLogTable";
 import TesterYieldTable from "./TesterYieldTable";
@@ -77,6 +85,8 @@ export const ProductDrilldownModal: React.FC<Props> = ({
   const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
   const [selection, setSelection] = useState<Selection>(null);
   const [view, setView] = useState<Level2View>("table");
+  /** Bars or Pareto inside the chart view. */
+  const [chartView, setChartView] = useState<ChartView>("bars");
   // The plant's two NC-log filters. Off by default: their screen hides later
   // attempts and unverified records, which makes its log shorter than the floor
   // actually is. Held here rather than in the table so they survive stepping back
@@ -85,6 +95,12 @@ export const ProductDrilldownModal: React.FC<Props> = ({
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   // Which unit's inspection images are open, if any.
   const [imagesFor, setImagesFor] = useState<string | null>(null);
+
+  const canPareto = paretoAvailable(modalRange);
+  const rangeDays = rangeDayCount(modalRange);
+  // Derived, not stored: narrowing back to one day must not leave the chart on
+  // a view its own toggle no longer offers.
+  const activeChartView: ChartView = canPareto ? chartView : "bars";
 
   const testers = useProductTesters(step, item, businessDate, modalRange);
   // The NC log loads once a tester or cause is chosen -- or once the chart view
@@ -225,6 +241,16 @@ export const ProductDrilldownModal: React.FC<Props> = ({
               ))}
             </div>
           )}
+          {/* Only in the chart view: the table below has no bars to re-draw,
+              and a control that did nothing where it sat would be worse than
+              one that appears when it applies. */}
+          {view === "chart" && canPareto && (
+            <ChartViewToggle
+              value={activeChartView}
+              onChange={setChartView}
+              days={rangeDays}
+            />
+          )}
           {/* The same control the dashboard header uses, so the range reads
               and behaves identically in both places. With no range set it shows
               the day the data is for, which is what the static label used to
@@ -298,6 +324,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
                   />
                 ) : (
                   <FailedStepChart
+                    view={activeChartView}
                     query={defects}
                     onDrill={(resource, category) =>
                       setSelection({ resource, category })

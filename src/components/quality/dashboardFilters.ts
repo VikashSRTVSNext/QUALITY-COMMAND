@@ -62,6 +62,43 @@ export const isRangeActive = (range: DateRange): boolean =>
  * the backend, not instants, and treating them as local dates makes the span
  * off by one for anyone west of UTC.
  */
+/**
+ * The production day a log timestamp falls in.
+ *
+ * NOT the calendar date. A production day runs 06:15 to 06:15, so a failure
+ * stamped 02:00 on the 12th belongs to the 11th — bucketing on the date part
+ * alone would split one night shift across two columns and credit half of it to
+ * a day that had not started.
+ *
+ * Parsed with a regex rather than `new Date()`: the string is plant local time
+ * with no zone on it, and letting the browser interpret it would shift the day
+ * for anyone not sitting in IST.
+ */
+export const productionDayOf = (
+  dateTime: string | null | undefined,
+): string | null => {
+  if (!dateTime) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(dateTime);
+  if (!m) return null;
+  const [, y, mo, d, hh, mm] = m;
+  if (`${hh}:${mm}` >= "06:15") return `${y}-${mo}-${d}`;
+  // Before the boundary: the previous day. UTC arithmetic on a pure date, so
+  // the rollback cannot be moved by the viewer's own zone.
+  const prev = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d) - 1));
+  return prev.toISOString().slice(0, 10);
+};
+
+const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+
+/** "2026-09-27" -> "27 Sep". Split, not parsed: these are opaque production-day
+ *  labels owned by the backend, and building a Date from one only invites the
+ *  timezone shift that renames the day. */
+export const shortDay = (label: string): string => {
+  const [, month, day] = label.split("-");
+  const name = MONTHS[Number(month) - 1];
+  return name ? `${day} ${name}` : label;
+};
+
 export const rangeDayCount = (range: DateRange): number | null => {
   if (!range.from || !range.to) return null;
   const from = Date.parse(`${range.from}T00:00:00Z`);

@@ -244,10 +244,19 @@ export const useProductDefects = (
     return () => {
       cancelled = true;
     };
+    // range.from/range.to, not `range`: the modal rebuilds the object on every
+    // render, and depending on it would refetch the log continuously.
+    //
+    // They were MISSING here while the request already sent them, so the log
+    // and the chart above it kept whichever window they first loaded with —
+    // widening 7 days to 30 refetched the tester table beside them and left
+    // these two showing the 7. A parameter that is sent has to be depended on.
   }, [
     step,
     item,
     businessDate,
+    range?.from,
+    range?.to,
     resource,
     category,
     timesProcessed,
