@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
+  CalendarDays,
   CheckCircle2,
   Clock,
   Info,
@@ -37,6 +38,12 @@ const SEVERITY = {
     cls: "border-warning/40 bg-warning/[0.10] text-warning",
     Icon: AlertTriangle,
   },
+  // No status token for amber; the mail uses amber for Moderate, so match it.
+  moderate: {
+    label: "Moderate",
+    cls: "border-amber-400/40 bg-amber-400/[0.10] text-amber-400",
+    Icon: AlertTriangle,
+  },
   info: {
     label: "Info",
     cls: "border-info/40 bg-info/[0.10] text-info",
@@ -46,9 +53,6 @@ const SEVERITY = {
 
 const severityOf = (s: string) =>
   SEVERITY[s as keyof typeof SEVERITY] ?? SEVERITY.info;
-
-const fmtNum = (v: number | null) =>
-  v === null || !Number.isFinite(v) ? null : String(v);
 
 /** "2026-09-23T06:15:00+05:30" -> "23 Sep 2026, 06:15". Null-safe; returns null
  *  rather than a dash so callers can drop the whole line. */
@@ -65,12 +69,24 @@ const fmtWhen = (iso: string | null): string | null => {
   });
 };
 
+/** "2026-10-08" -> "08 Oct 2026". Parsed as a plain calendar date so the
+ *  viewer's timezone cannot shift it by a day. */
+const fmtDate = (ymd: string | null): string | null => {
+  if (!ymd) return null;
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return ymd;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
 /**
- * "about 43 minutes" until the deadline, or null once it has passed.
+ * "about 43 minutes" until the next reminder mail, or null once it has passed.
  *
  * Computed ONCE on render rather than ticking. A countdown that moves while
- * someone is typing their note adds pressure without adding information, and the
- * two-hour window is not precise enough to warrant a running clock.
+ * someone is typing their note adds pressure without adding information.
  */
 const timeUntil = (iso: string | null): string | null => {
   if (!iso) return null;
@@ -85,6 +101,13 @@ const timeUntil = (iso: string | null): string | null => {
 
 const CARD =
   "rounded-xl border border-line bg-panel/70 p-4 sm:p-5";
+
+const LABEL =
+  "text-[9.5px] font-black uppercase tracking-wider text-ink-dim";
+
+/** Said on both the form and the read-only screen, so it is written once. */
+const WATCH_NOTE =
+  "After a reply, the system watches this alert for 2 hours and closes it if no new defect occurs in that time.";
 
 /** The page frame. Every screen sits in this, so the shell is written once. */
 const Frame = ({ children }: { children: React.ReactNode }) => (
@@ -145,9 +168,8 @@ const ErrorScreen = ({
  *  an answered alert reads identically to an open one above the fold. */
 const AlertBody = ({ d }: { d: AlertAckDetail }) => {
   const sev = severityOf(d.severity);
-  const measured = fmtNum(d.current_value);
-  const expected = fmtNum(d.target_value);
   const notified = fmtWhen(d.notified_at);
+  const snoozed = fmtDate(d.snooze_until);
 
   return (
     <div className={CARD}>
@@ -167,28 +189,35 @@ const AlertBody = ({ d }: { d: AlertAckDetail }) => {
         )}
       </div>
 
+      {/* d.title is a raw "|"-separated row, so it is never the heading. The
+          product is the most recognisable thing on a shop floor. */}
       <h1 className="text-[18px] sm:text-[20px] font-black text-white leading-snug mt-3">
-        {d.title}
+        {d.product_name ?? "Attention Center alert"}
+        {d.item_code && (
+          <span className="ml-2 font-mono text-[13px] font-bold text-ink-muted">
+            {d.item_code}
+          </span>
+        )}
       </h1>
 
-      {(d.product_name || d.item_code) && (
-        <p className="text-[12px] text-ink-muted mt-1.5">
-          {d.product_name}
-          {d.product_name && d.item_code ? " · " : ""}
-          {d.item_code && <span className="font-mono">{d.item_code}</span>}
-        </p>
-      )}
-
-      {measured && (
-        <p className="text-[13px] text-ink-secondary mt-3">
-          Measured <span className="font-bold text-white">{measured}</span>
-          {expected && (
-            <>
-              {" "}
-              <span className="text-ink-dim">(expected {expected})</span>
-            </>
-          )}
-        </p>
+      {/* The same label / value table the mail shows. Stacks under 420px so a
+          long value never squeezes its label off a narrow phone. */}
+      {d.detail_lines.length > 0 && (
+        <dl className="mt-3 divide-y divide-line/60 border-y border-line/60">
+          {d.detail_lines.map((line, i) => (
+            <div
+              key={`${line.label}-${i}`}
+              className="grid grid-cols-1 min-[420px]:grid-cols-[150px_1fr] gap-x-3 gap-y-0.5 py-2"
+            >
+              <dt className="text-[11px] font-bold text-ink-dim">
+                {line.label}
+              </dt>
+              <dd className="text-[13px] text-ink-secondary break-words whitespace-pre-wrap">
+                {line.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
       )}
 
       {/* AI-written, and only sometimes present. */}
@@ -206,9 +235,63 @@ const AlertBody = ({ d }: { d: AlertAckDetail }) => {
       {notified && (
         <p className="text-[11px] text-ink-dim mt-4">Raised {notified}</p>
       )}
+      {snoozed && (
+        <p className="text-[11px] text-ink-dim mt-1">
+          Hidden until the end of {snoozed}
+        </p>
+      )}
     </div>
   );
 };
+
+/** A labelled textarea with its inline error, used for both comment and cause. */
+const TextField = ({
+  id,
+  label,
+  value,
+  onChange,
+  error,
+  maxLength,
+  rows,
+  placeholder,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  error?: string;
+  maxLength: number;
+  rows: number;
+  placeholder: string;
+}) => (
+  <div className="flex flex-col gap-1.5">
+    <label htmlFor={id} className={LABEL}>
+      {label}
+    </label>
+    <textarea
+      id={id}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      maxLength={maxLength}
+      rows={rows}
+      required
+      aria-invalid={!!error}
+      placeholder={placeholder}
+      className={`w-full rounded-lg bg-page border px-3 py-2.5 text-[14px] text-white leading-relaxed outline-none resize-y placeholder:text-ink-dim/50 ${
+        error
+          ? "border-critical focus:border-critical"
+          : "border-line focus:border-info/60"
+      }`}
+    />
+    {error ? (
+      <p className="text-[12px] font-bold text-critical">{error}</p>
+    ) : (
+      <p className="text-[11px] text-ink-dim">
+        {value.length}/{maxLength}
+      </p>
+    )}
+  </div>
+);
 
 export const AlertAckPage = () => {
   // window.location.search, not useSearchParams: the token must not go through
@@ -223,15 +306,24 @@ export const AlertAckPage = () => {
     error,
     reply,
     submitting,
-    commentError,
-    clearCommentError,
+    fieldErrors,
+    clearFieldError,
     submit,
   } = useAlertAck(search);
 
   const [comment, setComment] = useState("");
-  const trimmed = comment.trim();
+  const [cause, setCause] = useState("");
+  const [snoozeUntil, setSnoozeUntil] = useState("");
+  // Both fields are required for both buttons; the server refuses a blank one
+  // anyway, and finding that out costs a round trip on a phone.
+  const canSubmit = !!comment.trim() && !!cause.trim() && !submitting;
 
-  const closesIn = useMemo(
+  const send = (action: "ack" | "resolve") => {
+    if (!canSubmit) return;
+    submit({ action, comment, cause, snoozeUntil: snoozeUntil || undefined });
+  };
+
+  const nextReminderIn = useMemo(
     () => (detail ? timeUntil(detail.deadline_at) : null),
     [detail],
   );
@@ -265,9 +357,9 @@ export const AlertAckPage = () => {
               className="text-healthy flex-shrink-0 mt-0.5"
             />
             <div className="min-w-0">
-              {/* The API's own wording, matched to the three real outcomes.
-                  Not reworded here — a reply to an already auto-closed alert
-                  gets different copy, and inventing our own would lose that. */}
+              {/* The API's own wording for the four outcomes (resolved,
+                  acknowledged, snoozed, noted). Not reworded here — inventing
+                  our own would lose the distinction. */}
               <h1 className="text-[16px] font-black text-white leading-snug">
                 {reply.title}
               </h1>
@@ -316,12 +408,28 @@ export const AlertAckPage = () => {
               {detail.resolution_comment}
             </p>
           )}
+          {detail.cause && (
+            <div className="mt-3">
+              <div className={LABEL}>Cause</div>
+              <p className="text-[13px] text-ink-secondary leading-relaxed mt-1 whitespace-pre-wrap">
+                {detail.cause}
+              </p>
+            </div>
+          )}
+          {/* Still being watched until it closes; once closed_at is set the
+              note would describe something that has already happened. */}
+          {!detail.closed_at && (
+            <p className="flex items-start gap-1.5 text-[11px] text-ink-dim mt-4 leading-relaxed">
+              <Clock size={12} className="flex-shrink-0 mt-0.5" />
+              {WATCH_NOTE}
+            </p>
+          )}
         </div>
       ) : (
         <>
-          {/* can_reply true AND auto_closed is deliberate, not a bug: nobody
-              answered inside the window, the alert closed itself and left the
-              dashboard, but we still want to know what happened. */}
+          {/* can_reply true AND auto_closed is deliberate, not a bug: only on
+              alerts raised before 2026-10-07, when unanswered alerts closed
+              after two hours. We still want to know what happened. */}
           {detail.ack_state === "auto_closed" && (
             <div className="rounded-xl border border-warning/30 bg-warning/[0.07] p-3 text-[12px] text-ink-secondary leading-relaxed">
               Nobody replied within the two-hour window, so this closed on its
@@ -333,63 +441,127 @@ export const AlertAckPage = () => {
             className={`${CARD} flex flex-col gap-3`}
             onSubmit={(e) => {
               e.preventDefault();
-              if (trimmed) submit("resolve", comment);
+              send("resolve");
             }}
           >
-            <label
-              htmlFor="ack-comment"
-              className="text-[9.5px] font-black uppercase tracking-wider text-ink-dim"
-            >
-              What did you do about it?
-            </label>
-            <textarea
+            <TextField
               id="ack-comment"
+              label="What did you find, and what did you do?"
               value={comment}
-              onChange={(e) => {
-                setComment(e.target.value);
-                if (commentError) clearCommentError();
+              onChange={(v) => {
+                setComment(v);
+                clearFieldError("comment");
               }}
+              error={fieldErrors.comment}
               maxLength={detail.comment_max_length}
               rows={5}
               placeholder="Fixture on tester 7 re-seated and re-calibrated; re-ran 20 boards, all passed."
-              className={`w-full rounded-lg bg-page border px-3 py-2.5 text-[14px] text-white leading-relaxed outline-none resize-y placeholder:text-ink-dim/50 ${
-                commentError
-                  ? "border-critical focus:border-critical"
-                  : "border-line focus:border-info/60"
-              }`}
             />
-            {commentError ? (
-              <p className="text-[12px] font-bold text-critical">
-                {commentError}
-              </p>
-            ) : (
-              <p className="text-[11px] text-ink-dim">
-                {comment.length}/{detail.comment_max_length}
-              </p>
-            )}
+            <TextField
+              id="ack-cause"
+              label="Cause"
+              value={cause}
+              onChange={(v) => {
+                setCause(v);
+                clearFieldError("cause");
+              }}
+              error={fieldErrors.cause}
+              maxLength={detail.comment_max_length}
+              rows={2}
+              placeholder="Loose RF cable on the fixture"
+            />
 
-            {/* Primary. Disabled on a blank comment: the server refuses one
-                anyway, and finding that out costs a round trip on a phone. */}
+            {/* Optional. Hides this alert — and the same product + stage +
+                category + failure ID / part number on later days — until the
+                end of the chosen date. */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="ack-snooze" className={LABEL}>
+                Hide until (optional)
+              </label>
+              <div className="flex gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <CalendarDays
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-dim pointer-events-none"
+                  />
+                  <input
+                    id="ack-snooze"
+                    type="date"
+                    value={snoozeUntil}
+                    min={detail.snooze_min}
+                    max={detail.snooze_max}
+                    onChange={(e) => {
+                      setSnoozeUntil(e.target.value);
+                      clearFieldError("snooze");
+                    }}
+                    // Native pickers only open from their own small icon; on a
+                    // phone the whole field should open the calendar. showPicker
+                    // is missing on older browsers and throws in some frames, so
+                    // the plain input is the fallback either way.
+                    onClick={(e) => {
+                      try {
+                        e.currentTarget.showPicker?.();
+                      } catch {
+                        // Fall back to the browser's own behaviour.
+                      }
+                    }}
+                    aria-invalid={!!fieldErrors.snooze}
+                    className={`w-full cursor-pointer rounded-lg bg-page border pl-10 pr-3 py-2.5 text-[14px] text-white outline-none [color-scheme:dark] ${
+                      fieldErrors.snooze
+                        ? "border-critical focus:border-critical"
+                        : "border-line focus:border-info/60"
+                    }`}
+                  />
+                </div>
+                {snoozeUntil && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSnoozeUntil("");
+                      clearFieldError("snooze");
+                    }}
+                    className="rounded-lg border border-line px-3 text-[12px] font-bold text-ink-muted hover:text-white transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {fieldErrors.snooze ? (
+                <p className="text-[12px] font-bold text-critical">
+                  {fieldErrors.snooze}
+                </p>
+              ) : (
+                <p className="text-[11px] text-ink-dim leading-relaxed">
+                  Not shown, mailed or reminded until the end of that date,
+                  including the same problem on later days.
+                </p>
+              )}
+            </div>
+
             <button
               type="submit"
-              disabled={!trimmed || submitting}
+              disabled={!canSubmit}
               className="w-full rounded-lg bg-info px-4 py-3.5 text-[14px] font-black text-white transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {submitting ? "Recording…" : "Acknowledge & resolve"}
             </button>
             <button
               type="button"
-              disabled={submitting}
-              onClick={() => submit("ack", comment)}
-              className="w-full rounded-lg border border-line-strong bg-panel px-4 py-3 text-[13px] font-bold text-ink-muted hover:text-white transition-colors disabled:opacity-40"
+              disabled={!canSubmit}
+              onClick={() => send("ack")}
+              className="w-full rounded-lg border border-line-strong bg-panel px-4 py-3 text-[13px] font-bold text-ink-muted hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Acknowledge only
             </button>
 
-            {closesIn && (
+            <p className="text-[11px] text-ink-dim text-center leading-relaxed">
+              {WATCH_NOTE}
+            </p>
+            {/* deadline_at is the next REMINDER, not a closing time. */}
+            {nextReminderIn && (
               <p className="flex items-center justify-center gap-1.5 text-[11px] text-ink-dim">
                 <Clock size={12} />
-                Closes automatically in {closesIn}
+                Next reminder in {nextReminderIn} if unanswered
               </p>
             )}
           </form>

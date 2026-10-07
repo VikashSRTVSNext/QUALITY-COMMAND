@@ -26,13 +26,20 @@ export type AckState =
   | "actioned"
   | "auto_closed";
 
+/** One row of the label / value table the alert mail shows. "-" means "not
+ *  applicable" and is rendered as-is. */
+export type AlertDetailLine = {
+  label: string;
+  value: string;
+};
+
 export type AlertAckDetail = {
   alert_key: string;
   episode: number;
   recipient: string;
-  /** critical | risk | info — already lower-cased by the API. */
+  /** critical | risk | moderate | info — already lower-cased by the API. */
   severity: string;
-  /** Never null; the API falls back to "Attention Center alert". */
+  /** Raw "|"-separated ten-field row. NOT for display — render detail_lines. */
   title: string;
   rule_code: string;
   entity_ref: string | null;
@@ -52,25 +59,57 @@ export type AlertAckDetail = {
   acknowledged_by: string | null;
   acknowledged_at: string | null;
   resolution_comment: string | null;
+  /** The cause recorded with the reply, or null. */
+  cause: string | null;
   closed_at: string | null;
   notified_at: string | null;
-  /** When the alert auto-closes, two hours after notified_at. */
+  /** When the next REMINDER mail is due, or null when no more will be sent
+   *  (always null for Moderate). Not a closing time — alerts do not close on a
+   *  timer. */
   deadline_at: string | null;
   /** THE ONLY THING that decides whether the form renders. Deliberately not
-   *  recomputed from ack_state — the two disagree on purpose for an alert that
-   *  auto-closed but can still be answered. */
+   *  recomputed from ack_state — the two disagree on purpose for an old alert
+   *  that auto-closed but can still be answered. */
   can_reply: boolean;
   comment_max_length: number;
+  /** Raw structured facts of the alert, for reference only. */
+  details: Record<string, unknown> | null;
+  /** What to display, in reading order, for every alert. */
+  detail_lines: AlertDetailLine[];
+  /** YYYY-MM-DD the alert is hidden until, or null. */
+  snooze_until: string | null;
+  /** Bounds for the snooze date input (tomorrow … today + 30 days, IST). */
+  snooze_min: string;
+  snooze_max: string;
 };
 
 export type AlertAckReply = {
   ok: boolean;
-  /** Read THIS, not the action that was sent: a reply to an already auto-closed
-   *  alert is stored but leaves the state at `auto_closed`, so the "nobody
-   *  answered" count stays honest. */
+  /** Read THIS, not the action that was sent: a reply to an old alert that had
+   *  already auto-closed is stored but leaves the state at `auto_closed`. */
   ack_state: AckState;
   title: string;
   detail: string;
+  snooze_until: string | null;
+};
+
+/** The refusals that belong under a form field rather than on a full page. The
+ *  page keeps the form, and the text, so nothing is retyped. */
+export type AlertAckField = "comment" | "cause" | "snooze";
+export type AlertAckFieldErrors = Partial<Record<AlertAckField, string>>;
+
+const FIELD_OF_CODE: Record<string, AlertAckField> = {
+  comment_required: "comment",
+  cause_required: "cause",
+  invalid_snooze: "snooze",
+};
+
+export type AlertAckInput = {
+  action: "ack" | "resolve";
+  comment: string;
+  cause: string;
+  /** YYYY-MM-DD, or omitted for no snooze. */
+  snoozeUntil?: string;
 };
 
 /** Every refusal on both endpoints has this shape. `title` and `detail` are
@@ -154,9 +193,9 @@ export const useAlertAck = (search: string) => {
 
   const [reply, setReply] = useState<AlertAckReply | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  /** Shown under the textarea, keeping what the user typed. Only
-   *  `comment_required` lands here; everything else is a full-page refusal. */
-  const [commentError, setCommentError] = useState<string | null>(null);
+  /** Shown under the matching field, keeping what the user typed. Only the
+   *  codes in FIELD_OF_CODE land here; everything else is a full-page refusal. */
+  const [fieldErrors, setFieldErrors] = useState<AlertAckFieldErrors>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -203,23 +242,29 @@ export const useAlertAck = (search: string) => {
   }, [token]);
 
   const submit = useCallback(
-    async (action: "ack" | "resolve", comment: string) => {
+    async ({ action, comment, cause, snoozeUntil }: AlertAckInput) => {
       if (!token || submitting) return;
       setSubmitting(true);
-      setCommentError(null);
+      setFieldErrors({});
       try {
         const res = await fetch(apiUrl("/alerts/ack/reply"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           // The token goes in the body verbatim — JSON is not URL-encoded.
-          body: JSON.stringify({ t: token, action, comment }),
+          body: JSON.stringify({
+            t: token,
+            action,
+            comment: comment.trim(),
+            cause: cause.trim(),
+            ...(snoozeUntil ? { snooze_until: snoozeUntil } : {}),
+          }),
         });
         if (!res.ok) {
           const err = await readError(res);
-          // The one refusal that is a field problem rather than a dead end. The
-          // page keeps the form, and the text, so nothing is retyped.
-          if (err.code === "comment_required") {
-            setCommentError(err.detail || err.title);
+          // Field problems rather than dead ends: keep the form and the text.
+          const field = FIELD_OF_CODE[err.code];
+          if (field) {
+            setFieldErrors({ [field]: err.detail || err.title });
             return;
           }
           setError(err);
@@ -244,8 +289,14 @@ export const useAlertAck = (search: string) => {
     error,
     reply,
     submitting,
-    commentError,
-    clearCommentError: () => setCommentError(null),
+    fieldErrors,
+    clearFieldError: (field: AlertAckField) =>
+      setFieldErrors((prev) => {
+        if (!prev[field]) return prev;
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      }),
     submit,
   };
 };
