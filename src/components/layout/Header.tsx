@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { RefreshCw, Calendar, Clock, Menu, ChevronDown } from "lucide-react";
+import brandLogo from "../../assets/tvsnext-logo.png";
 
 interface HeaderProps {
   isOnline?: boolean;
@@ -30,20 +31,17 @@ export const Header: React.FC<HeaderProps> = ({ isOnline = false }) => {
 
   return (
     <div className="flex flex-col lg:flex-row justify-between items-center w-full px-2 gap-2 lg:gap-3 2xl:gap-4 py-1">
-      {/* Left section: Nokia Logo & Plant Status */}
+      {/* Left section: Brand mark & Plant Status */}
       <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2 lg:gap-3 2xl:gap-4">
-        {/* Nokia Logo Wordmark */}
-        <svg
-          viewBox="0 0 238 56"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="flex-shrink-0 w-[100px] lg:w-[120px] 2xl:w-[135px] h-auto"
-        >
-          <path
-            d="M164.52 1.70304V54.2969H172.407V1.70304H164.52ZM80.2509 0.804622C64.8848 0.804553 52.9624 11.9886 52.9624 28C52.9624 44.7324 64.8848 55.1957 80.2509 55.1954C95.6171 55.1951 107.564 44.7324 107.539 28C107.517 12.8299 95.6171 0.804691 80.2509 0.804622ZM99.6661 28C99.6661 39.8532 90.9737 47.7084 80.2509 47.7084C69.5282 47.7084 60.8357 39.8532 60.8357 28C60.8357 16.3618 69.5282 8.29171 80.2509 8.29171C90.9737 8.29171 99.6661 16.3618 99.6661 28ZM0 4.74601e-06V54.2969H8.04989V18.4143L49.8817 56V44.7427L0 4.74601e-06ZM113.472 28L142.745 54.297H154.483L125.165 28L154.483 1.70302H142.745L113.472 28ZM238 54.2969H229.323L222.978 42.6502H194.239L187.893 54.2969H179.215L189.724 34.8846H218.851L204.327 7.90705L208.608 0L238 54.2969Z"
-            fill="white"
-          />
-        </svg>
+        {/* Brand wordmark. Sits on a light chip deliberately: the mark's "TVS"
+            glyphs are dark navy (#1b2a6b-ish) and would be close to invisible
+            directly on bg-panel (#101c2b). The chip keeps the brand colours
+            exact rather than recolouring the logo. */}
+        <img
+          src={brandLogo}
+          alt="TVSnext"
+          className="flex-shrink-0 w-[92px] lg:w-[108px] 2xl:w-[120px] h-auto rounded bg-white/95 px-1.5 py-1"
+        />
 
         {/* Visual Separator */}
         <div className="h-6 w-[1.5px] bg-gradient-to-b from-transparent via-line to-transparent hidden sm:block" />

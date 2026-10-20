@@ -76,7 +76,7 @@ export const zonePalette = {
 
 /**
  * Stock Tailwind values used by the plant-layout editor's own chrome. That UI is
- * an internal tool that never adopted the Nokia palette; these are named after
+ * an internal tool that never adopted the dashboard palette; these are named after
  * the Tailwind colours they are, so it stays obvious they are off-palette.
  */
 export const toolPalette = {

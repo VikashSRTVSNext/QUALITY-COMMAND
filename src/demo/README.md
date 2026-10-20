@@ -548,6 +548,74 @@ It also asserts **which sections frame 0 carries**, which was previously
 unchecked — dropping one would have passed validation and simply blanked a
 panel at runtime.
 
+Counts moved slightly when the identifiers were scrubbed (§6.6): the anchor day
+now yields **18 alerts** rather than 16, still `truncated: false`, and its
+severity mix is 10 critical / 0 risk / 8 moderate where it was 5 / 2 / 9. The
+`risk` tier is still exercised — 70 alerts across 26 of the 30 days — it simply
+does not land on the anchor day any more, so the first screen shows only
+critical and moderate chips. Nothing was retuned to chase the old numbers: the
+clusters are a function of the item codes, and the item codes changed.
+
+---
+
+## 6.6 De-branding — what was replaced, and what was not
+
+The dashboard is shown outside the NDA boundary, so the customer's marks and
+identifiers were removed. This section exists so the next person can tell which
+strings are invented and which are still load-bearing.
+
+**Replaced.**
+
+| Surface | Was | Now |
+|---|---|---|
+| `Header.tsx` | inline customer wordmark (SVG path) | `assets/tvsnext-logo.png` on a light chip |
+| `QualityLayout.tsx` header | the same wordmark again, as the home link | same asset, same click target |
+| `AlertAckPage.tsx` | the same wordmark a third time | same asset |
+| `QualityLayout.tsx` footer | "Powered by" + 28 KB base64 copy of the TVSnext logo | removed — the mark is in the header now |
+| `index.html` | `<title>` naming the customer | `Factory Command Center` |
+| `QualityLayout.tsx` | plant city name | `ASSEMBLY PLANT` |
+| `domain.mjs` `PRODUCTS` | 17 real product names + item codes | invented, same shapes |
+| `domain.mjs` `testersFor` | real plant asset tags (`NET…`, `NSN…`) | invented `ATE…` tags |
+| `generate-demo-fixtures.mjs` | real serial families | `R703` + 7 digits / `QF382` + 6 digits |
+| `generate-demo-fixtures.mjs` | 38 verbatim test-case names | 38 invented equivalents |
+
+The logo sits on `bg-white/95` deliberately: the mark's "TVS" glyphs are dark
+navy and are close to invisible directly on `bg-panel` (`#101c2b`). The chip
+keeps the brand colours exact instead of recolouring the artwork.
+
+Only shapes were preserved, because shape is what the UI was built around —
+dotted item codes, 11-character serials, the same base code reappearing at UNIT,
+TRX and PA level, and long test-case names that have to still overflow the alert
+title. Pool sizes were held constant too: `TEST_FAILURE_IDS` feeds a modulo in
+`failureIdFor`, so resizing it would redistribute every failure mode in the set.
+
+**Deliberately not replaced.**
+
+1. **`IN04`, the site code.** It is not only data — the live app parses it. 
+   `DpmoiPane.tsx`, `DpmoiDetailModal.tsx`, `ScrewDefectsPane.tsx` and
+   `ScrewPositionsModal.tsx` all strip `_REWORK_IN04` / `_IN04` to render a
+   label. Changing it in the fixtures would show `AOI TOP REWORK PL01` in the
+   demo; changing it in the regexes too would fork the live app's parsing of the
+   real API for a cosmetic gain on a four-character string. Flagged, not touched.
+2. **The internal API hostname.** `src/core/api/config.ts` keeps it as the
+   fallback and the committed `.env` sets it. It does **not** reach the demo
+   artifact: `.env.demo` overrides `VITE_API_URL` with `demo.invalid`, so the
+   constant is tree-shaken — verified by scanning `dist-demo` for the string and
+   finding none. A live build from a clean clone *would* inline it. Left alone
+   because it is production networking config, not branding.
+3. **The floor-plan renders.** `Quality-OG-Layout.png` and
+   `FACTORY-DIGITAL-TWIN.png` are stylised isometric illustrations with no
+   signage, dimensions or real CAD geometry.
+4. **The NC codes, cause categories and process step names.** Industry
+   vocabulary (`FCR`, `SMT`, `SPI`, `AXI`, `RTWP`, `LBTS`), not customer IP.
+
+**Verification.** All 1,266 fixture files were scanned case-sensitively for
+every old product name, item code, tester tag, serial prefix and part
+designator: zero hits. `dist-demo` was scanned for `nokia`: zero hits. Two
+apparent hits in the fixtures were confirmed false positives — `area` is the SPI
+pad-area measurement field and `AREA_LOW` is a solder-paste defect code, neither
+related to the retired product of that name.
+
 ---
 
 ## 7. Limitations and known gaps

@@ -491,13 +491,14 @@ const DISPOSITIONS = [
  * given product has to carry the same prefix, or the serials look random
  * rather than issued.
  *
- * Both families are 11 characters, matching captured serials: K926+7 digits
- * (K9264249069) and LD264+6 digits (LD264202011).
+ * Both families are 11 characters. The prefixes are invented; only the LENGTH
+ * split is borrowed from the capture (4-char prefix + 7 digits, or 5-char
+ * prefix + 6 digits), because column widths were sized for 11 characters.
  */
 const serialFor = (item, erng) =>
   chance(rngFor(SEED, "serial-family", item), 0.72)
-    ? `K926${int(erng, 1000000, 9999999)}`
-    : `LD264${int(erng, 100000, 999999)}`;
+    ? `R703${int(erng, 1000000, 9999999)}`
+    : `QF382${int(erng, 100000, 999999)}`;
 
 /**
  * The same serial, but derived from a board index instead of a stream.
@@ -509,15 +510,15 @@ const serialFor = (item, erng) =>
  */
 const serialForBoard = (item, day, boardIdx, salt) =>
   chance(rngFor(SEED, "serial-family", item), 0.72)
-    ? `K926${1000000 + ((boardIdx * 137 + salt) % 9000000)}`
-    : `LD264${100000 + ((boardIdx * 137 + salt) % 900000)}`;
+    ? `R703${1000000 + ((boardIdx * 137 + salt) % 9000000)}`
+    : `QF382${100000 + ((boardIdx * 137 + salt) % 900000)}`;
 
 /**
  * Failure IDs at the electrical test steps.
  *
  * A test cell identifies a failure by the test case that failed, not by a
  * ticket number, and those names are what the Attention Center groups and
- * counts ("4 failure ID(s)", "RF_B25CH1_B GAIN (1)"). An opaque `F1234567`
+ * counts ("4 failure ID(s)", "RF_B40CH2_A GAIN (1)"). An opaque `F1234567`
  * would render the titles meaningless.
  *
  * Taken from a captured payload. Inconsistent spacing and underscores are
@@ -525,44 +526,44 @@ const serialForBoard = (item, day, boardIdx, salt) =>
  * the test, and normalising them would make the data look manufactured.
  */
 const TEST_FAILURE_IDS = [
-  "RF_B25CH1_B GAIN",
-  "VVA TUNING OVERALLRESULT",
-  "IRL_INPUT_SEGMENT_1",
-  "SMALL SIGNAL GAIN B66CH1 FLATNESS",
+  "RF_B40CH2_A GAIN",
+  "VGA TUNING OVERALLRESULT",
+  "IRL_INPUT_SEGMENT_2",
+  "SMALL SIGNAL GAIN B12CH2 FLATNESS",
   "POWER UP HOUSEKEEPINGCURRENT",
-  "INTCLK_FSP0_RP1_CLK",
+  "INTCLK_FSQ1_RP2_CLK",
   "BSCAN_RESETBUTTONTEST",
   "INSTALL_BOARD_SPECIFIC_FLASH_CONTENT",
-  "LED SEI GREEN",
-  "PAPSU_1_CS2_GAIN",
-  "PAPSU_2_CS2_GAIN",
-  "PAPSU_1_CS2_GAINTRIM",
+  "LED STATUS GREEN",
+  "PAPSU_1_CS3_GAIN",
+  "PAPSU_2_CS3_GAIN",
+  "PAPSU_1_CS3_GAINTRIM",
   "BIAS_TUNING_MAIN_DACERRORVALUE",
-  "BIAS_TUNING_DRIVER2_DACERRORVALUE",
+  "BIAS_TUNING_DRIVER3_DACERRORVALUE",
   "PSU2 +5V_CURRENTTESTCURRENT",
-  "PSU2 BIAS +50V_VOLTAGETESTVOLTAGE",
-  "SETUPBIASLMP92066",
-  "BSCAN_D4803_I2C_MUX_CHAN2",
+  "PSU2 BIAS +48V_VOLTAGETESTVOLTAGE",
+  "SETUPBIASPMC41800",
+  "BSCAN_U7120_I2C_MUX_CHAN3",
   "LED_RED_ON_GREEN_OFF",
   "PINGMASTER",
   "FAN_MINLOAD_VOLTAGE",
-  "FEEDBACK_H_T",
-  "FEEDBACK_H_B",
-  "BIASTUNING_DRIVER2",
-  "RFPWROUT_H_B",
+  "FEEDBACK_L_T",
+  "FEEDBACK_L_B",
+  "BIASTUNING_DRIVER3",
+  "RFPWROUT_L_B",
   "BIASSETUPTEST",
   "POWERUPTEST",
-  "PIPE3RETURNLOSS_ANT3_TX_RETURNLOSS",
+  "PIPE2RETURNLOSS_ANT2_TX_RETURNLOSS",
   "GAINRIPPLETEST_PA_MINIMUM",
-  "INPUT RESISTANCE TEST_RESISTANCE_101",
-  "BSCAN2 PROG BMUG",
+  "INPUT RESISTANCE TEST_RESISTANCE_204",
+  "BSCAN2 PROG CMUX",
   "RED_LED_TEST",
-  "TC_0409_0_ETH_L1CHIP_PRBS_SFP_8",
+  "TC_0712_0_ETH_L1CHIP_PRBS_SFP_4",
   "BSCAN_INFRASTRUCTURE_LONG",
-  "UPGRADE_PEX9_IMAGE",
-  "PAV_NEGSUMMATION_APS2-4-6-8",
-  "PAV_POSSUMMATION_APS2-4-6-8",
-  "PAV_POSSUMMATION_APS1-3-5-7",
+  "UPGRADE_PCIE2_IMAGE",
+  "PAV_NEGSUMMATION_APS1-2-3-4",
+  "PAV_POSSUMMATION_APS1-2-3-4",
+  "PAV_POSSUMMATION_APS5-6-7-8",
 ];
 
 /**

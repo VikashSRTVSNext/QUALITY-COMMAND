@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import brandLogo from "../../assets/tvsnext-logo.png";
 import {
   AlertTriangle,
   ArrowRight,
@@ -116,18 +117,11 @@ const Frame = ({ children }: { children: React.ReactNode }) => (
         without ever needing a second column on a phone. */}
     <div className="w-full max-w-[560px] flex flex-col gap-4">
       <header className="flex items-center gap-3">
-        <svg
-          viewBox="0 0 238 56"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="w-[68px] h-auto flex-shrink-0"
-          aria-label="Nokia"
-        >
-          <path
-            d="M164.52 1.70304V54.2969H172.407V1.70304H164.52ZM80.2509 0.804622C64.8848 0.804553 52.9624 11.9886 52.9624 28C52.9624 44.7324 64.8848 55.1957 80.2509 55.1954C95.6171 55.1951 107.564 44.7324 107.539 28C107.517 12.8299 95.6171 0.804691 80.2509 0.804622ZM99.6661 28C99.6661 39.8532 90.9737 47.7084 80.2509 47.7084C69.5282 47.7084 60.8357 39.8532 60.8357 28C60.8357 16.3618 69.5282 8.29171 80.2509 8.29171C90.9737 8.29171 99.6661 16.3618 99.6661 28ZM0 4.74601e-06V54.2969H8.04989V18.4143L49.8817 56V44.7427L0 4.74601e-06ZM113.472 28L142.745 54.297H154.483L125.165 28L154.483 1.70302H142.745L113.472 28ZM238 54.2969H229.323L222.978 42.6502H194.239L187.893 54.2969H179.215L189.724 34.8846H218.851L204.327 7.90705L208.608 0L238 54.2969Z"
-            fill="currentColor"
-          />
-        </svg>
+        <img
+          src={brandLogo}
+          alt="TVSnext"
+          className="w-[64px] h-auto flex-shrink-0 rounded bg-white/95 px-1 py-0.5"
+        />
         <span className="h-6 w-px bg-line-strong" />
         <span className="text-[11px] font-black uppercase tracking-widest text-ink-dim">
           Attention Center

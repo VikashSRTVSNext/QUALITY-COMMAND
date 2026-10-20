@@ -21,29 +21,32 @@
 /**
  * The product master.
  *
- * Shapes and names follow the real catalogue observed on the running service:
- * dotted item codes, UNIT names without a suffix, TRX/PA names carrying one.
+ * Names and item codes are invented. Only the SHAPES follow the real catalogue
+ * observed on the running service: dotted item codes, UNIT names without a
+ * suffix, TRX/PA names carrying one, and the same family-reuse pattern (one
+ * base code appearing at UNIT, TRX and PA level). Nothing here traces back to
+ * a real part — see src/demo/README.md §6.6.
  * Two products deliberately have `target_yield: null` so the `no_target` status
  * path and the "don't render it in the red count" rule are both exercised.
  */
 export const PRODUCTS = [
-  { item: "475656A.104", product: "AHFII Z", sub_module: "UNIT", target_yield: 0.95, dailyVolume: 24 },
-  { item: "476122A.104", product: "AHPMDG_Z", sub_module: "UNIT", target_yield: 0.95, dailyVolume: 168 },
-  { item: "475918A.101", product: "AKQZ MAVERICK", sub_module: "UNIT", target_yield: 0.94, dailyVolume: 52 },
-  { item: "476708A.101", product: "ARDC", sub_module: "UNIT", target_yield: 0.95, dailyVolume: 6 },
-  { item: "474198A.101", product: "AREA", sub_module: "UNIT", target_yield: 0.93, dailyVolume: 64 },
-  { item: "476901A.102", product: "ASCG Z", sub_module: "UNIT", target_yield: 0.95, dailyVolume: 142 },
-  { item: "477310A.101", product: "AZQJ", sub_module: "UNIT", target_yield: null, dailyVolume: 18 },
-  { item: "089338A.112", product: "AHPB TRX", sub_module: "TRX", target_yield: 0.96, dailyVolume: 22 },
-  { item: "093447A.105", product: "AKQZ-TRX", sub_module: "TRX", target_yield: 0.96, dailyVolume: 63 },
-  { item: "093801A.105", product: "ASCG", sub_module: "TRX", target_yield: 0.95, dailyVolume: 64 },
-  { item: "093802A.105", product: "AKNB", sub_module: "TRX", target_yield: 0.95, dailyVolume: 310 },
-  { item: "093915B.200", product: "AREA TRX", sub_module: "TRX", target_yield: null, dailyVolume: 41 },
-  { item: "094588A.102", product: "AHPMDG Z PA", sub_module: "PA", target_yield: 0.97, dailyVolume: 318 },
-  { item: "094855A.102", product: "ARDC_MPA", sub_module: "PA", target_yield: 0.96, dailyVolume: 63 },
-  { item: "094832E.102", product: "AREC_PA", sub_module: "PA", target_yield: 0.96, dailyVolume: 9 },
-  { item: "094901C.101", product: "ASCG_PA", sub_module: "PA", target_yield: 0.97, dailyVolume: 86 },
-  { item: "095120A.103", product: "AKNB PSU", sub_module: "PSU", target_yield: 0.98, dailyVolume: 54 },
+  { item: "471204A.104", product: "LYRA Z", sub_module: "UNIT", target_yield: 0.95, dailyVolume: 24 },
+  { item: "471338A.104", product: "MESADG_Z", sub_module: "UNIT", target_yield: 0.95, dailyVolume: 168 },
+  { item: "471455A.101", product: "NOVAQ RANGER", sub_module: "UNIT", target_yield: 0.94, dailyVolume: 52 },
+  { item: "471570A.101", product: "ORYX", sub_module: "UNIT", target_yield: 0.95, dailyVolume: 6 },
+  { item: "471682A.101", product: "PICO", sub_module: "UNIT", target_yield: 0.93, dailyVolume: 64 },
+  { item: "471796A.102", product: "TORQ Z", sub_module: "UNIT", target_yield: 0.95, dailyVolume: 142 },
+  { item: "471811A.101", product: "VANE", sub_module: "UNIT", target_yield: null, dailyVolume: 18 },
+  { item: "081402A.112", product: "LYRB TRX", sub_module: "TRX", target_yield: 0.96, dailyVolume: 22 },
+  { item: "091516A.105", product: "NOVAQ-TRX", sub_module: "TRX", target_yield: 0.96, dailyVolume: 63 },
+  { item: "091623A.105", product: "TORQ", sub_module: "TRX", target_yield: 0.95, dailyVolume: 64 },
+  { item: "091744A.105", product: "KITE", sub_module: "TRX", target_yield: 0.95, dailyVolume: 310 },
+  { item: "091858B.200", product: "PICO TRX", sub_module: "TRX", target_yield: null, dailyVolume: 41 },
+  { item: "092160A.102", product: "MESADG Z PA", sub_module: "PA", target_yield: 0.97, dailyVolume: 318 },
+  { item: "092274A.102", product: "ORYX_MPA", sub_module: "PA", target_yield: 0.96, dailyVolume: 63 },
+  { item: "092389E.102", product: "PICC_PA", sub_module: "PA", target_yield: 0.96, dailyVolume: 9 },
+  { item: "092493C.101", product: "TORQ_PA", sub_module: "PA", target_yield: 0.97, dailyVolume: 86 },
+  { item: "093507A.103", product: "KITE PSU", sub_module: "PSU", target_yield: 0.98, dailyVolume: 54 },
 ];
 
 export const productByItem = (item) =>
@@ -117,7 +120,7 @@ export const LINE_STEPS = STEPS.filter((s) => s.lines.length > 0).map((s) => s.s
  *
  * Named the way the plant names them, because these strings are user-visible in
  * three places: the Resource column of the tester yield report, the NC log, and
- * the Attention Center alert titles ("Tester NET06EP0373: 4 false failures").
+ * the Attention Center alert titles ("Tester ATE12EP0418: 4 false failures").
  * Short synthetic ids like MT01 read as placeholder data the moment anyone who
  * knows the floor looks at the screen.
  *
@@ -136,13 +139,14 @@ export const testersFor = (step) => {
     case "AXI": return ["AXI001", "AXI002", "AXI003"];
     case "AUTO_OGI": return ["OGI001", "OGI002"];
     case "THERMAL_AVI": return ["AVI001", "AVI002"];
-    // Electrical test and rework cells — asset-tagged.
-    case "UNIT_TEST": return ["NET06EP0373", "NET06EP0354", "NET06E00089", "NET05000277", "NSN04A00364"];
-    case "MODULE_TEST": return ["NET07000209", "NET07000266", "NET05000986", "NET06EP0497"];
-    case "IP": return ["NET06EP0589", "NET06000089", "NET06E00106"];
-    case "OTA_TEST": return ["NET06EP0197", "NSN04A00371"];
-    case "RTWP": return ["NSN04A00388", "NET05000312"];
-    case "LBTS": return ["NET07000418", "NET07000420"];
+    // Electrical test and rework cells — asset-tagged. Tags are invented; only
+    // the shape (prefix + cell digits + optional letter block) is borrowed.
+    case "UNIT_TEST": return ["ATE12EP0418", "ATE12EP0427", "ATE12E00133", "ATE11000342", "ATE09A00471"];
+    case "MODULE_TEST": return ["ATE14000255", "ATE14000318", "ATE11000624", "ATE12EP0536"];
+    case "IP": return ["ATE12EP0641", "ATE12000147", "ATE12E00158"];
+    case "OTA_TEST": return ["ATE12EP0233", "ATE09A00452"];
+    case "RTWP": return ["ATE09A00466", "ATE11000389"];
+    case "LBTS": return ["ATE14000503", "ATE14000517"];
     case "BURN_IN": return ["BI001"];
     default: return [`${step}001`];
   }
