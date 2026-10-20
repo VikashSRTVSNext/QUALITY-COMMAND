@@ -26,7 +26,6 @@ import { mkdir, writeFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import {
-  ALERT_TEMPLATES,
   ALL_STEPS,
   CAUSE_CATEGORIES,
   COMPONENTS,
@@ -43,8 +42,12 @@ import {
   SPI_DEFECT_CODES,
   STEPS,
   kpiLevelOf,
+  isElectricalStep,
+  ncCodesFor,
+  operationFor,
   optionLabel,
   screwsFor,
+  stageFor,
   stepByName,
   testersFor,
 } from "./lib/domain.mjs";
@@ -52,6 +55,8 @@ import {
   SHIFT_LETTERS,
   SHIFT_MINUTES,
   addDays,
+  fiscalPeriodOf,
+  fiscalPeriods,
   periodMonthOf,
   timestampIn,
   todayLabel,
@@ -478,8 +483,122 @@ const DISPOSITIONS = [
   "Scrapped - MOD REJ",
 ];
 
-/** NC code descriptions, for the nc_description column. */
+/**
+ * Board serial (SFC), in the plant's two real formats.
+ *
+ * Which family a product uses is a property OF THE PRODUCT, not of the board,
+ * so it is keyed on the item and never on the event stream — every board of a
+ * given product has to carry the same prefix, or the serials look random
+ * rather than issued.
+ *
+ * Both families are 11 characters, matching captured serials: K926+7 digits
+ * (K9264249069) and LD264+6 digits (LD264202011).
+ */
+const serialFor = (item, erng) =>
+  chance(rngFor(SEED, "serial-family", item), 0.72)
+    ? `K926${int(erng, 1000000, 9999999)}`
+    : `LD264${int(erng, 100000, 999999)}`;
+
+/**
+ * The same serial, but derived from a board index instead of a stream.
+ *
+ * The SPI pad log needs many pads to land on the SAME board — that clustering
+ * is the entire point of the pads-vs-boards distinction — so the serial has to
+ * be a pure function of (day, item, boardIdx). Drawing from the event stream
+ * would give every pad its own board and flatten the drill-down.
+ */
+const serialForBoard = (item, day, boardIdx, salt) =>
+  chance(rngFor(SEED, "serial-family", item), 0.72)
+    ? `K926${1000000 + ((boardIdx * 137 + salt) % 9000000)}`
+    : `LD264${100000 + ((boardIdx * 137 + salt) % 900000)}`;
+
+/**
+ * Failure IDs at the electrical test steps.
+ *
+ * A test cell identifies a failure by the test case that failed, not by a
+ * ticket number, and those names are what the Attention Center groups and
+ * counts ("4 failure ID(s)", "RF_B25CH1_B GAIN (1)"). An opaque `F1234567`
+ * would render the titles meaningless.
+ *
+ * Taken from a captured payload. Inconsistent spacing and underscores are
+ * preserved deliberately — real test-case names are written by whoever wrote
+ * the test, and normalising them would make the data look manufactured.
+ */
+const TEST_FAILURE_IDS = [
+  "RF_B25CH1_B GAIN",
+  "VVA TUNING OVERALLRESULT",
+  "IRL_INPUT_SEGMENT_1",
+  "SMALL SIGNAL GAIN B66CH1 FLATNESS",
+  "POWER UP HOUSEKEEPINGCURRENT",
+  "INTCLK_FSP0_RP1_CLK",
+  "BSCAN_RESETBUTTONTEST",
+  "INSTALL_BOARD_SPECIFIC_FLASH_CONTENT",
+  "LED SEI GREEN",
+  "PAPSU_1_CS2_GAIN",
+  "PAPSU_2_CS2_GAIN",
+  "PAPSU_1_CS2_GAINTRIM",
+  "BIAS_TUNING_MAIN_DACERRORVALUE",
+  "BIAS_TUNING_DRIVER2_DACERRORVALUE",
+  "PSU2 +5V_CURRENTTESTCURRENT",
+  "PSU2 BIAS +50V_VOLTAGETESTVOLTAGE",
+  "SETUPBIASLMP92066",
+  "BSCAN_D4803_I2C_MUX_CHAN2",
+  "LED_RED_ON_GREEN_OFF",
+  "PINGMASTER",
+  "FAN_MINLOAD_VOLTAGE",
+  "FEEDBACK_H_T",
+  "FEEDBACK_H_B",
+  "BIASTUNING_DRIVER2",
+  "RFPWROUT_H_B",
+  "BIASSETUPTEST",
+  "POWERUPTEST",
+  "PIPE3RETURNLOSS_ANT3_TX_RETURNLOSS",
+  "GAINRIPPLETEST_PA_MINIMUM",
+  "INPUT RESISTANCE TEST_RESISTANCE_101",
+  "BSCAN2 PROG BMUG",
+  "RED_LED_TEST",
+  "TC_0409_0_ETH_L1CHIP_PRBS_SFP_8",
+  "BSCAN_INFRASTRUCTURE_LONG",
+  "UPGRADE_PEX9_IMAGE",
+  "PAV_NEGSUMMATION_APS2-4-6-8",
+  "PAV_POSSUMMATION_APS2-4-6-8",
+  "PAV_POSSUMMATION_APS1-3-5-7",
+];
+
+/**
+ * Failure ID for one event.
+ *
+ * Drawn from a SMALL per-(product, step) subset rather than the whole list,
+ * because a product has characteristic failure modes: an RF module that fails
+ * does so on the same handful of tests, not uniformly across every test in the
+ * program. Picking uniformly made repeat failures vanish — two events on one
+ * tester almost never shared a test case — which in turn made the Attention
+ * Center read as all-noise, because a cluster only counts as a reproducible
+ * fault when the same test fails twice.
+ *
+ * Inspection steps have no test case to name, so they keep a ticket number.
+ */
+const failureIdFor = (step, item, erng) => {
+  if (!isElectricalStep(step)) return `F${int(erng, 1000000, 9999999)}`;
+  const prng = rngFor(SEED, "failure-modes", step, item);
+  const offset = int(prng, 0, TEST_FAILURE_IDS.length - 1);
+  const modes = Array.from(
+    { length: 5 },
+    (_, k) => TEST_FAILURE_IDS[(offset + k * 7) % TEST_FAILURE_IDS.length],
+  );
+  return pick(erng, modes);
+};
+
+/**
+ * NC code descriptions, for the nc_description column.
+ *
+ * The G/F descriptions are the plant's own wording. G3's "Retest (False
+ * failure)" is the most important one to get exactly right: it is the single
+ * most common disposition in a real log and it appears verbatim in Attention
+ * Center titles.
+ */
 const NC_DESCRIPTIONS = {
+  // Inspection — physical defects.
   SOLDER_BRIDGE: "Solder bridge between adjacent pads",
   COLD_JOINT: "Cold / dull solder joint",
   MISSING_COMPONENT: "Component absent from pad",
@@ -490,6 +609,15 @@ const NC_DESCRIPTIONS = {
   VSWR_HIGH: "VSWR above limit",
   EEPROM_WRITE_FAIL: "EEPROM write verification failed",
   CONNECTOR_DAMAGE: "Connector pin damage",
+  // Electrical test — dispositions against a failed test.
+  G3: "Retest (False failure)",
+  G4: "Tester HW error",
+  G7: "Test program / limit issue",
+  G9: "Fixture contact problem",
+  F99: "Other electrical component failure",
+  F12: "Open circuit on component lead",
+  F31: "Short circuit between nets",
+  F74: "Component out of tolerance",
 };
 
 /**
@@ -539,8 +667,8 @@ const ncLogFor = (step, day, item, doneBoards, failedBoards) => {
       : step.step === "THERMAL_AVI"
         ? null // no verified row for this step carries a category
         : weighted(erng, CAUSE_CATEGORIES);
-    const sfc = `24${int(erng, 10000000, 99999999)}`;
-    const nc = weighted(erng, NC_CODES);
+    const sfc = serialFor(item, erng);
+    const nc = weighted(erng, ncCodesFor(step.step));
     // A few rows belong to an earlier day's first pass. Real rework, excluded
     // from `categories` and `parent`, listed so the log matches MES row-for-row.
     const firstPass = !chance(erng, 0.06);
@@ -568,7 +696,7 @@ const ncLogFor = (step, day, item, doneBoards, failedBoards) => {
       sfc,
       date_time: failedAt,
       verified_state: verified ? "VERIFIED" : "PENDING",
-      failure_id: `F${int(erng, 1000000, 9999999)}`,
+      failure_id: failureIdFor(step.step, item, erng),
       nc,
       nc_description: NC_DESCRIPTIONS[nc] ?? null,
       category: verified ? category : null,
@@ -640,7 +768,7 @@ const smtDefectsFor = (day, item, boardsFailed, records) => {
   for (let i = 0; i < records; i++) {
     const erng = rngFor(SEED, "smt", day, item, i);
     const shift = pick(erng, SHIFT_LETTERS);
-    const sfc = `24${int(erng, 10000000, 99999999)}`;
+    const sfc = serialFor(item, erng);
     boardsSeen.add(sfc);
     const nc = weighted(erng, SMT_NC_CODES);
     const refIdx = int(erng, 0, REF_DES.length - 1);
@@ -758,7 +886,7 @@ const spiDefectsFor = (day, item, boardsFailed) => {
     // Pads cluster onto a smaller set of boards, which is the whole point of
     // the pads-vs-boards distinction.
     const boardIdx = int(erng, 0, Math.max(0, boardsFailed - 1));
-    const sfc = `24${10000000 + boardIdx * 137 + (hashBoard(day, item) % 1000)}`;
+    const sfc = serialForBoard(item, day, boardIdx, hashBoard(day, item) % 1000);
     const code = weighted(erng, SPI_DEFECT_CODES);
     const refIdx = int(erng, 0, REF_DES.length - 1);
     const side = chance(erng, 0.6) ? "T" : "B";
@@ -1074,77 +1202,786 @@ const screwDefectsFor = (day) => {
 
 // ── Alerts, safety, ERI, recommendations ────────────────────────────────────
 
-const attentionFor = (day) => {
-  const rng = rngFor(SEED, "alerts", day);
-  const n = int(rng, 3, 6);
-  const alerts = [];
-  for (let i = 0; i < n; i++) {
-    const t = ALERT_TEMPLATES[(i + day.charCodeAt(9)) % ALERT_TEMPLATES.length];
-    const arng = rngFor(SEED, "alerts", day, i);
-    const target = float(arng, 95, 99, 2);
-    const current = Math.round((target - float(arng, 0.4, 5.5, 2)) * 100) / 100;
-    alerts.push({
-      id: `${day}-alert-${i + 1}`,
-      entity_ref: `${day}-alert-${i + 1}`,
-      title: t.title,
-      age_minutes: int(arng, 4, 460),
-      current_value: current,
-      target_value: target,
-      unit: t.unit,
-      deviation: Math.round((current - target) * 100) / 100,
-      severity: t.severity,
-      impact: t.impact,
-      ai_recommendation: "Check the station log for the preceding hour and confirm the fixture seating.",
-    });
-  }
-  return { alerts };
+/** `2026-10-20` -> `20 Oct`, as the alert titles date themselves. */
+const dayMonth = (day) => {
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${Number(day.slice(8, 10))} ${MONTHS[Number(day.slice(5, 7)) - 1]}`;
 };
 
-const safetyFixture = () => {
-  const periods = DAY_LABELS.filter((_, i) => i % 5 === 0).map((day, i) => {
-    const rng = rngFor(SEED, "safety", day);
+/** Which shift a naked-local NC timestamp falls in. */
+const shiftOfTs = (ts) => {
+  const mins = Number(ts.slice(11, 13)) * 60 + Number(ts.slice(14, 16));
+  if (mins >= 375 && mins < 855) return "A";   // 06:15 - 14:15
+  if (mins >= 855 && mins < 1335) return "B";  // 14:15 - 22:15
+  return "C";
+};
+
+/** `[["a",3],["b",1]]`, descending — the shape `tester_counts` uses. */
+const countPairs = (values) => {
+  const m = new Map();
+  for (const v of values) if (v) m.set(v, (m.get(v) ?? 0) + 1);
+  return [...m.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
+};
+
+/**
+ * Prose standing in for the model-written recommendation the live field holds.
+ *
+ * Slot-filled from the cluster rather than canned, because the whole value of
+ * the field is that it names the tester, the test cases and the disposition
+ * the reader is about to go and look at. The previous implementation shipped
+ * one identical sentence on every alert, which told the reader nothing.
+ */
+const recommendationFor = (c) => {
+  const topFailures = c.failureIdCounts.slice(0, 3).map(([id]) => id);
+  const failureList = topFailures.length > 1
+    ? `${topFailures.slice(0, -1).join(", ")} and ${topFailures[topFailures.length - 1]}`
+    : topFailures[0] ?? "the failing test";
+  const falseFailure = c.causes.some(([code]) => code === "G3");
+  const hwError = c.causes.some(([code]) => code === "G4");
+
+  if (c.keyField === "tester") {
+    const lead = `The ${c.productName} ${c.stage.toLowerCase()} is showing ${c.count} ${falseFailure ? "false failures" : "failures"} on tester ${c.key}, with defects in ${failureList}.`;
+    const action = hwError
+      ? `Check tester ${c.key}'s hardware first — a tester HW error is already recorded against this cluster, so verify and repair the cell before testing more boards.`
+      : falseFailure
+        ? `Check tester ${c.key}'s calibration and test program before inspecting the boards: every failure here cleared on retest, which points at the cell rather than the product.`
+        : `Check tester ${c.key} and then the boards listed, in that order.`;
+    return `${lead} ${action}`;
+  }
+  if (c.keyField === "part_number") {
+    return `The ${c.productName} ${c.stage.toLowerCase()} has ${c.count} defects sharing part number ${c.key}, failing ${failureList}. Inspect the component at ${c.locations.slice(0, 2).join(" and ") || "the listed reference designators"} for placement and soldering, then check whether the affected boards came from one component batch.`;
+  }
+  return `${failureList} is failing across ${c.testers.length} different testers (${c.testers.slice(0, 3).join(", ")}) on ${c.count} boards of ${c.productName}. Because it is not confined to one cell, treat the test limit or the product itself as the likely cause rather than any single tester.`;
+};
+
+/**
+ * One alert title, in the plant's pipe-delimited format.
+ *
+ * Reproduced field-for-field from a captured payload. It is a dense line, and
+ * the order carries meaning: identity, then where, then how it was classified,
+ * then the evidence. Empty segments are "-" rather than omitted, so the
+ * positions stay readable when a cluster has no part number or location.
+ */
+const alertTitle = (c) => {
+  const causeText = c.causes.map(([code, desc]) => `${code} - ${desc}`).join(", ");
+  const failureText = c.failureIdCounts.map(([id, n]) => `${id} (${n})`).join(", ");
+  const testerText = c.testerCounts.map(([t, n]) => `Tester ${t} (${n})`).join(", ");
+  const shifts = c.shifts.join(", ");
+  const boards = c.sfcs.join(", ");
+
+  let summary;
+  if (c.keyField === "tester") {
+    summary = `Tester ${c.key}: ${c.count} ${c.causes.some(([x]) => x === "G3") ? "false failures" : "failures"} on ${c.failureIdCounts.length} failure ID(s) on ${dayMonth(c.day)} (shift ${shifts}); boards: ${boards}`;
+  } else if (c.keyField === "part_number") {
+    summary = `${c.count} defects with the same part number on ${dayMonth(c.day)} (shift ${shifts}); boards: ${boards}`;
+  } else {
+    summary = `Same failure ID on ${c.testers.length} different testers (${c.sfcs.length} boards) on ${dayMonth(c.day)} (shift ${shifts}); boards: ${boards}`;
+  }
+
+  return [
+    `${c.productName} (${c.item})`,
+    `${c.stage} (${c.operation})`,
+    c.failureCategory,
+    causeText,
+    summary,
+    c.partNumbers.length ? c.partNumbers.join(", ") : "-",
+    c.locations.length ? c.locations.join(", ") : "-",
+    failureText,
+    c.comments.join("; ") || "-",
+    testerText || "-",
+  ].join(" | ");
+};
+
+/**
+ * Attention Center alerts, derived from the day's own NC log.
+ *
+ * WHY DERIVED RATHER THAN TEMPLATED. The previous version drew 3-6 alerts from
+ * a fixed template list, so an alert said "SPI volume drift on SMT_LINE01"
+ * while naming boards that existed nowhere in the set. Opening the drill-down
+ * behind an alert contradicted it. These clusters are grouped out of real
+ * `nc_log` rows, so every serial, tester, NC code and failure ID in an alert
+ * resolves to rows the user can actually navigate to — which is the one thing
+ * the panel is for.
+ *
+ * Three cluster kinds, matching the `kind` values the live payload carries:
+ *
+ *   tester       one cell producing repeat failures   -> suspect the cell
+ *   part_number  one component across boards          -> suspect the batch
+ *   failure_id   one test failing on several cells    -> suspect the limit
+ *
+ * SEVERITY AND IMPACT ARE INFERRED, not specified. They were fitted to a
+ * single 16-alert capture: count >= 3 read as critical, count 2 as risk or
+ * moderate, and impact medium at count >= 6 (which held for all 16). If the
+ * real thresholds are ever published these rules should be replaced, not
+ * tuned — they are a reading of one sample, not a specification.
+ */
+const attentionFor = (day, ncByStepItem) => {
+  const clusters = [];
+
+  for (const { step, item, productName, rows } of ncByStepItem) {
+    // Electrical cells only. The inline inspection steps would dominate the
+    // panel — one AOI head sees every board, so it produces clusters of 9+
+    // where a test cell produces 2-6 — and they would crowd out exactly the
+    // test-and-rework signal the Attention Center exists to surface. It also
+    // keeps the titles readable: an AXI cluster spans most of the solder-code
+    // vocabulary at once, which renders as an unreadable wall of causes.
+    if (!isElectricalStep(step)) continue;
+    const operation = operationFor(step);
+    const stage = stageFor(step);
+    // Verified rows only: an unverified row has no category, so it cannot be
+    // attributed to a failure category and would form meaningless clusters.
+    const usable = rows.filter((r) => r.category);
+
+    const push = (keyField, key, group, kind) => {
+      if (group.length < 2) return;
+      const shifts = [...new Set(group.map((r) => shiftOfTs(r.date_time)))].sort();
+      const times = group.map((r) => r.date_time).sort();
+      clusters.push({
+        day, step, item, productName, operation, stage,
+        keyField, key, kind,
+        count: group.length,
+        failureCategory: group[0].category,
+        sfcs: [...new Set(group.map((r) => r.sfc))],
+        causes: countPairs(group.map((r) => r.nc)).map(([code]) => [code, NC_DESCRIPTIONS[code] ?? code]),
+        causeCounts: countPairs(group.map((r) => r.nc)),
+        failureIdCounts: countPairs(group.map((r) => r.failure_id)),
+        testerCounts: keyField === "part_number" ? [] : countPairs(group.map((r) => r.resource)),
+        testers: keyField === "part_number" ? [] : [...new Set(group.map((r) => r.resource))],
+        locations: [...new Set(group.map((r) => r.ref_des).filter(Boolean))],
+        partNumbers: keyField === "part_number" ? [key] : [],
+        comments: [...new Set(group.map((r) => r.comment).filter(Boolean))],
+        shifts,
+        firstAt: times[0],
+        lastAt: times[times.length - 1],
+      });
+    };
+
+    const by = (fn) => {
+      const m = new Map();
+      for (const r of usable) {
+        const k = fn(r);
+        if (!k) continue;
+        if (!m.has(k)) m.set(k, []);
+        m.get(k).push(r);
+      }
+      return m;
+    };
+
+    for (const [key, group] of by((r) => `${r.category}|${r.resource}`)) {
+      push("tester", key.split("|")[1], group, "tester");
+    }
+    for (const [key, group] of by((r) => `${r.category}|${r.component}`)) {
+      push("part_number", key.split("|")[1], group, "same");
+    }
+    for (const [key, group] of by((r) => `${r.category}|${r.failure_id}`)) {
+      // Only interesting when it is NOT confined to one cell — that is what
+      // separates a product/limit problem from a tester problem.
+      if (new Set(group.map((r) => r.resource)).size < 2) continue;
+      push("failure_id", key.split("|")[1], group, "failure");
+    }
+  }
+
+  // Worst first, then oldest, then by key so ties are stable across runs.
+  clusters.sort(
+    (a, b) => b.count - a.count || a.firstAt.localeCompare(b.firstAt) || String(a.key).localeCompare(String(b.key)),
+  );
+
+  // Per-kind ceilings, because the three kinds are not equally actionable and
+  // they overlap: one bad cell shows up as a tester cluster AND, because that
+  // product only has a handful of failure modes, as a failure-ID cluster on
+  // every test it touched. Left uncapped, the cross-tester kind drowned the
+  // panel (7 of 18 alerts) while the capture had one. A tester cluster names
+  // something an engineer can go and physically check, so it wins.
+  const KIND_CAP = { tester: 12, same: 4, failure: 2 };
+  const perKind = { tester: 0, same: 0, failure: 0 };
+  const ranked = clusters.filter((c) => {
+    if (perKind[c.kind] >= KIND_CAP[c.kind]) return false;
+    perKind[c.kind] += 1;
+    return true;
+  });
+
+  const CAP = 18;
+  const kept = ranked.slice(0, CAP);
+  const alerts = kept.map((c, i) => {
+    const arng = rngFor(SEED, "alert", day, c.step, c.item, c.keyField, String(c.key));
+    // Severity, read off the capture rather than invented:
+    //   3+ events                      -> critical
+    //   2 events, one test, two boards -> risk     (a genuine repeat)
+    //   2 events otherwise             -> moderate (scattered)
+    // The risk/moderate split is the one subtle part. In the capture, every
+    // `risk` alert was the same test failing on two distinct boards, and every
+    // `moderate` one was either two events on a single board or two different
+    // tests — i.e. risk means "reproducible", moderate means "noise so far".
+    const cleanRepeat = c.sfcs.length === c.count && c.failureIdCounts.length === 1;
+    const severity = c.count >= 3 ? "critical" : cleanRepeat ? "risk" : "moderate";
+    const rank = severity === "critical" ? (c.count >= 5 ? 3 : 2) : severity === "risk" ? 2 : 1;
+    const ref = `${c.item}|${c.operation}|${c.failureCategory}`;
     return {
-      period: periodMonthOf(day) + `-${i}`,
-      period_code: `P${`${i + 1}`.padStart(2, "0")}`,
-      incident: int(rng, 0, 2),
-      near_miss: int(rng, 0, 6),
+      severity,
+      title: alertTitle(c),
+      rule_code: "category_defect",
+      entity_type: "product",
+      entity_ref: ref,
+      // A count, with no target to compare it against — which is why live
+      // leaves target and deviation null and sends no unit. The dashboard
+      // renders "—" for all three.
+      current_value: c.count,
+      target_value: null,
+      deviation: null,
+      impact: c.count >= 6 ? "medium" : "low",
+      ai_recommendation: recommendationFor(c),
+      reopen_count: severity === "critical" ? int(arng, 1, 2) : 0,
+      created_at: c.firstAt,
+      age_minutes: int(arng, 30, 480),
+      details: {
+        key: c.key,
+        item: c.item,
+        kind: c.kind,
+        sfcs: c.sfcs,
+        step: rank,
+        cause: c.causeCounts.map(([code, n]) => ({
+          count: n, nc_code: code, description: NC_DESCRIPTIONS[code] ?? code,
+        })),
+        count: c.count,
+        stage: c.stage,
+        shifts: c.shifts,
+        last_at: c.lastAt,
+        product: `${c.productName} (${c.item})`,
+        testers: c.testers,
+        comments: c.comments,
+        first_at: c.firstAt,
+        key_field: c.keyField,
+        locations: c.locations,
+        operations: [c.operation],
+        failure_ids: c.failureIdCounts.map(([id]) => id),
+        part_numbers: c.partNumbers,
+        business_date: day,
+        tester_counts: c.testerCounts,
+        failure_category: c.failureCategory,
+        fpy_below_target: null,
+        failure_id_counts: c.failureIdCounts,
+      },
+      ack_state: "notified",
+      acknowledged_by: null,
+      acknowledged_at: null,
+      resolution_comment: null,
+      cause: null,
+      status_label: "Open - not acknowledged",
+      // Kept so the dashboard's `a.id ?? a.entity_ref` resolves to something
+      // unique: entity_ref alone repeats across clusters of one product.
+      id: `${day}-${c.step}-${c.keyField}-${i + 1}`,
     };
   });
-  const last = periods[periods.length - 1] ?? { incident: 0, near_miss: 0 };
-  return {
-    current: {
-      incident: last.incident, near_miss: last.near_miss,
-      incident_target: 0, near_miss_target: 4,
-    },
-    periods,
-  };
+
+  const counts = { critical: 0, risk: 0, moderate: 0, info: 0 };
+  for (const a of alerts) counts[a.severity] += 1;
+
+  return { alerts, counts, truncated: ranked.length > CAP };
+};
+
+/** "2026-01-01" -> "Jan'26", the label the month charts tick with. */
+const monthLabel = (ym) => {
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${MONTHS[Number(ym.slice(5, 7)) - 1]}'${ym.slice(2, 4)}`;
+};
+
+/** Calendar months from January to the anchor's month, for the trend charts. */
+const monthsToAnchor = () => {
+  const year = ANCHOR.slice(0, 4);
+  const upto = Number(ANCHOR.slice(5, 7));
+  return Array.from({ length: upto }, (_, i) => `${year}-${`${i + 1}`.padStart(2, "0")}-01`);
+};
+
+/**
+ * Safety, per fiscal period.
+ *
+ * `reported` is the field that matters and the one most likely to be dropped
+ * by mistake: a period with no incidents and a period nobody has filed yet
+ * both read as zero, and only this flag separates "we were safe" from "we do
+ * not know". The live payload leaves the most recent periods unreported.
+ */
+const safetyFixture = () => {
+  const all = fiscalPeriods(Number(ANCHOR.slice(0, 4)));
+  const current = fiscalPeriodOf(ANCHOR);
+  const periods = all
+    .filter((p) => p.period_num <= current.period_num)
+    .map((p) => {
+      const rng = rngFor(SEED, "safety", p.period_code);
+      // The two most recent periods are still open, so they are unreported and
+      // must read as zero rather than as a real count.
+      const reported = p.period_num <= current.period_num - 2;
+      return {
+        ...p,
+        incident: reported ? int(rng, 0, 1) : 0,
+        incident_target: 0,
+        near_miss: reported ? int(rng, 0, 4) : 0,
+        near_miss_target: 0,
+        reported,
+      };
+    });
+  const last = periods[periods.length - 1];
+  return { current: last, periods };
 };
 
 const eriFixture = () => {
   const rng = rngFor(SEED, "eri");
-  const deliveries = int(rng, 18000, 26000);
-  const returns = int(rng, 40, 190);
-  const eri = Math.round((returns / deliveries) * 1e6) / 100;
+  const all = fiscalPeriods(Number(ANCHOR.slice(0, 4)));
+  const current = fiscalPeriodOf(ANCHOR);
+  const year = Number(ANCHOR.slice(0, 4));
+
+  // ERI is reported two periods in arrears, so the newest periods carry no
+  // figures at all. The chart has to tolerate null points, and the only way to
+  // prove it does is to ship some.
+  const reportedUpto = Math.max(1, current.period_num - 2);
+  const points = all.map((p) => {
+    const prng = rngFor(SEED, "eri", p.period_code);
+    const reported = p.period_num <= reportedUpto;
+    const deliveries = reported ? int(prng, 1200, 6800) : null;
+    const returns = reported ? int(prng, 1, 4) : null;
+    return {
+      period: `${year} ${p.period_code}`,
+      period_code: p.period_code,
+      period_num: p.period_num,
+      month_number: p.period_num,
+      month: monthLabel(`${year}-${`${p.period_num}`.padStart(2, "0")}-01`).slice(0, 3),
+      period_start: reported ? p.period_start : null,
+      period_end: reported ? p.period_end : null,
+      deliveries,
+      returns,
+      eri_pct: reported ? Math.round((returns / deliveries) * 1e4) / 100 : null,
+      target_pct: reported ? float(prng, 2.26, 2.45, 2) : null,
+      prev_year_returns: int(prng, 2, 7),
+      prev_year_eri_pct: float(prng, 0.29, 1.14, 2),
+      reported,
+    };
+  });
+
+  const latest = points.filter((p) => p.reported).slice(-1)[0];
+
+  // A decade of history, so the year-over-year view has something to show.
+  const years = Array.from({ length: 10 }, (_, i) => {
+    const y = year - 9 + i;
+    const yrng = rngFor(SEED, "eri-year", String(y));
+    const complete = y < year;
+    const deliveries = int(yrng, 100000, 2900000);
+    const returns = int(yrng, 55, 6400);
+    return {
+      fiscal_year: y,
+      eri_pct: complete ? Math.round((returns / deliveries) * 1e6) / 1e4 : null,
+      avg_target_pct: float(yrng, 1.9, 3.87, 4),
+      deliveries,
+      returns,
+      periods_reported: complete ? 12 : reportedUpto,
+      complete,
+    };
+  });
+
   return {
     eri: {
-      period: periodMonthOf(ANCHOR),
-      fiscal_year: Number(ANCHOR.slice(0, 4)),
-      period_code: `P${ANCHOR.slice(5, 7)}`,
-      period_num: Number(ANCHOR.slice(5, 7)),
-      period_start: `${ANCHOR.slice(0, 7)}-01`,
-      period_end: ANCHOR,
-      deliveries, returns,
-      eri_pct: eri,
-      target_pct: 10,
-      status: eri <= 10 ? "healthy" : eri <= 12 ? "at_risk" : "critical",
+      period: `${year} ${latest.period_code}`,
+      fiscal_year: year,
+      period_code: latest.period_code,
+      period_num: latest.period_num,
+      period_start: latest.period_start,
+      period_end: latest.period_end,
+      deliveries: latest.deliveries,
+      returns: latest.returns,
+      eri_pct: latest.eri_pct,
+      target_pct: latest.target_pct,
+      status: latest.eri_pct <= latest.target_pct ? "healthy" : latest.eri_pct <= latest.target_pct * 1.2 ? "at_risk" : "critical",
+      trend: { fiscal_year: year, points },
+      years,
     },
-    customer_complaints: {
-      latest: { count: int(rng, 1, 7) },
-      months: DAY_LABELS.filter((_, i) => i % 6 === 0).map((day) => ({
-        period_month: periodMonthOf(day),
-        count: int(rngFor(SEED, "complaints", day), 0, 9),
-      })),
+    customer_complaints: complaintsFixture(),
+  };
+};
+
+/**
+ * Customer complaints, by calendar month.
+ *
+ * Built separately from the ERI block it ships inside because the dashboard
+ * reaches it by two different paths that read different fields — the SSE frame
+ * prefers `total`, while /dashboard/eri uses only `latest.count`. Both are
+ * populated so the two paths cannot disagree.
+ */
+const complaintsFixture = () => {
+  // One month in arrears, like the rest of the group reporting.
+  const months = monthsToAnchor().slice(0, -2).map((ym) => ({
+    period_month: ym,
+    label: monthLabel(ym),
+    count: int(rngFor(SEED, "complaints", ym), 0, 4),
+  }));
+  return {
+    business_group: "MN",
+    months_reported: months.length,
+    months,
+    latest: months[months.length - 1] ?? { period_month: null, label: null, count: 0 },
+    total: months.reduce((a, m) => a + m.count, 0),
+  };
+};
+
+/**
+ * HFTPY — how many products hit their own yield target this period.
+ *
+ * Not an average yield. It is a count of products meeting target, expressed as
+ * a percentage of those that qualify, and `min_tested` is what decides who
+ * qualifies: a product with nine boards built can sit at 100% or 0% and
+ * neither figure means anything, so it is excluded from the ratio while still
+ * being listed. Getting that wrong makes the headline swing wildly on noise.
+ *
+ * Derived from the same per-product rows the Product Yield panel draws, summed
+ * across the whole window, so the two panels cannot contradict each other.
+ */
+const hftpyFixture = (perDayRows) => {
+  const MIN_TESTED = 200;
+  const DEFAULT_TARGET = 90;
+
+  const agg = new Map();
+  for (const day of DAY_LABELS) {
+    for (const r of perDayRows.get(day) ?? []) {
+      // Shift "D" is the whole-day roll-up; summing the shift rows as well
+      // would double-count every board.
+      if (r.shift !== "D") continue;
+      const cur = agg.get(r.item) ?? {
+        item: r.item, product: r.product, tested: 0, failed: 0,
+        target_yield_pct: r.target_yield ?? DEFAULT_TARGET,
+        target_is_default: r.target_yield == null,
+      };
+      cur.tested += r.tested;
+      cur.failed += r.failed;
+      agg.set(r.item, cur);
+    }
+  }
+
+  const products = [...agg.values()]
+    .map((p) => {
+      const fpy = p.tested ? Math.round(((p.tested - p.failed) / p.tested) * 1e4) / 100 : 0;
+      const qualifies = p.tested >= MIN_TESTED;
+      return { ...p, fpy_pct: fpy, qualifies, on_target: qualifies && fpy >= p.target_yield_pct };
+    })
+    .sort((a, b) => b.tested - a.tested);
+
+  const qualified = products.filter((p) => p.qualifies);
+  const onTarget = qualified.filter((p) => p.on_target);
+  const actual = qualified.length
+    ? Math.round((onTarget.length / qualified.length) * 1e4) / 100
+    : 0;
+
+  const current = fiscalPeriodOf(ANCHOR);
+  const year = Number(ANCHOR.slice(0, 4));
+
+  // The plan is a spreadsheet the quality team maintains by hand, which is why
+  // the live payload names the file and flags the projection as hardcoded.
+  const trendPoints = fiscalPeriods(year)
+    .filter((p) => p.period_num <= current.period_num)
+    .map((p) => {
+      const prng = rngFor(SEED, "hftpy-trend", p.period_code);
+      const total = int(prng, 15, 27);
+      const met = int(prng, Math.floor(total * 0.5), total);
+      const isCurrent = p.period_num === current.period_num;
+      const targetTotal = isCurrent ? int(prng, total, total + 3) : total;
+      const targetMet = isCurrent ? int(prng, met, targetTotal) : met;
+      return {
+        period_code: p.period_code,
+        period_num: p.period_num,
+        total_products: isCurrent ? qualified.length : total,
+        met_target: isCurrent ? onTarget.length : met,
+        hftpy_pct: isCurrent ? actual : Math.round((met / total) * 1e4) / 100,
+        target_total_products: targetTotal,
+        target_met_products: targetMet,
+        target_pct: Math.round((targetMet / targetTotal) * 1e4) / 100,
+        reported: true,
+      };
+    });
+
+  const projection = trendPoints.length > 1
+    ? trendPoints[trendPoints.length - 2].target_pct
+    : actual;
+
+  return {
+    period: `${year} ${current.period_code}`,
+    fiscal_year: year,
+    period_code: current.period_code,
+    period_start: current.period_start,
+    period_end: current.period_end,
+    actual_pct: actual,
+    projection_pct: projection,
+    projection_is_hardcoded: true,
+    delta_vs_projection: Math.round((actual - projection) * 10) / 10,
+    meets_projection: actual >= projection,
+    products_on_target: onTarget.length,
+    products_qualified: qualified.length,
+    products_total: products.length,
+    min_tested: MIN_TESTED,
+    products_on_default_target: products.filter((p) => p.target_is_default).length,
+    default_target_yield_pct: DEFAULT_TARGET,
+    plan_source: "HFTPY Plan.xlsx",
+    plan_actual_products_total: qualified.length,
+    plan_actual_products_met: onTarget.length,
+    plan_target_products_total: trendPoints[trendPoints.length - 1]?.target_total_products ?? qualified.length,
+    plan_target_products_met: trendPoints[trendPoints.length - 1]?.target_met_products ?? onTarget.length,
+    plan_delta_vs_target: Math.round((actual - projection) * 10) / 10,
+    meets_plan_target: actual >= projection,
+    trend: {
+      source: "HFTPY Plan.xlsx",
+      // The plan counts products against their plan targets, the actual counts
+      // them against their live targets. Charting them on one axis invites the
+      // reader to subtract one from the other, so the payload says outright
+      // that they are not comparable.
+      comparable_to_actual_pct: false,
+      points: trendPoints,
     },
+    products: products.map((p) => ({
+      item: p.item,
+      product: p.product,
+      tested: p.tested,
+      failed: p.failed,
+      fpy_pct: p.fpy_pct,
+      target_yield_pct: p.target_yield_pct,
+      target_is_default: p.target_is_default,
+      qualifies: p.qualifies,
+      on_target: p.on_target,
+    })),
+  };
+};
+
+/** Continuous-improvement counters, by calendar month. */
+const ciFixture = () => {
+  const months = monthsToAnchor().slice(0, -1).map((ym) => ({
+    period_month: ym,
+    label: monthLabel(ym),
+    currency: null,
+    kaizen: int(rngFor(SEED, "ci", ym, "k"), 110, 260),
+    // Lean savings land in lumps when a project closes, not every month, so
+    // most months are legitimately zero. Smoothing them would misrepresent how
+    // the number behaves and make the chart look like a trend.
+    lean_savings: chance(rngFor(SEED, "ci", ym, "l"), 0.3)
+      ? int(rngFor(SEED, "ci", ym, "amt"), 33700, 2360000)
+      : 0,
+  }));
+  const latest = months[months.length - 1];
+  const maxKaizen = Math.max(...months.map((m) => m.kaizen));
+  const maxSavings = Math.max(...months.map((m) => m.lean_savings));
+  return {
+    period_month: latest.period_month,
+    month_label: `${latest.label.slice(0, 3)} ${latest.period_month.slice(0, 4)}`,
+    metrics: {
+      kaizen: {
+        target: null, achieved: latest.kaizen, pct: null, currency: null,
+        reported: true, scale_max: maxKaizen + 41,
+      },
+      lean_savings: {
+        target: null, achieved: latest.lean_savings, pct: null, currency: "EUR",
+        reported: true, scale_max: maxSavings,
+      },
+    },
+    months,
+  };
+};
+
+/** Energy and CO2, by calendar month and fiscal period. */
+const sustainabilityFixture = () => {
+  const months = monthsToAnchor().slice(0, -4).map((ym) => {
+    const rng = rngFor(SEED, "sust", ym);
+    const total = int(rng, 1040000, 1580000);
+    const greenPct = float(rng, 61.78, 98.06, 2);
+    const green = Math.round(total * (greenPct / 100) * 10) / 10;
+    return {
+      period_month: ym,
+      label: monthLabel(ym),
+      total_kwh: total,
+      green_kwh: green,
+      green_pct: greenPct,
+      carbon_credit_pct: Math.round((100 - greenPct) * 100) / 100,
+    };
+  });
+  const latest = months[months.length - 1];
+
+  const year = Number(ANCHOR.slice(0, 4));
+  const current = fiscalPeriodOf(ANCHOR);
+  // CO2 is cumulative across the year, so it only ever rises.
+  let running = 0;
+  const periods = fiscalPeriods(year)
+    .filter((p) => p.period_num <= Math.max(1, current.period_num - 3))
+    .map((p) => {
+      running += float(rngFor(SEED, "co2", p.period_code), 40, 150, 4);
+      return {
+        period_code: p.period_code,
+        period_num: p.period_num,
+        total_co2e_t: Math.round(running * 1e4) / 1e4,
+        net_co2e_t: float(rngFor(SEED, "co2net", p.period_code), 0.8, 7.7, 4),
+      };
+    });
+  const lastPeriod = periods[periods.length - 1];
+
+  // Four named feeds, because the mix is the story: the site buys most of its
+  // green energy and generates the rest on two roofs.
+  const greenSources = {
+    bharath: Math.round(latest.green_kwh * 0.527),
+    solar_south: Math.round(latest.green_kwh * 0.091),
+    solar_north: Math.round(latest.green_kwh * 0.084),
+    babu_sarees: Math.round(latest.green_kwh * 0.298),
+  };
+
+  return {
+    period_month: latest.period_month,
+    month_label: latest.label,
+    co2_emission_tco2: {
+      value: lastPeriod.total_co2e_t,
+      period_code: lastPeriod.period_code,
+      trend: periods.map((p) => p.total_co2e_t),
+      trend_labels: periods.map((p) => p.period_code),
+      net_value: lastPeriod.net_co2e_t,
+      periods,
+    },
+    green_energy_pct: {
+      value: latest.green_pct,
+      trend: months.map((m) => m.green_pct),
+    },
+    total_green_energy_kwh: { value: latest.green_kwh },
+    total_energy_kwh: { value: latest.total_kwh },
+    carbon_credit_pct: { value: latest.carbon_credit_pct },
+    green_sources_kwh: greenSources,
+    months,
+  };
+};
+
+/**
+ * The factory twin, as station-level yield.
+ *
+ * DATA ONLY — nothing reads this today. The twin on screen is drawn from the
+ * hardcoded ZONES constant in src/components/factory/zones.ts, and its six
+ * statuses are derived client-side from the KPI cards
+ * (QualityLayout.tsx:1966-2029). This block is carried because the live frame
+ * carries it, so a component built against it later finds the data already
+ * shaped.
+ *
+ * The station ids and order match ZONES deliberately. Statuses are banded from
+ * the same process-performance yields the client derivation uses, so the data
+ * and the rendered twin agree instead of quietly disagreeing — the worst
+ * possible outcome for a panel whose whole job is a red/amber/green judgement.
+ *
+ * `inputs_expected` vs `inputs_present` is the honest part: Packaging has no
+ * instrumented feed, so it reports null rather than a invented green.
+ */
+const factoryTwinFor = (day, processPerformance, kpiAcc) => {
+  // processPerformanceFor returns the step map directly; the fixture file wraps
+  // it in { steps }, which is the easy mistake to make here.
+  const steps = processPerformance;
+
+  /** Mean of whatever numbers resolve, ignoring steps that reported nothing. */
+  const mean = (vals) => {
+    const nums = vals.filter((v) => typeof v === "number");
+    return nums.length
+      ? Math.round((nums.reduce((a, v) => a + v, 0) / nums.length) * 100) / 100
+      : null;
+  };
+  const band = (v) => (v == null ? null : v >= 98 ? "healthy" : v >= 97 ? "at_risk" : "critical");
+  const dayYieldOf = (n) => steps[n]?.day?.yield_pct;
+  const shiftYieldOf = (n, shift) => steps[n]?.by_shift?.find((b) => b.shift === shift)?.yield_pct;
+
+  // MFT and TESTING are the module and unit test cells, and those live in
+  // LEVEL_STEPS rather than STEPS, so they are absent from the process map.
+  // They come from the KPI block instead — which is also how the captured
+  // payload relates them: its MFT per-shift figures are exactly the KPI
+  // module FPY for the same shifts.
+  const kpiDay = metricsFrom(kpiAcc.D);
+  const kpiShift = (shift) => metricsFrom(kpiAcc[shift]);
+
+  const ZONES = [
+    {
+      station: "SMT", station_name: "SMT", sort_order: 1, inputs_expected: 5,
+      // DPMOI is an index, not a yield, so averaging it in would be nonsense.
+      day: () => mean(["SPI", "AXI", "SMT_DEFECTS"].map(dayYieldOf)),
+      shift: (s) => mean(["SPI", "AXI", "SMT_DEFECTS"].map((n) => shiftYieldOf(n, s))),
+      present: () => ["SPI", "AXI", "SMT_DEFECTS", "DPMOI"].filter((n) => typeof dayYieldOf(n) === "number").length,
+    },
+    {
+      station: "MFT", station_name: "MFT", sort_order: 2, inputs_expected: 1,
+      day: () => kpiDay.fpy_module, shift: (s) => kpiShift(s).fpy_module, present: () => 1,
+    },
+    {
+      station: "THERMAL_GEL", station_name: "Thermal Gel", sort_order: 3, inputs_expected: 1,
+      day: () => dayYieldOf("THERMAL_AVI"), shift: (s) => shiftYieldOf("THERMAL_AVI", s),
+      present: () => (typeof dayYieldOf("THERMAL_AVI") === "number" ? 1 : 0),
+    },
+    {
+      station: "RFM", station_name: "RFM", sort_order: 4, inputs_expected: 2,
+      day: () => mean(["RTWP", "OTA_TEST"].map(dayYieldOf)),
+      shift: (s) => mean(["RTWP", "OTA_TEST"].map((n) => shiftYieldOf(n, s))),
+      present: () => ["RTWP", "OTA_TEST"].filter((n) => typeof dayYieldOf(n) === "number").length,
+    },
+    {
+      station: "TESTING", station_name: "Testing", sort_order: 5, inputs_expected: 6,
+      day: () => mean([kpiDay.fpy_unit, ...["IP", "LBTS", "BURN_IN", "AUTO_OGI"].map(dayYieldOf)]),
+      shift: (s) => mean([kpiShift(s).fpy_unit, ...["IP", "LBTS", "BURN_IN", "AUTO_OGI"].map((n) => shiftYieldOf(n, s))]),
+      present: () => 1 + ["IP", "LBTS", "BURN_IN", "AUTO_OGI"].filter((n) => typeof dayYieldOf(n) === "number").length,
+    },
+    {
+      // No instrumented feed. Reports null rather than an invented green — the
+      // one honest answer for a station nobody is measuring.
+      station: "PACKAGING", station_name: "Packaging", sort_order: 6, inputs_expected: 1,
+      day: () => null, shift: () => null, present: () => 0,
+    },
+  ];
+
+  return {
+    zones: ZONES.map((z) => {
+      const dayYield = z.day();
+      const present = z.present();
+      return {
+        station: z.station,
+        station_name: z.station_name,
+        sort_order: z.sort_order,
+        inputs_expected: z.inputs_expected,
+        inputs_present: present,
+        by_shift: SHIFT_LETTERS.slice(0, 2).map((shift) => {
+          const v = z.shift(shift);
+          return { shift, yield_pct: v, status: band(v) };
+        }),
+        day: {
+          yield_pct: dayYield,
+          status: band(dayYield),
+          // Partial when the station is missing a feed, which is what makes a
+          // green reading trustworthy or not.
+          partial: present < z.inputs_expected,
+        },
+      };
+    }),
+  };
+};
+
+/**
+ * Customer quality audit, day over day.
+ *
+ * DATA ONLY — there is no process-audit feature in the app. Derived from the
+ * same `auditFor` the KPI card's customer_audit uses, so the two can never
+ * report different scores for the same day.
+ *
+ * Today is deliberately unreported: the audit is signed off the day after the
+ * shift it covers, so `today.reported` is false and the score is 0 rather than
+ * a figure nobody has filed. That distinction is the reason `reported` exists.
+ */
+const processAuditFor = () => {
+  const scored = DAY_LABELS.map((d) => ({ day: d, score: auditFor(d) })).filter((e) => e.score != null);
+  const latest = scored[scored.length - 1];
+  const prior = scored[scored.length - 2];
+  const todayScore = auditFor(ANCHOR);
+  return {
+    area: "Customer Quality Audit",
+    today: {
+      business_date: latest?.day ?? ANCHOR,
+      score: todayScore ?? 0,
+      reported: todayScore != null,
+    },
+    yesterday: {
+      business_date: prior?.day ?? null,
+      score: prior?.score ?? 0,
+      reported: prior != null,
+    },
+    delta_vs_yesterday:
+      todayScore != null && prior ? Math.round((todayScore - prior.score) * 100) / 100 : -100,
+    trend: scored.slice(-8).map((e) => ({ business_date: e.day, score: e.score })),
   };
 };
 
@@ -1192,10 +2029,17 @@ const yieldRecommendationFixture = () => ({
  * interval fires. Later frames nudge the live figures so the dashboard visibly
  * moves without the numbers wandering away from the fixtures.
  */
-const realtimeFor = (day, rows, kpiAcc, processSteps, latestAudit, hftpy, shopFloor, attention, safety, eri, ci) => {
+const realtimeFor = (day, rows, kpiAcc, processSteps, latestAudit, hftpy, shopFloor, attention, safety, eri, ci, sustainability, factoryTwin, processAudit) => {
   const meta = {
     shift: { name: "Full Day", start: "06:15 AM", end: "06:15 AM" },
     status: "ONLINE",
+    // Identifies the plant and the vintage of the frame. `source: "gold"` is
+    // the warehouse layer the live payload was served from; carried so the
+    // frame is a faithful capture rather than a subset.
+    site: "IN04",
+    business_date: day,
+    generated_at: `${day}T11:32:50`,
+    source: "gold",
   };
   // The audit is a PLANT score signed off the day after the shift it covers, so
   // today's is never filed yet. The live card therefore carries the newest
@@ -1227,10 +2071,17 @@ const realtimeFor = (day, rows, kpiAcc, processSteps, latestAudit, hftpy, shopFl
           },
         },
         hftpy, shop_floor: shopFloor, attention, safety,
-        sustainability: ci.sustainability,
+        sustainability,
         customer_complaints: eri.customer_complaints,
         eri: eri.eri,
-        ci: { months: ci.months },
+        ci,
+        // No consumer today. The factory twin is rendered from the hardcoded
+        // ZONES constant with statuses derived client-side, and there is no
+        // process-audit feature at all. Both are carried because the live frame
+        // carries them, so a component built against either finds the data
+        // already there and correctly shaped.
+        factory_twin: factoryTwin,
+        process_audit: processAudit,
       },
     },
   ];
@@ -1273,6 +2124,9 @@ const main = async () => {
 
   const perDayRows = new Map();
   const perDayKpi = new Map();
+  // The anchor day's attention block is reused by the realtime frames, and
+  // rebuilding it there would mean re-deriving every NC log.
+  const perDayAttention = new Map();
 
   for (const day of DAY_LABELS) {
     // Product yield + the KPI counts derived from the SAME rows.
@@ -1340,6 +2194,11 @@ const main = async () => {
     //
     // Every level-two payload is derived from the level-one rows above it, so
     // the log and the table it opened from always agree.
+    // Collected for attentionFor below: the alerts are clustered out of these
+    // same rows, so an alert can never name a board the drill-down does not
+    // have.
+    const ncForAttention = [];
+
     for (const step of ALL_STEPS) {
       if (!step.ncLog) continue;
       const levelOne = stepRows.get(step.step) ?? [];
@@ -1348,6 +2207,12 @@ const main = async () => {
       for (const row of levelOne) {
         const nc = ncLogFor(step, day, row.item, row.done, row.failed);
         defectsByItem[row.item] = nc;
+        ncForAttention.push({
+          step: step.step,
+          item: row.item,
+          productName: nc.product_name ?? row.item,
+          rows: nc.nc_log,
+        });
         countRows("nc_log", nc.nc_log.length);
         const t = testersForItem(step, day, row.item, row.done, row.failed);
         testersByItem[row.item] = t;
@@ -1381,13 +2246,15 @@ const main = async () => {
     await write(`events/screw-defects/${day}.json`, screw);
     countRows("screw_defects", screw.rows.length);
 
-    const attention = attentionFor(day);
+    const attention = attentionFor(day, ncForAttention);
+    perDayAttention.set(day, attention);
     await write(`events/attention-${day}.json`, attention);
     countRows("alerts", attention.alerts.length);
   }
 
   // Single-file fixtures.
-  await write("summaries/safety.json", safetyFixture());
+  const safety = safetyFixture();
+  await write("summaries/safety.json", safety);
   const eri = eriFixture();
   await write("summaries/eri.json", eri);
   await write("summaries/yield-recommendation.json", yieldRecommendationFixture());
@@ -1457,47 +2324,45 @@ const main = async () => {
   });
 
   // Realtime frames for the anchor day only: the snapshot is always "today".
-  const ciRng = rngFor(SEED, "ci");
-  const ci = {
-    months: DAY_LABELS.filter((_, i) => i % 6 === 0).map((day) => ({
-      label: periodMonthOf(day),
-      period_month: periodMonthOf(day),
-      lean_savings: int(rngFor(SEED, "ci", day), 180000, 920000),
-      kaizen: int(rngFor(SEED, "ci", day, "k"), 3, 24),
-    })),
-    sustainability: {
-      green_energy_pct: { value: float(ciRng, 58, 78, 1) },
-      co2_emission_tco2: {
-        value: float(ciRng, 1050, 1480, 1),
-        trend: DAY_LABELS.slice(-7).map((d) => float(rngFor(SEED, "co2", d), 1020, 1500, 1)),
-        trend_labels: DAY_LABELS.slice(-7).map((d) => d.slice(5)),
-      },
-    },
-  };
-  const hftpyRng = rngFor(SEED, "hftpy", ANCHOR);
-  const actual = float(hftpyRng, 88, 95, 1);
-  const projection = Math.round((actual + float(hftpyRng, 0.5, 3.2, 1)) * 10) / 10;
+  const ci = ciFixture();
+  const sustainability = sustainabilityFixture();
+  const hftpy = hftpyFixture(perDayRows);
+  const anchorProcess = processPerformanceFor(ANCHOR);
+  const factoryTwin = factoryTwinFor(ANCHOR, anchorProcess, perDayKpi.get(ANCHOR));
+  const processAudit = processAuditFor();
   await write(
     "realtime/snapshots.json",
     realtimeFor(
       ANCHOR,
       perDayRows.get(ANCHOR) ?? [],
       perDayKpi.get(ANCHOR),
-      processPerformanceFor(ANCHOR),
+      anchorProcess,
       // Newest audited day, walking back from the anchor. Today is unaudited by
       // design, so this is normally yesterday.
       DAY_LABELS.map(auditFor).filter((s) => s != null).slice(-1)[0] ?? null,
-      {
-        actual_pct: actual,
-        projection_pct: projection,
-        delta_vs_projection: Math.round((actual - projection) * 10) / 10,
-        projection_is_hardcoded: false,
-      },
+      hftpy,
       { temp_c: float(rngFor(SEED, "sf", ANCHOR), 21.8, 24.4, 1), humidity_pct: float(rngFor(SEED, "sf2", ANCHOR), 49, 55, 1), hour_of_day: 11 },
-      attentionFor(ANCHOR),
-      { accident: { value: 0, trend: [0, 0, 0] }, near_miss: { value: int(rngFor(SEED, "nm"), 1, 5), trend: [2, 3, 2] } },
+      perDayAttention.get(ANCHOR) ?? { alerts: [], counts: { critical: 0, risk: 0, moderate: 0, info: 0 }, truncated: false },
+      // The stream and /dashboard/safety disagree on shape, and both are real:
+      // the REST endpoint sends {current, periods} while the frame sends
+      // {accident, near_miss} wrappers, which is what QualityLayout reads at
+      // the SSE seam. Derived from the same fixture so the two cannot report
+      // different numbers for the same period.
+      {
+        accident: {
+          value: safety.current.incident,
+          trend: safety.periods.slice(-3).map((p) => p.incident),
+        },
+        near_miss: {
+          value: safety.current.near_miss,
+          trend: safety.periods.slice(-3).map((p) => p.near_miss),
+        },
+      },
       eri,
       ci,
+      sustainability,
+      factoryTwin,
+      processAudit,
     ),
   );
 

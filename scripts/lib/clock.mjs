@@ -83,3 +83,49 @@ export const SHIFT_MINUTES = 480;
 
 /** "2026-09-27" -> "P09", matching monthPeriodLabel's expectation. */
 export const periodMonthOf = (day) => day.slice(0, 7);
+
+/**
+ * The plant's 12 fiscal periods for a year.
+ *
+ * NOT calendar months. The year is divided into four 13-week quarters split
+ * 5-4-4, so P01 runs 3 Jan - 6 Feb and P02 only 7 Feb - 6 Mar. Every
+ * period-scale metric in the dashboard — safety, ERI, HFTPY, CO2 — is reported
+ * against these, and labelling them with month names puts the numbers under
+ * the wrong heading by up to a week.
+ *
+ * Anchored on the first Saturday of January, which is how the captured
+ * payload's P01 starts on 2026-01-03.
+ */
+export const fiscalPeriods = (year) => {
+  // First Saturday of January.
+  let cursor = `${year}-01-01`;
+  while (new Date(`${cursor}T00:00:00Z`).getUTCDay() !== 6) cursor = addDays(cursor, 1);
+
+  const WEEKS = [5, 4, 4, 5, 4, 4, 5, 4, 4, 5, 4, 4];
+  const periods = [];
+  let week = 2; // P01 starts in ISO week 2, as the capture reports.
+  for (let i = 0; i < WEEKS.length; i++) {
+    const span = WEEKS[i];
+    const start = cursor;
+    const end = addDays(cursor, span * 7 - 1);
+    periods.push({
+      period: `${year}-P${`${i + 1}`.padStart(2, "0")}`,
+      fiscal_year: year,
+      period_code: `P${`${i + 1}`.padStart(2, "0")}`,
+      period_num: i + 1,
+      week_from: week,
+      week_to: week + span - 1,
+      period_start: start,
+      period_end: end,
+    });
+    cursor = addDays(end, 1);
+    week += span;
+  }
+  return periods;
+};
+
+/** The fiscal period a day falls in, or the last one before it. */
+export const fiscalPeriodOf = (day) => {
+  const all = fiscalPeriods(Number(day.slice(0, 4)));
+  return all.find((p) => day >= p.period_start && day <= p.period_end) ?? all[all.length - 1];
+};

@@ -112,23 +112,70 @@ export const LINE_STEPS = STEPS.filter((s) => s.lines.length > 0).map((s) => s.s
 
 // ── Testers, defect codes and dispositions ──────────────────────────────────
 
-/** Test resources per step. The drill-down attributes failures to these. */
+/**
+ * Test resources per step. The drill-down attributes failures to these.
+ *
+ * Named the way the plant names them, because these strings are user-visible in
+ * three places: the Resource column of the tester yield report, the NC log, and
+ * the Attention Center alert titles ("Tester NET06EP0373: 4 false failures").
+ * Short synthetic ids like MT01 read as placeholder data the moment anyone who
+ * knows the floor looks at the screen.
+ *
+ * Two families, both real: NET.../NSN... for the electrical testers, and
+ * positional ids for the inline inspection machines (an AOI head is identified
+ * by where it sits on the line, not by an asset tag).
+ *
+ * Pool SIZES are deliberately unchanged from the previous synthetic names.
+ * Failure volumes are divided across the pool, so resizing a pool would shift
+ * every per-tester yield in the set for no reason.
+ */
 export const testersFor = (step) => {
   switch (step) {
+    // Inline inspection — positional, as on the line.
     case "SPI": return ["SPI001", "SPI002"];
     case "AXI": return ["AXI001", "AXI002", "AXI003"];
-    case "UNIT_TEST": return ["UT01", "UT02", "UT03", "UT04", "UT05"];
-    case "MODULE_TEST": return ["MT01", "MT02", "MT03", "MT04"];
-    case "OTA_TEST": return ["OTA01", "OTA02"];
-    case "RTWP": return ["RTWP01", "RTWP02"];
-    case "BURN_IN": return ["BI01"];
-    case "LBTS": return ["LBTS01", "LBTS02"];
-    case "IP": return ["IP01", "IP02", "IP03"];
-    case "AUTO_OGI": return ["OGI01", "OGI02"];
-    case "THERMAL_AVI": return ["AVI01", "AVI02"];
-    default: return [`${step}01`];
+    case "AUTO_OGI": return ["OGI001", "OGI002"];
+    case "THERMAL_AVI": return ["AVI001", "AVI002"];
+    // Electrical test and rework cells — asset-tagged.
+    case "UNIT_TEST": return ["NET06EP0373", "NET06EP0354", "NET06E00089", "NET05000277", "NSN04A00364"];
+    case "MODULE_TEST": return ["NET07000209", "NET07000266", "NET05000986", "NET06EP0497"];
+    case "IP": return ["NET06EP0589", "NET06000089", "NET06E00106"];
+    case "OTA_TEST": return ["NET06EP0197", "NSN04A00371"];
+    case "RTWP": return ["NSN04A00388", "NET05000312"];
+    case "LBTS": return ["NET07000418", "NET07000420"];
+    case "BURN_IN": return ["BI001"];
+    default: return [`${step}001`];
   }
 };
+
+/**
+ * MES operation name for a step.
+ *
+ * The plant qualifies every operation with what it does and which site it runs
+ * at — `MODULE_TEST_REWORK_IN04`, not `MODULE_TEST`. IN04 is the site code that
+ * also appears in `meta.site`. The images handler already used this convention
+ * (`${step}_INSPECTION_IN04`); this makes it the rule rather than one special
+ * case.
+ */
+export const operationFor = (step) => {
+  switch (step) {
+    case "UNIT_TEST": return "UNIT_CUTS_REWORK_IN04";
+    case "MODULE_TEST": return "MODULE_TEST_REWORK_IN04";
+    case "IP": return "IP_TEST_REWORK_IN04";
+    case "AXI": return "AXI_INSPECTION_IN04";
+    case "SPI": return "SPI_INSPECTION_IN04";
+    default: return `${step}_IN04`;
+  }
+};
+
+/**
+ * Assembly stage a step belongs to, as the alert titles report it.
+ *
+ * Unit steps test a whole radio unit; everything upstream tests a module that
+ * will go into one. Drives the "| Module (...) |" / "| Unit (...) |" segment of
+ * an Attention Center title.
+ */
+export const stageFor = (step) => (step === "UNIT_TEST" ? "Unit" : "Module");
 
 /**
  * Disposition categories, as the `category` parameter takes them.
@@ -146,7 +193,14 @@ export const CAUSE_CATEGORIES = [
   ["MOD_REJ", 2],
 ];
 
-/** NC codes for the MES NC log, weighted so a few dominate the Pareto. */
+/**
+ * NC codes for the MES NC log at the INSPECTION steps, weighted so a few
+ * dominate the Pareto.
+ *
+ * These are physical solder/placement defects, which is what SPI and AXI
+ * actually find. They are the wrong vocabulary for an electrical test cell —
+ * see ELECTRICAL_NC_CODES.
+ */
 export const NC_CODES = [
   ["SOLDER_BRIDGE", 42],
   ["COLD_JOINT", 28],
@@ -159,6 +213,46 @@ export const NC_CODES = [
   ["EEPROM_WRITE_FAIL", 4],
   ["CONNECTOR_DAMAGE", 3],
 ];
+
+/**
+ * NC codes for the electrical TEST and REWORK steps.
+ *
+ * A test cell does not report "solder bridge" — it reports a disposition
+ * against a failed test, and the single largest category in a real log is the
+ * retest that passes. Hence G3 dominating by a wide margin.
+ *
+ * PROVENANCE, because it matters when reading these: G3, G4 and F99 are taken
+ * from a captured production payload, with their exact descriptions. The other
+ * codes are INVENTED siblings in the same families (G = test/tester handling,
+ * F = component failure), added because three codes cannot produce a credible
+ * Pareto. They follow the families' evident conventions but are not verified
+ * against the real code list.
+ */
+export const ELECTRICAL_NC_CODES = [
+  ["G3", 54],
+  ["F99", 14],
+  ["G4", 11],
+  ["F12", 8],
+  ["G7", 6],
+  ["F31", 4],
+  ["G9", 2],
+  ["F74", 1],
+];
+
+/**
+ * True for the electrical test / rework cells.
+ *
+ * These behave differently from the inline inspection steps in three ways that
+ * matter downstream: they draw NC codes from the G/F families, they name
+ * failures by test case rather than by ticket, and they are the steps the
+ * Attention Center clusters over. Centralised so those three never drift apart.
+ */
+export const isElectricalStep = (step) =>
+  step === "UNIT_TEST" || step === "MODULE_TEST" || step === "IP";
+
+/** The code list a step draws from. */
+export const ncCodesFor = (step) =>
+  isElectricalStep(step) ? ELECTRICAL_NC_CODES : NC_CODES;
 
 /** SMT solder-defect NC codes. Distinct vocabulary from the MES log. */
 export const SMT_NC_CODES = [

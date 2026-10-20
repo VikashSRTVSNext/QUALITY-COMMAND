@@ -31,10 +31,8 @@ import {
   type YieldRowLike,
 } from "../aggregations";
 import {
-  attentionDay,
   eriFixture,
   kpiDay,
-  latestDay,
   previousWindow,
   processFilterOptionsFixture,
   processPerformanceDay,
@@ -453,6 +451,3 @@ export const yieldRecommendationHandler = async (): Promise<DemoResponse> => ({
     plan_available: false,
   },
 });
-
-/** Not a REST route — the simulator reads this for the current day's alerts. */
-export const attentionForToday = () => attentionDay(latestDay());

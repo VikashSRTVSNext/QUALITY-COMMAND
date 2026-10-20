@@ -170,7 +170,7 @@ Three streams, replayed from `realtime/snapshots.json` (9 frames).
 |---|---|---|
 | `/dashboard/stream/process-performance` | `processPerformance` | `meta`, `process_performance` |
 | `/dashboard/stream/product-yield` | `productYield` | `meta`, `product_yield` |
-| `/dashboard/stream/other` | `other` | `meta`, `kpis`, `hftpy`, `shop_floor`, `attention`, `safety`, `sustainability`, `customer_complaints`, `eri`, `ci` |
+| `/dashboard/stream/other` | `other` | `meta`, `kpis`, `hftpy`, `shop_floor`, `attention`, `safety`, `sustainability`, `customer_complaints`, `eri`, `ci`, `factory_twin`, `process_audit` |
 
 - Event name `snapshot`, with `onmessage` as the fallback the app also wires.
   **A named `snapshot` event never also fires `onmessage`** — native EventSource
@@ -181,6 +181,15 @@ Three streams, replayed from `realtime/snapshots.json` (9 frames).
 - Control: `startSimulator`, `stopSimulator`, `pauseSimulator`,
   `resumeSimulator`, `setSimulatorSpeed(n)`, `simulatorState()`.
   Speed also from `VITE_DEMO_SSE_SPEED`.
+
+### The safety block has two different shapes, and both are correct
+
+`QualityLayout` reads `safety.accident.value` / `safety.near_miss.value` off the
+SSE frame, but `safety.current` / `safety.periods` off `/dashboard/safety`. The
+two are genuinely different payloads for the same data in the live system, so
+the fixtures reproduce both, derived from one source so they cannot disagree.
+Sending the REST shape over the stream does not error — it silently stops safety
+updating, which is why the validator now asserts the wrappers are present.
 - **One simulator, shared.** Connections subscribe and unsubscribe; the timer
   starts on the first subscriber and stops on the last. This is what makes
   StrictMode safe — a per-connection timer would interleave two playbacks and
@@ -198,7 +207,7 @@ Three streams, replayed from `realtime/snapshots.json` (9 frames).
    bypassed shim fails DNS instead of reaching a real service.
 3. **No UI switch to a real backend exists.**
 4. **Fixtures stay out of the live build.** `publicDir` is `false` outside demo
-   mode, so the 35 MB set cannot ride along in `dist/`.
+   mode, so the 36 MB set cannot ride along in `dist/`.
 
 Measured: **0 requests to the sentinel host** across a full session exercising
 all 15 tabs, 12 drill-downs, range filtering, and the acknowledgement flow.
@@ -212,7 +221,7 @@ Everything below was executed. Nothing here is projected.
 ### Fixture validation — pass
 ```
 npm run demo:validate -- --deep
-  · 1266 files, 35.24 MB on disk
+  · 1266 files, 36.48 MB on disk
   · 1,792 yield rows, 13,067 NC records checked
   · determinism: regenerated and compared sha256 over every file
 Demo fixtures OK — 48,544 assertions passed.
@@ -277,7 +286,7 @@ Worst case is the full 30-day span, cold cache:
 
 | Metric | Value |
 |---|---|
-| Fixture set on disk | 35.24 MB, 1,267 files, 57,622 rows |
+| Fixture set on disk | 36.48 MB, 1,267 files, 57,999 rows |
 | Partitions at first paint | 7 (~174 KB) |
 | After range query + 3-level drill-down | 41 of 1,267 (3.2%) |
 | Slowest single partition fetch | 28 ms |
@@ -305,13 +314,29 @@ fixed by the calendar (yield, KPI days, process steps, testers) and only
 
 | | `--volume 1` | `--volume 2.08` | `--volume 25.1` |
 |---|---|---|---|
-| Rows | 57,622 | **100,203** | **1,008,665** |
-| On disk | 35.29 MB | 55.09 MB | **472.55 MB** |
+| Rows | 57,999 | **100,203** | **1,008,665** |
+| On disk | 36.53 MB | 55.09 MB | **472.55 MB** |
 | Generation | 3.1 s | **4.2 s** | **31.2 s** |
 | Validation | 48,543 asserts | 91,177 asserts | **1,000,456 asserts, 18.8 s** |
 | Partitions at first paint | 7 | 7 | **7** |
 | Slowest first-paint fetch | 28 ms | 22 ms | **31 ms** |
 | Heap after first paint | 36 MB | 34 MB | **41 MB** |
+
+The `--volume 1` column is current. **The 2.08 and 25.1 columns were measured
+before the alerts became NC-derived** and are not re-run here; they understate
+rows by roughly 400-550 and generation by a second or two. Nothing they were
+measured to prove — lazy loading, first-paint cost, query latency — is affected
+by the alert block, which is capped at 18 entries per day regardless of volume.
+
+Re-checked at `--volume 5` (215,929 rows, 110 MB) after the change: generation
+19.8 s, alert rows 540 in total, 18 on the anchor day, `truncated: false`. The
+clustering is linear in NC rows and bounded in output.
+
+One consequence of volume worth knowing: the severity rule is an absolute
+threshold (3+ events = critical), so a busier plant produces bigger clusters and
+at `--volume 5` every alert is critical. The committed `--volume 1` set gives
+the realistic spread. Scaling the threshold with volume would be inventing a
+rule the capture does not support.
 
 First paint does not degrade with set size, because the partitions it reads are
 day summaries whose size is fixed by the calendar, not by volume.
@@ -431,6 +456,100 @@ window → 200 with an empty, well-formed envelope.
 
 ---
 
+## 6.5 Attention alerts — derived from the NC log
+
+Alerts used to come from a seven-entry template list: 3-6 per day, titles like
+"SPI volume drift on SMT_LINE01", one identical `ai_recommendation` on every
+card, and no connection to any data in the set. An alert named boards that
+existed nowhere, so opening the drill-down behind it contradicted it.
+
+They are now clustered out of each day's own `nc_log` rows. Three kinds, the
+same three the live payload carries:
+
+| `details.kind` | `key_field` | grouped on | reads as |
+|---|---|---|---|
+| `tester` | `tester` | product + operation + category + resource | suspect the cell |
+| `same` | `part_number` | product + operation + category + component | suspect the batch |
+| `failure` | `failure_id` | one test failing on ≥ 2 different cells | suspect the limit |
+
+Against the captured payload:
+
+| | live capture | demo, anchor day |
+|---|---|---|
+| alerts | 16 | **16** |
+| `truncated` | false | **false** |
+| kinds | tester 13, same 2, failure 1 | tester 11, same 3, failure 2 |
+| severity | critical 9, risk 3, moderate 4 | critical 5, risk 2, moderate 9 |
+| envelope keys | 20 | **20, all present** |
+| `details` sub-fields | 20 | **20, all present** |
+
+The severity mix skews more moderate than the capture because the demo's
+clusters are smaller — a consequence of its volumes, not of a different rule.
+The rules themselves are read off the capture:
+
+- **critical** at 3+ events; **risk** at 2 events that are the same test on two
+  distinct boards; **moderate** at 2 events otherwise. That last split is the
+  subtle one: in the capture every `risk` alert was one test reproducing on two
+  boards and every `moderate` one was either two events on a single board or
+  two unrelated tests — risk means reproducible, moderate means noise so far.
+- **impact** `medium` at 6+ events, else `low`. Held for all 16 captured alerts.
+- `details.step` carries 1/2/3 tracking moderate/risk/critical, matching the
+  correlation visible in the capture.
+
+**These are inferred from one 16-alert sample, not specified.** If the real
+thresholds are ever published they should be replaced outright rather than
+tuned.
+
+Only the electrical cells are clustered (`UNIT_TEST`, `MODULE_TEST`, `IP`). An
+AOI head sees every board, so inspection steps produce clusters of 9+ where a
+test cell produces 2-6; left in, they crowded out the test-and-rework signal the
+panel exists for and rendered titles spanning most of the solder-code
+vocabulary at once.
+
+### What the dashboard actually shows
+
+`QualityLayout.tsx:1254-1288` maps ten fields, and `:1273` maps **every**
+non-`critical` severity to "Risk" — so the tabs read `All 16 / Critical 5 /
+Risk 11`, with `moderate` folded into Risk. That is live behaviour, not a
+defect. The alert card and the all-alerts table render severity, title, impact,
+age and recommendation; **neither displays current/target/deviation**, so the
+null target and deviation these alerts carry are not visible anywhere.
+
+The visible change is the titles, which are now the plant's pipe-delimited
+format, and the recommendations, which now name the actual tester and test
+cases instead of repeating one sentence.
+
+### Why `failure_id` is correlated
+
+Failure IDs are drawn from a small per-(product, step) subset rather than the
+whole list, because a product has characteristic failure modes — an RF module
+that fails does so on the same handful of tests. Drawing uniformly made repeat
+failures vanish, which made every cluster read as noise, because a cluster only
+counts as reproducible when the same test fails twice.
+
+### Validation
+
+There were no attention assertions at all before this, which mattered once the
+alerts became derived: a templated alert can only be wrong in its wording, but
+a derived one can reference a board that does not exist, and nothing on screen
+would reveal it. The validator now checks, for all 30 days:
+
+```
+512 alerts, 1462 board references resolved to NC rows
+```
+
+Every `details.sfcs` entry must exist in that day's NC log for that product and
+step. Plus: severity/impact/key_field vocabularies, `counts` matching the actual
+tally, `current_value === details.count`, `target_value` and `deviation` null,
+no `unit`, and `tester_counts` / `failure_id_counts` / `cause[].count` each
+summing to `count`.
+
+It also asserts **which sections frame 0 carries**, which was previously
+unchecked — dropping one would have passed validation and simply blanked a
+panel at runtime.
+
+---
+
 ## 7. Limitations and known gaps
 
 1. **The shift report is CSV, not xlsx.** Live returns a server-generated
@@ -489,12 +608,38 @@ window → 200 with an empty, well-formed envelope.
 7. **`npm run lint` fails repo-wide** with "ESLint couldn't find a configuration
    file". Pre-existing on `deployment/main`, unrelated to this work, not fixed
    here.
-8. **The fixture set is committed** (35 MB). Keeping it in git is what makes the
+8. **The fixture set is committed** (36 MB). Keeping it in git is what makes the
    demo clone-and-run; regenerating is one command if that trade-off is
    unwanted.
 9. **Beyond ~1M rows, partitions need splitting.** Measured, not guessed: at
    `--volume 25` a single day of SPI pad log is one 9.98 MB JSON file, parsed
    whole to answer one drill-down. See §6.1.
+10. **Most NC codes on the electrical steps are invented.** `G3` ("Retest
+    (False failure)"), `G4` ("Tester HW error") and `F99` ("Other electrical
+    component failure") are taken from a captured payload with their exact
+    wording. The other five are siblings fabricated in the same families
+    (`G` = test/tester handling, `F` = component failure), because three codes
+    cannot produce a credible Pareto. They follow the families' evident
+    conventions but are not verified against the real code list.
+11. **`factory_twin` and `process_audit` have no consumer.** Both are carried in
+    the SSE frame because the live frame carries them, but nothing reads either.
+    The factory twin on screen is drawn from the hardcoded `ZONES` constant in
+    `src/components/factory/zones.ts`, with statuses derived client-side from
+    the KPI cards (`QualityLayout.tsx:1966-2029`); there is no process-audit
+    feature at all. The fixture values are derived from the same
+    process-performance and `customer_audit` sources the UI already uses, so if
+    a component is ever built against either, the data will agree with what is
+    already on screen rather than contradicting it.
+12. **HFTPY reads low — around 31%, where the capture shows 80%.** Not a bug in
+    the roll-up. Each product's `baseYield` in `scripts/lib/domain.mjs` is set
+    deliberately just *below* its target so the per-day cards show amber rather
+    than a wall of green, and cumulative FPY therefore lands just under target
+    for most products (96.69 against 97, 94.70 against 95). Since HFTPY counts
+    products meeting target, it inherits that. Raising it would mean either
+    retuning every product's yield — changing a panel nobody asked about — or
+    hardcoding the headline so it contradicts the Product Yield table a user can
+    open. Internal consistency is worth more than matching one captured number.
+
 
 ---
 

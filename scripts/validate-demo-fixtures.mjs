@@ -266,6 +266,89 @@ const main = async () => {
 
   notes.push(`${yieldRows.toLocaleString("en-US")} yield rows, ${ncRows.toLocaleString("en-US")} NC records checked`);
 
+  // ── Attention alerts ─────────────────────────────────────────────────────
+  //
+  // There were no assertions here at all until the alerts started being
+  // derived from the NC log, which is exactly when they became worth having:
+  // a templated alert could only be wrong in its wording, but a derived one
+  // can reference a board that does not exist, and nothing on screen would
+  // reveal it — the panel would look fine and the drill-down behind it would
+  // be empty.
+  const SEVERITIES = new Set(["critical", "risk", "moderate", "info"]);
+  const IMPACTS = new Set(["low", "medium"]);
+  const KEY_FIELDS = new Set(["tester", "part_number", "failure_id"]);
+  const STEP_OF_OPERATION = {
+    UNIT_CUTS_REWORK_IN04: "UNIT_TEST",
+    MODULE_TEST_REWORK_IN04: "MODULE_TEST",
+    IP_TEST_REWORK_IN04: "IP",
+  };
+  let alertsChecked = 0;
+  let boardRefsChecked = 0;
+
+  for (const day of manifest.days) {
+    const rel = `events/attention-${day}.json`;
+    if (!onDisk.includes(rel)) continue;
+    const attention = await readJson(rel);
+
+    const tally = { critical: 0, risk: 0, moderate: 0, info: 0 };
+    for (const a of attention.alerts) tally[a.severity] = (tally[a.severity] ?? 0) + 1;
+    for (const sev of Object.keys(tally)) {
+      check(
+        attention.counts[sev] === tally[sev],
+        `${day}: attention.counts.${sev} says ${attention.counts[sev]} but ${tally[sev]} alerts carry it`,
+      );
+    }
+    check(typeof attention.truncated === "boolean", `${day}: attention.truncated is not a boolean`);
+
+    for (const a of attention.alerts) {
+      alertsChecked += 1;
+      const d = a.details;
+      check(SEVERITIES.has(a.severity), `${day}: unknown severity "${a.severity}"`);
+      check(IMPACTS.has(a.impact), `${day}: unknown impact "${a.impact}"`);
+      check(KEY_FIELDS.has(d.key_field), `${day}: unknown key_field "${d.key_field}"`);
+      check(a.rule_code === "category_defect", `${day}: unexpected rule_code "${a.rule_code}"`);
+
+      // A count with nothing to compare it to. The dashboard renders "—" for
+      // target and deviation, and sends no unit — if a target ever appears
+      // here the panel will start showing a comparison that does not exist.
+      check(a.current_value === d.count, `${day}: current_value ${a.current_value} != details.count ${d.count}`);
+      check(a.target_value === null, `${day}: category_defect alert carries a target_value`);
+      check(a.deviation === null, `${day}: category_defect alert carries a deviation`);
+      check(!("unit" in a), `${day}: category_defect alert carries a unit`);
+
+      // The sums have to reconcile, or the title's "(n)" counts contradict the
+      // headline count beside them.
+      const sumOf = (pairs) => pairs.reduce((acc, [, n]) => acc + n, 0);
+      check(sumOf(d.failure_id_counts) === d.count, `${day}: failure_id_counts sum != count for ${d.key}`);
+      check(
+        d.cause.reduce((acc, c) => acc + c.count, 0) === d.count,
+        `${day}: cause counts sum != count for ${d.key}`,
+      );
+      if (d.key_field !== "part_number") {
+        check(sumOf(d.tester_counts) === d.count, `${day}: tester_counts sum != count for ${d.key}`);
+      }
+
+      check(d.business_date === day, `${day}: details.business_date says ${d.business_date}`);
+      check(d.first_at <= d.last_at, `${day}: first_at is after last_at for ${d.key}`);
+      check(a.title.includes(d.item), `${day}: title does not name its item ${d.item}`);
+
+      // THE IMPORTANT ONE. Every board an alert names must exist in that day's
+      // NC log for that product and step, or the alert is pointing at nothing.
+      const step = STEP_OF_OPERATION[d.operations[0]];
+      check(step != null, `${day}: alert operation "${d.operations[0]}" maps to no step`);
+      if (step) {
+        const defects = await readJson(`events/${step}/defects-${day}.json`);
+        const log = defects.byItem?.[d.item]?.nc_log ?? [];
+        const serials = new Set(log.map((r) => r.sfc));
+        for (const sfc of d.sfcs) {
+          boardRefsChecked += 1;
+          check(serials.has(sfc), `${day}: alert names board ${sfc}, absent from ${step} NC log for ${d.item}`);
+        }
+      }
+    }
+  }
+  notes.push(`${alertsChecked} alerts, ${boardRefsChecked} board references resolved to NC rows`);
+
   // ── Realtime frames ──────────────────────────────────────────────────────
   const realtime = await readJson("realtime/snapshots.json");
   check(realtime.frames.length > 0, "no snapshot frames");
@@ -278,6 +361,53 @@ const main = async () => {
   }
   const ordered = realtime.frames.every((f, i, a) => i === 0 || a[i - 1].at <= f.at);
   check(ordered, "snapshot frames are not in chronological order");
+
+  // Which SECTIONS a frame carries was previously unchecked, so dropping one
+  // would have passed validation and simply blanked a panel at runtime. These
+  // are the sections QualityLayout reads off the stream.
+  const firstOther = realtime.frames.find((f) => f.stream === "other" && f.at === 0).payload;
+  for (const section of [
+    "meta", "kpis", "hftpy", "shop_floor", "attention", "safety",
+    "sustainability", "customer_complaints", "eri", "ci",
+    "factory_twin", "process_audit",
+  ]) {
+    check(firstOther[section] != null, `frame 0 of "other" is missing the ${section} section`);
+  }
+  // The SSE safety shape is NOT the /dashboard/safety shape. QualityLayout
+  // reads `.accident` / `.near_miss` here and `.current` / `.periods` there,
+  // so sending the REST shape over the stream silently stops safety updating.
+  check(
+    firstOther.safety?.accident?.value !== undefined,
+    "frame safety is missing the accident wrapper the SSE path reads",
+  );
+  check(
+    firstOther.safety?.near_miss?.value !== undefined,
+    "frame safety is missing the near_miss wrapper the SSE path reads",
+  );
+  // The dashboard prefers customer_complaints.total over latest.count, and
+  // /dashboard/eri uses only latest.count. Both must be present or the two
+  // paths report different numbers for the same month.
+  check(
+    typeof firstOther.customer_complaints?.total === "number",
+    "customer_complaints.total missing — the SSE path falls back to latest.count",
+  );
+  check(
+    typeof firstOther.customer_complaints?.latest?.count === "number",
+    "customer_complaints.latest.count missing — /dashboard/eri reads only this",
+  );
+  // HFTPY is a ratio over products that cleared min_tested, so the headline is
+  // meaningless without the denominator.
+  const h = firstOther.hftpy;
+  check(h.products_qualified <= h.products_total, "hftpy qualified exceeds total");
+  check(h.products_on_target <= h.products_qualified, "hftpy on_target exceeds qualified");
+  check(h.products.length === h.products_total, "hftpy products[] length != products_total");
+  check(h.trend.points.length > 0, "hftpy trend has no points");
+  check(h.trend.comparable_to_actual_pct === false, "hftpy trend must declare it is not comparable to actual_pct");
+  check(firstOther.eri.years.length > 0, "eri has no year history");
+  check(firstOther.eri.trend.points.length === 12, "eri trend should carry all 12 fiscal periods");
+  check(firstOther.factory_twin.zones.length === 6, "factory_twin should carry the six stations");
+  check(firstOther.process_audit.trend.length > 0, "process_audit has no trend");
+
 
   // ── Determinism ──────────────────────────────────────────────────────────
   if (DEEP) {
