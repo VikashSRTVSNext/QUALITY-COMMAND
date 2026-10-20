@@ -1,26 +1,20 @@
 // Product multi-select for the QCC dashboard.
 //
-// Built once and deliberately generic, because it has a second home coming. The
-// filter works on the yield table today but NOT on the KPI cards: the table
-// behind those cards stores one row per shift for the whole plant with every
-// product's boards already added together, so there is nothing left to filter
-// on. When the per-product columns land it arrives as a repeatable `product` on
-// the same /dashboard/kpis endpoint with no other change, and this component gets
-// pointed at the KPI strip as-is.
+// Two instances edit ONE shared selection: the header pill (every card and the
+// yield table) and the yield panel's own pill (same state, the yield table's
+// option list). Only the header instance prunes selections the window no longer
+// offers — its list is the union across every card, so a product missing from
+// it really did not run. The yield table's list is narrower, and letting it
+// prune would silently drop a product that ran on, say, SPI but not UNITS.
 //
-// Until then the KPI strip renders it `disabled` with a reason rather than
-// hiding it: a dropdown that silently changes nothing is worse than one that
-// isn't there, and a disabled control with a tooltip says which of the two
-// panels the filter reaches.
-//
-// Selection is by ITEM CODE, which is what ?product= takes. The display name is
-// shown to the user and never sent — the endpoint also accepts names and base
-// codes, but mixing spellings in state would make de-duplication guesswork.
+// Selection is by ITEM CODE, which is what ?product= takes. The label is shown
+// to the user and never sent — the endpoint also accepts names and base codes,
+// but mixing spellings in state would make de-duplication guesswork.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Package, Search, X } from "lucide-react";
 import { isNum } from "../../core/format";
-import type { ProductOption } from "./dashboardFilters";
+import { optionVolume, type ProductOption } from "./dashboardFilters";
 
 interface ProductFilterProps {
   options: ProductOption[];
@@ -34,6 +28,11 @@ interface ProductFilterProps {
   /** Tooltip explaining the disabled state. Required in practice, because a
    *  disabled control with no explanation reads as a bug. */
   disabledReason?: string;
+  /** Drop selected items the options no longer list. See the file comment for
+   *  why only one instance should. */
+  pruneUnavailable?: boolean;
+  /** "header" matches the taller pills in the dashboard header. */
+  variant?: "panel" | "header";
 }
 
 export const ProductFilter = ({
@@ -43,6 +42,8 @@ export const ProductFilter = ({
   optionsState = "ready",
   disabled = false,
   disabledReason,
+  pruneUnavailable = true,
+  variant = "panel",
 }: ProductFilterProps) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -65,6 +66,7 @@ export const ProductFilter = ({
    * reports an empty list, does not wipe a valid selection.
    */
   useEffect(() => {
+    if (!pruneUnavailable) return;
     if (optionsState !== "ready" || options.length === 0) return;
     const available = new Set(options.map((o) => o.item));
     const kept = value.filter((item) => available.has(item));
@@ -77,7 +79,8 @@ export const ProductFilter = ({
     return options.filter(
       (o) =>
         o.product.toLowerCase().includes(needle) ||
-        o.item.toLowerCase().includes(needle),
+        o.item.toLowerCase().includes(needle) ||
+        (o.label ?? "").toLowerCase().includes(needle),
     );
   }, [options, search]);
 
@@ -91,6 +94,11 @@ export const ProductFilter = ({
     );
   };
 
+  const nameOf = (item: string) => {
+    const o = options.find((opt) => opt.item === item);
+    return o?.label ?? o?.product ?? item;
+  };
+
   const label =
     value.length === 0
       ? "All products"
@@ -98,8 +106,11 @@ export const ProductFilter = ({
         ? (options.find((o) => o.item === value[0])?.product ?? value[0])
         : `${value.length} products`;
 
+  const isHeader = variant === "header";
+  const active = value.length > 0;
+
   return (
-    <div className="relative">
+    <div className="relative shrink-0">
       <div
         role="button"
         tabIndex={disabled ? -1 : 0}
@@ -109,10 +120,8 @@ export const ProductFilter = ({
           disabled
             ? disabledReason
             : value.length
-              ? value
-                  .map((i) => options.find((o) => o.item === i)?.product ?? i)
-                  .join(", ")
-              : "Filter the table by product"
+              ? value.map(nameOf).join(", ")
+              : "Filter by product"
         }
         onClick={() => !disabled && setOpen((o) => !o)}
         onKeyDown={(e) => {
@@ -122,10 +131,18 @@ export const ProductFilter = ({
             setOpen((o) => !o);
           }
         }}
-        className={`border rounded px-2 py-0.5 text-[11px] font-bold flex items-center gap-1.5 transition-colors max-w-[200px] ${
+        className={`border rounded flex items-center gap-1.5 transition-colors ${
+          isHeader
+            ? "px-2.5 py-0.5 text-[13px] font-bold whitespace-nowrap max-w-[220px]"
+            : "px-2 py-0.5 text-[11px] font-bold max-w-[200px]"
+        } ${
           disabled
             ? "bg-page border-line text-ink-dim/60 cursor-not-allowed"
-            : "bg-page border-line text-white cursor-pointer hover:bg-line"
+            : isHeader && active
+              ? "bg-panel border-info/40 text-info cursor-pointer hover:bg-raised"
+              : isHeader
+                ? "bg-panel border-line-strong text-white cursor-pointer hover:bg-raised"
+                : "bg-page border-line text-white cursor-pointer hover:bg-line"
         }`}
       >
         <Package size={11} className="flex-shrink-0 text-ink-dim" />
@@ -155,7 +172,11 @@ export const ProductFilter = ({
           {/* Full-viewport catcher rather than a blur handler: the panel holds a
               search input, and a blur close would fire the moment it is focused. */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1 w-[260px] bg-panel border border-line-strong rounded-lg shadow-xl shadow-black/50 overflow-hidden z-50">
+          <div
+            className={`absolute top-full mt-1 w-[280px] bg-panel border border-line-strong rounded-lg shadow-xl shadow-black/50 overflow-hidden z-50 ${
+              isHeader ? "right-0" : "left-0"
+            }`}
+          >
             <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-line">
               <Search size={11} className="text-ink-dim flex-shrink-0" />
               <input
@@ -187,6 +208,7 @@ export const ProductFilter = ({
               ) : (
                 filtered.map((o) => {
                   const on = selectedSet.has(o.item);
+                  const volume = optionVolume(o);
                   return (
                     <div
                       key={o.item}
@@ -209,14 +231,14 @@ export const ProductFilter = ({
                           {o.product}
                         </span>
                         <span className="text-[9px] text-ink-dim truncate">
-                          {o.item}
+                          {o.label ?? o.item}
                           {o.sub_module ? ` · ${o.sub_module}` : ""}
                         </span>
                       </span>
                       {/* Volume in the window, so a product with barely any
                           production is recognisable before it is selected. */}
                       <span className="text-[9px] text-ink-dim tabular-nums flex-shrink-0">
-                        {isNum(o.tested) ? o.tested.toLocaleString("en-US") : "—"}
+                        {isNum(volume) ? volume.toLocaleString("en-US") : "—"}
                       </span>
                     </div>
                   );

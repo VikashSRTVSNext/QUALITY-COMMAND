@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import AlertTableRow from "./AlertTableRow";
 import AlertTabs, { AlertTab } from "./AlertTabs";
+import ShiftReportDownload from "./ShiftReportDownload";
 
 interface AlertsModalProps {
   /** Alerts already filtered to the active severity. */
@@ -45,12 +46,15 @@ export const AlertsModal = ({
               Attention Center
             </span>
           </div>
-          <button
-            onClick={() => onClose()}
-            className="bg-raised hover:bg-critical text-ink-muted hover:text-white border border-line-strong rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
-          >
-            ✕ Close
-          </button>
+          <div className="flex items-center gap-3">
+            <ShiftReportDownload />
+            <button
+              onClick={() => onClose()}
+              className="bg-raised hover:bg-critical text-ink-muted hover:text-white border border-line-strong rounded-lg px-4 py-1.5 text-[13px] font-bold cursor-pointer transition-colors duration-200 outline-none"
+            >
+              ✕ Close
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center justify-between px-6 py-3 border-b border-line/60 flex-shrink-0">

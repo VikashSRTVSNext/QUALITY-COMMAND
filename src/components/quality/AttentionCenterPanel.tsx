@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Bot, ChevronRight } from "lucide-react";
 import AlertCard, { RecTip } from "./AlertCard";
 import AlertTabs, { AlertTab } from "./AlertTabs";
+import ShiftReportDownload from "./ShiftReportDownload";
 
 const ALERT_PREVIEW_LIMIT = 4;
 
@@ -41,6 +42,7 @@ export const AttentionCenterPanel = ({
           <span className="text-[12px] font-black tracking-widest text-ink-muted uppercase">
             ATTENTION CENTER
           </span>
+          <ShiftReportDownload />
         </div>
 
         <div className="flex gap-2 mb-2 flex-shrink-0">

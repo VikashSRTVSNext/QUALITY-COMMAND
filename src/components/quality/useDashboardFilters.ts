@@ -1,24 +1,31 @@
-// The three range-aware dashboard queries: yield rows, KPI cards and the
-// product dropdown's options.
+// The filter-aware dashboard queries: yield rows, KPI cards, the Process
+// Performance strip, and the option lists behind the product and line pills.
 //
-// All three are inert until a date range is selected. Without one the dashboard
-// keeps reading the SSE snapshot it already has, which is the fast path the
-// backend asks us to keep for first paint — so these hooks return null and fire
-// no request at all. `isRangeActive` is the switch; see dashboardFilters.ts.
+// The data hooks are inert until the dashboard is in a FILTERED scope: a date
+// range, a product or a line. Without one the dashboard keeps reading the SSE
+// snapshot it already has, which is the fast path for first paint, so these
+// hooks return null and fire no request. With one they take over, even for
+// today: the streams only publish the unfiltered current day, and showing that
+// under a product chip would be the plant figure with a misleading label.
 //
-// They follow the shape of useProcessProducts: a cancelled flag rather than an
-// AbortController, because the range can change mid-flight and the failure mode
-// is a slow first response landing after a faster second and showing the wrong
-// window.
+// While filtered, the streams are still useful as a "something changed" signal.
+// The dashboard turns each push into a `refreshTick` bump and these hooks refetch
+// on it, keeping the figures on screen until the new ones land.
+//
+// Every request goes through an AbortController. The filter can change
+// mid-flight, and the failure that matters is a slow old response landing after
+// a fast new one and showing the wrong selection.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiUrl } from "../../core/api/config";
 import {
   buildDashboardParams,
   isRangeActive,
+  optionVolume,
   rangeError,
   type DateRange,
   type KpiResponse,
+  type ProcessFilterOptions,
   type ProductOption,
   type ProductYieldResponse,
   type ProductsResponse,
@@ -30,11 +37,11 @@ export type QueryState = "idle" | "loading" | "ready" | "error";
 /**
  * Reads FastAPI's error body so the UI can show the backend's own wording.
  *
- * The documented 400s (from after to, range over 400 days, unknown shift) all
- * carry a `detail` string worth showing verbatim; 422 carries a validation
- * array instead, which is not, hence the typeof check.
+ * The documented 400s (bad range, unknown shift) and 404s (unknown step) carry a
+ * `detail` string that is safe to show verbatim; 422 carries a validation array
+ * instead, which is not, hence the typeof check.
  */
-const readError = async (res: Response): Promise<string> => {
+export const readError = async (res: Response): Promise<string> => {
   try {
     const body = await res.json();
     if (typeof body?.detail === "string") return body.detail;
@@ -44,279 +51,308 @@ const readError = async (res: Response): Promise<string> => {
   return `Request failed (${res.status}).`;
 };
 
+/** A range the backend would 400, checked only when a range is actually set. */
+const scopeError = (range: DateRange): string | null =>
+  isRangeActive(range) ? rangeError(range) : null;
+
+/**
+ * One GET, keyed on its URL.
+ *
+ * `url: null` = inert (idle, no data). `invalid` = a request certain to 400, so
+ * the local message is shown instead of spending a round trip on it.
+ *
+ * A change of URL is a new question and clears the old answer. A `refreshTick`
+ * bump is the SAME question asked again, so the current data stays up and the
+ * state stays "ready" until the replacement arrives. Otherwise every SSE push
+ * would blink the table through "Loading…".
+ */
+const useScopedFetch = <T,>(
+  url: string | null,
+  invalid: string | null,
+  refreshTick: number,
+  label: string,
+) => {
+  const [data, setData] = useState<T | null>(null);
+  const [state, setState] = useState<QueryState>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const lastUrl = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (invalid) {
+      lastUrl.current = null;
+      setData(null);
+      setState("error");
+      setError(invalid);
+      return;
+    }
+    if (url === null) {
+      lastUrl.current = null;
+      setData(null);
+      setState("idle");
+      setError(null);
+      return;
+    }
+
+    const isRefresh = lastUrl.current === url;
+    lastUrl.current = url;
+    if (!isRefresh) {
+      setData(null);
+      setState("loading");
+      setError(null);
+    }
+
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch(url, { signal: ctrl.signal });
+        if (!res.ok) throw new Error(await readError(res));
+        const json: T = await res.json();
+        if (ctrl.signal.aborted) return;
+        setData(json);
+        setState("ready");
+        setError(null);
+      } catch (err) {
+        if (ctrl.signal.aborted) return;
+        console.error(`Error fetching ${label}:`, err);
+        // A failed background refresh keeps the last good figures: they are
+        // still the right selection, just a few seconds older.
+        if (!isRefresh) setData(null);
+        setState("error");
+        setError(err instanceof Error ? err.message : "Request failed.");
+      }
+    })();
+
+    return () => ctrl.abort();
+  }, [url, invalid, refreshTick, label]);
+
+  return { data, state, error };
+};
+
 interface YieldQueryArgs {
   range: DateRange;
   shift: "A" | "B" | "C" | null;
   level: YieldRequestLevel;
   /** Item codes. Empty selects every product. */
   products: string[];
+  /** False keeps the hook inert (the snapshot is the source). */
+  active: boolean;
+  refreshTick?: number;
 }
 
 /**
- * Product-yield rows for a date range, straight from the database.
+ * Product-yield rows for the filtered scope.
  *
- * Returns `rows: null` while no range is selected, which is the caller's signal
- * to keep using the snapshot rows from the SSE feed. The row shape is identical
- * on both sources, so one table renders either.
+ * Returns `rows: null` while inert, which is the caller's signal to keep using
+ * the snapshot rows from the SSE feed. The row shape is identical on both
+ * sources, so one table renders either.
  */
 export const useRangeProductYield = ({
   range,
   shift,
   level,
   products,
+  active,
+  refreshTick = 0,
 }: YieldQueryArgs) => {
-  const [data, setData] = useState<ProductYieldResponse | null>(null);
-  const [state, setState] = useState<QueryState>("idle");
-  const [error, setError] = useState<string | null>(null);
-
-  // Serialised so the effect does not refire on every render just because the
-  // caller passed a fresh array literal for `products`.
-  const productKey = products.join("\u0000");
-
-  useEffect(() => {
-    if (!isRangeActive(range)) {
-      setData(null);
-      setState("idle");
-      setError(null);
-      return;
-    }
-
-    // A range the backend would reject with a 400 is not worth a round trip,
-    // and the local message names the field to fix.
-    const invalid = rangeError(range);
-    if (invalid) {
-      setData(null);
-      setState("error");
-      setError(invalid);
-      return;
-    }
-
-    let cancelled = false;
-
-    const run = async () => {
-      setState("loading");
-      setError(null);
-      try {
-        const params = buildDashboardParams({
-          range,
-          shift,
-          level,
-          products: productKey ? productKey.split("\u0000") : [],
-        });
-        const res = await fetch(apiUrl(`/dashboard/product-yield?${params}`));
-        if (!res.ok) throw new Error(await readError(res));
-        const json: ProductYieldResponse = await res.json();
-        if (cancelled) return;
-        setData(json);
-        setState("ready");
-      } catch (err) {
-        if (cancelled) return;
-        console.error("Error fetching ranged product yield:", err);
-        setData(null);
-        setState("error");
-        setError(err instanceof Error ? err.message : "Request failed.");
-      }
-    };
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [range.from, range.to, shift, level, productKey]);
-
+  const url = active
+    ? apiUrl(
+        `/dashboard/product-yield?${buildDashboardParams({ range, shift, level, products })}`,
+      )
+    : null;
+  const { data, state, error } = useScopedFetch<ProductYieldResponse>(
+    url,
+    active ? scopeError(range) : null,
+    refreshTick,
+    "filtered product yield",
+  );
   return { data, rows: data?.rows ?? null, meta: data?.meta ?? null, state, error };
 };
 
 /**
- * The five KPI card figures over a date range.
+ * The five KPI card figures for the filtered scope, from /dashboard/kpis.
  *
- * Takes no product parameter on purpose: /dashboard/kpis has none yet. The
- * table behind those cards stores one row per shift for the whole plant with
- * every product's boards already added together, so there is nothing to filter
- * on — sending `product` would be silently ignored. When the backend lands the
- * per-product columns it arrives as a repeatable `product` on this same
- * endpoint with no other change, so only this hook and its caller move.
+ * Takes `product` now that the backend reads mart_kpi_product_shift. Under a
+ * product filter `totals.customer_audit` is null: the audit is a plant score
+ * with no product, and the caller must say so rather than show 0.
  */
-export const useRangeKpis = (
-  range: DateRange,
-  shift: "A" | "B" | "C" | null,
-) => {
-  const [data, setData] = useState<KpiResponse | null>(null);
-  const [state, setState] = useState<QueryState>("idle");
-  const [error, setError] = useState<string | null>(null);
+export const useRangeKpis = ({
+  range,
+  shift,
+  products,
+  active,
+  refreshTick = 0,
+}: {
+  range: DateRange;
+  shift: "A" | "B" | "C" | null;
+  products: string[];
+  active: boolean;
+  refreshTick?: number;
+}) => {
+  const url = active
+    ? apiUrl(`/dashboard/kpis?${buildDashboardParams({ range, shift, products })}`)
+    : null;
+  const { data, state, error } = useScopedFetch<KpiResponse>(
+    url,
+    active ? scopeError(range) : null,
+    refreshTick,
+    "filtered KPIs",
+  );
 
-  useEffect(() => {
-    if (!isRangeActive(range)) {
-      setData(null);
-      setState("idle");
-      setError(null);
-      return;
-    }
-
-    const invalid = rangeError(range);
-    if (invalid) {
-      setData(null);
-      setState("error");
-      setError(invalid);
-      return;
-    }
-
-    let cancelled = false;
-
-    const run = async () => {
-      setState("loading");
-      setError(null);
-      try {
-        const params = buildDashboardParams({ range, shift });
-        const res = await fetch(apiUrl(`/dashboard/kpis?${params}`));
-        if (!res.ok) throw new Error(await readError(res));
-        const json: KpiResponse = await res.json();
-        if (cancelled) return;
-        setData(json);
-        setState("ready");
-      } catch (err) {
-        if (cancelled) return;
-        console.error("Error fetching ranged KPIs:", err);
-        setData(null);
-        setState("error");
-        setError(err instanceof Error ? err.message : "Request failed.");
-      }
-    };
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [range.from, range.to, shift]);
-
-  /** Nothing ran in the range. An empty state, not a red 0%. */
+  /** Nothing ran in the scope. An empty state, not a red 0%. */
   const isEmpty = state === "ready" && data?.range.days_with_data === 0;
 
   return { data, state, error, isEmpty };
 };
 
+interface ProcessPerformanceResponse {
+  steps?: Record<string, any>;
+  filters?: {
+    products: string[];
+    lines: string[];
+    line_steps: string[];
+    source: string;
+  };
+}
+
 /**
- * The Process Performance strip over a date range.
- *
- * The strip is normally fed by the SSE snapshot, which only ever describes the
- * current production day. The four KPI-sourced tiles already had a ranged source
- * (useRangeKpis) and followed the picker; the twelve process tiles beside them
- * did not, so applying a range moved four cards and left the rest on today —
- * one strip showing two different windows with nothing saying so.
+ * The Process Performance strip for the filtered scope.
  *
  * Returns the SAME per-step shape the snapshot publishes, so the dashboard swaps
- * one for the other and keeps a single mapping. `trend` is null on every step:
- * the sparkline is hourly buckets for one day and there is no such thing for a
- * range, which is the same reason the ranged KPI cards lose their line.
+ * one for the other and keeps a single mapping.
+ *
+ * No shift parameter: every card carries `day` and `by_shift`, and the shift
+ * selector picks between them on the client with no new request.
+ *
+ * With any line set, `steps` holds only the line cards (`filters.line_steps`).
+ * A step missing from `steps` under a filter means "no data for this
+ * selection", never "use the unfiltered figure".
  */
-export const useRangeProcessPerformance = (range: DateRange) => {
-  const [data, setData] = useState<Record<string, any> | null>(null);
-  const [state, setState] = useState<QueryState>("idle");
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Inert without a range: the snapshot is the source then, and firing this
-    // anyway would race it to write the same cards.
-    if (!isRangeActive(range)) {
-      setData(null);
-      setState("idle");
-      setError(null);
-      return;
-    }
-    const invalid = rangeError(range);
-    if (invalid) {
-      setData(null);
-      setState("error");
-      setError(invalid);
-      return;
-    }
-
-    let cancelled = false;
-    const run = async () => {
-      setState("loading");
-      setError(null);
-      try {
-        // No shift in the request: the response carries every shift and the
-        // dashboard picks, the same way it does with the snapshot. Switching
-        // shift therefore costs no round trip.
-        const params = buildDashboardParams({ range, shift: null });
-        const res = await fetch(
-          apiUrl(`/dashboard/process-performance?${params}`),
-        );
-        if (!res.ok) throw new Error(await readError(res));
-        const json = await res.json();
-        if (cancelled) return;
-        setData(json?.steps ?? null);
-        setState("ready");
-      } catch (err) {
-        if (cancelled) return;
-        console.error("Error fetching ranged process performance:", err);
-        setData(null);
-        setState("error");
-        setError(err instanceof Error ? err.message : "Request failed.");
-      }
-    };
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [range.from, range.to]);
-
-  return { data, state, error };
+export const useRangeProcessPerformance = ({
+  range,
+  products,
+  lines,
+  active,
+  refreshTick = 0,
+}: {
+  range: DateRange;
+  products: string[];
+  lines: string[];
+  active: boolean;
+  refreshTick?: number;
+}) => {
+  const url = active
+    ? apiUrl(
+        `/dashboard/process-performance?${buildDashboardParams({ range, shift: null, products, lines })}`,
+      )
+    : null;
+  const { data, state, error } = useScopedFetch<ProcessPerformanceResponse>(
+    url,
+    active ? scopeError(range) : null,
+    refreshTick,
+    "filtered process performance",
+  );
+  return {
+    data: data?.steps ?? null,
+    lineSteps: data?.filters?.line_steps ?? null,
+    state,
+    error,
+  };
 };
 
 /**
- * Options for the product dropdown: products that actually produced something
- * in the window.
+ * Options for the yield table's product dropdown: products that actually
+ * produced something in the window, from /dashboard/products.
  *
- * Reads the same table the yield table reads, so the dropdown can never offer a
- * product whose row would come back empty. It therefore has to follow the date
- * picker — a product that ran last week may not have run this week, and options
- * left over from the previous range would reintroduce exactly the empty rows
- * this endpoint exists to prevent.
- *
- * Unlike the other two this DOES run with no range, because the dropdown has to
- * be populated on first paint, when the range is the current production day and
- * both dates are omitted.
+ * Runs with no range too, because the dropdown has to be populated on first
+ * paint, when the window is the current production day and both dates are
+ * omitted.
  */
 export const useProductOptions = (range: DateRange) => {
+  const qs = buildDashboardParams({ range, shift: null }).toString();
+  const invalid = scopeError(range);
+  // Skip a request certain to 400 without clearing: the previous options stay
+  // up so the control does not empty out while a date is half-typed.
+  const url = invalid ? null : apiUrl(`/dashboard/products${qs ? `?${qs}` : ""}`);
   const [options, setOptions] = useState<ProductOption[]>([]);
-  const [state, setState] = useState<QueryState>("loading");
-
+  const { data, state } = useScopedFetch<ProductsResponse>(
+    url,
+    null,
+    0,
+    "product options",
+  );
   useEffect(() => {
-    // Skip a request that is certain to 400; the previous options stay up so
-    // the control does not empty out while a date is half-typed.
-    if (rangeError(range)) return;
+    if (state === "ready") setOptions(data?.products ?? []);
+    if (state === "error") setOptions([]);
+  }, [data, state]);
+  return { options, state: url === null && options.length ? "ready" : state };
+};
 
-    let cancelled = false;
+/**
+ * Options for the header's product pill and the Process strip's line pill, from
+ * /dashboard/process-filter-options. Called again whenever the date range
+ * changes, so a pill only offers what ran in that window.
+ *
+ * The header pill is ONE shared selection across the KPI cards and every
+ * process card, so its list is the union of `steps.KPI.products` and each
+ * step's products, de-duplicated on `item` and sorted by volume. The volumes are
+ * added across steps purely to order the list; they are not a figure anyone
+ * reads.
+ */
+export const useProcessFilterOptions = (range: DateRange) => {
+  const qs = buildDashboardParams({ range, shift: null }).toString();
+  const invalid = scopeError(range);
+  const url = invalid
+    ? null
+    : apiUrl(`/dashboard/process-filter-options${qs ? `?${qs}` : ""}`);
+  const [last, setLast] = useState<ProcessFilterOptions | null>(null);
+  const { data, state } = useScopedFetch<ProcessFilterOptions>(
+    url,
+    null,
+    0,
+    "process filter options",
+  );
+  useEffect(() => {
+    if (state === "ready" && data) setLast(data);
+    if (state === "error") setLast(null);
+  }, [data, state]);
 
-    const run = async () => {
-      setState("loading");
-      try {
-        const params = buildDashboardParams({ range, shift: null });
-        const qs = params.toString();
-        const res = await fetch(
-          apiUrl(`/dashboard/products${qs ? `?${qs}` : ""}`),
-        );
-        if (!res.ok) throw new Error(await readError(res));
-        const json: ProductsResponse = await res.json();
-        if (cancelled) return;
-        setOptions(json.products ?? []);
-        setState("ready");
-      } catch (err) {
-        if (cancelled) return;
-        console.error("Error fetching product options:", err);
-        setOptions([]);
-        setState("error");
+  return useMemo(() => {
+    const steps = last?.steps ?? {};
+    const lineSteps = last?.line_steps ?? [];
+
+    const byItem = new Map<string, ProductOption>();
+    for (const step of Object.values(steps)) {
+      for (const p of step.products ?? []) {
+        const seen = byItem.get(p.item);
+        const vol = optionVolume(p) ?? 0;
+        if (seen) {
+          seen.done = (seen.done ?? 0) + vol;
+        } else {
+          byItem.set(p.item, {
+            item: p.item,
+            product: p.product,
+            label: p.label,
+            done: vol,
+          });
+        }
       }
-    };
+    }
+    const products = [...byItem.values()].sort(
+      (a, b) => (b.done ?? 0) - (a.done ?? 0),
+    );
 
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [range.from, range.to]);
+    const lineSet = new Set<string>();
+    for (const step of lineSteps) {
+      for (const line of steps[step]?.lines ?? []) lineSet.add(line);
+    }
+    const lines = [...lineSet].sort();
 
-  return { options, state };
+    return {
+      products,
+      lines,
+      lineSteps,
+      kpiProducts: steps.KPI?.products ?? [],
+      state: url === null && last ? ("ready" as QueryState) : state,
+    };
+  }, [last, state, url]);
 };

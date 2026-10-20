@@ -61,12 +61,14 @@ const StepPane = ({
   step,
   shift,
   range,
+  products,
 }: {
   step: string;
   shift: string | null;
   range?: DateRange | null;
+  products?: string[];
 }) => {
-  const query = useProcessProducts(step, shift, range);
+  const query = useProcessProducts(step, shift, range, products);
   const [selected, setSelected] = useState<{
     item: string;
     product_name: string | null;
@@ -108,11 +110,13 @@ const StepPane = ({
 const SpiStepPane = ({
   shift,
   range,
+  products,
 }: {
   shift: string | null;
   range?: DateRange | null;
+  products?: string[];
 }) => {
-  const query = useProcessProducts("SPI", shift, range);
+  const query = useProcessProducts("SPI", shift, range, products);
   const [selected, setSelected] = useState<{
     item: string;
     product_name: string | null;
@@ -152,11 +156,13 @@ const SpiStepPane = ({
 const SmtStepPane = ({
   shift,
   range,
+  products,
 }: {
   shift: string | null;
   range?: DateRange | null;
+  products?: string[];
 }) => {
-  const query = useProcessProducts("SMT_DEFECTS", shift, range);
+  const query = useProcessProducts("SMT_DEFECTS", shift, range, products);
   const [selected, setSelected] = useState<{
     item: string;
     product_name: string | null;
@@ -229,6 +235,9 @@ interface ProductYieldPanelProps {
    *  window the UNITS table does — before this they always read the live current
    *  production day while the rest of the screen showed a range. */
   dateRange?: DateRange | null;
+  /** The shared product selection, passed to the per-product step tables so
+   *  their rows and totals match the product-filtered card. */
+  productScope?: string[];
 }
 
 // Product Yield panel: level tabs, a sortable and paginated table, and the AI
@@ -253,6 +262,7 @@ export const ProductYieldPanel = ({
   rangeMeta = null,
   rangeError = null,
   dateRange = null,
+  productScope = [],
 }: ProductYieldPanelProps) => {
   // Product opened from a UNITS row. Lives here rather than in StepPane because
   // the UNITS tab is the panel's own table, not a step pane.
@@ -389,15 +399,19 @@ export const ProductYieldPanel = ({
             )}
           </div>
 
-          {/* Only on the level tabs. The step panes read
-              /process/{step}/products, which takes no product parameter, so the
-              control would be inert there. */}
-          {activeStep === null && onProductsChange && (
+          {/* Hidden on the DPMOI and screw tabs: those breakdowns already list
+              per item/line in their own rows and take no product parameter, so
+              the control would be inert there. Same state as the header pill,
+              but this list is narrower, so it must not prune. */}
+          {activeStep !== DPMOI_TAB &&
+            activeStep !== SCREW_DEFECTS_TAB &&
+            onProductsChange && (
             <ProductFilter
               options={productOptions}
               optionsState={productOptionsState}
               value={selectedProducts}
               onChange={onProductsChange}
+              pruneUnavailable={false}
             />
           )}
         </div>
@@ -450,9 +464,9 @@ export const ProductYieldPanel = ({
         </div>
 
         {activeStep === "SPI" ? (
-          <SpiStepPane shift={shift} range={dateRange} />
+          <SpiStepPane shift={shift} range={dateRange} products={productScope} />
         ) : activeStep === "SMT_DEFECTS" ? (
-          <SmtStepPane shift={shift} range={dateRange} />
+          <SmtStepPane shift={shift} range={dateRange} products={productScope} />
         ) : activeStep === DPMOI_TAB ? (
           <DpmoiPane businessDate={null} range={dateRange} shift={shift} />
         ) : activeStep === SCREW_DEFECTS_TAB ? (
@@ -464,7 +478,12 @@ export const ProductYieldPanel = ({
             shift={shift}
           />
         ) : activeStep ? (
-          <StepPane step={activeStep} shift={shift} range={dateRange} />
+          <StepPane
+            step={activeStep}
+            shift={shift}
+            range={dateRange}
+            products={productScope}
+          />
         ) : (
           <>
         <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar">

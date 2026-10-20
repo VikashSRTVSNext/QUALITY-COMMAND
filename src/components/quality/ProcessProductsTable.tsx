@@ -177,16 +177,26 @@ export const ProcessProductsTable = ({
                 // the tabIndex, the role and the cursor all come and go with
                 // this rather than advertising an interaction that does nothing.
                 const clickable = Boolean(
-                  onRowClick && (!isRowClickable || isRowClickable(row)),
+                  row.item !== null &&
+                    onRowClick &&
+                    (!isRowClickable || isRowClickable(row)),
                 );
-                const open = () =>
+                // Unattributed production has no item to drill into, but the
+                // card still counts it, so it stays in the table under a name.
+                const displayName =
+                  row.item === null
+                    ? "Unattributed"
+                    : (row.product_name ?? row.item);
+                const open = () => {
+                  if (row.item === null) return;
                   onRowClick?.({
                     item: row.item,
                     product_name: row.product_name,
                   });
+                };
                 return (
                   <tr
-                    key={row.item}
+                    key={row.item ?? "__unattributed__"}
                     className={`hover:bg-panel/40 ${
                       clickable
                         ? "cursor-pointer focus-visible:outline focus-visible:outline-1 focus-visible:outline-info"
@@ -207,7 +217,7 @@ export const ProcessProductsTable = ({
                     role={clickable ? "button" : undefined}
                     title={
                       clickable
-                        ? `${rowActionLabel} for ${row.product_name ?? row.item}`
+                        ? `${rowActionLabel} for ${displayName}`
                         : undefined
                     }
                   >
@@ -221,10 +231,18 @@ export const ProcessProductsTable = ({
                         UNITS ones and broke the match. The code is still in the
                         row's tooltip for anyone who needs to quote it. */}
                     <td
-                      className="py-[2.5px] text-white font-sans font-bold"
-                      title={row.product_name ? row.item : undefined}
+                      className={`py-[2.5px] font-sans font-bold ${
+                        row.item === null ? "text-ink-muted italic" : "text-white"
+                      }`}
+                      title={
+                        row.item === null
+                          ? "Production with no item code. Counted in the card's total."
+                          : row.product_name
+                            ? row.item
+                            : undefined
+                      }
                     >
-                      {row.product_name ?? row.item}
+                      {displayName}
                     </td>
                     <td className="py-[2.5px] text-center text-white">
                       {fmtCount(row.done)}

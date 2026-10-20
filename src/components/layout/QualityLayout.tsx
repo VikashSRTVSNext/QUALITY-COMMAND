@@ -22,16 +22,20 @@ import {
   EMPTY_RANGE,
   LEVEL_PARAM,
   comparisonLabel,
+  isFilteredScope,
   isRangeActive,
   type DateRange,
 } from "../quality/dashboardFilters";
 import {
+  useProcessFilterOptions,
   useProductOptions,
   useRangeKpis,
   useRangeProcessPerformance,
   useRangeProductYield,
 } from "../quality/useDashboardFilters";
 import DateRangeFilter from "../quality/DateRangeFilter";
+import ProductFilter from "../quality/ProductFilter";
+import LineFilter from "../quality/LineFilter";
 import { ZONES, ZoneDef, STATUS_CSS, STATUS_LABEL } from "../factory/zones";
 import FactoryLayoutOverlay from "../factory/FactoryLayoutOverlay";
 import { palette } from "../../theme/palette";
@@ -687,6 +691,10 @@ const SHIFTS = [
 // a rail ends exactly where its last card does.
 const PROCESS_CARD_GAP = 10;
 
+// How long after an SSE push a filtered view refetches. Long enough to fold the
+// three streams' near-simultaneous pushes into one request.
+const SSE_REFRESH_DEBOUNCE_MS = 3000;
+
 const STAGE_GROUP_COLOR = palette.accentRail;
 
 // The SMT / MFT / RFM rail drawn above a run of process cards.
@@ -818,10 +826,21 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   // either date moves every panel below onto the database instead.
   const [dateRange, setDateRange] = useState<DateRange>(EMPTY_RANGE);
   // Item codes. Empty selects every product, matching an absent ?product=.
+  // ONE selection shared by the KPI cards, the process cards, the yield table
+  // and its step tabs — the header pill and the yield panel's pill both edit it.
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  // Line names. Only the four line cards read it (process-filter-options'
+  // `line_steps`); every other card ignores it.
+  const [selectedLines, setSelectedLines] = useState<string[]>([]);
+  // Bumped (debounced) by SSE pushes while a filter is on. The streams only
+  // carry the unfiltered current day, so under a filter a push is a "data
+  // changed" signal: the filtered queries refetch on it instead of the push
+  // being rendered.
+  const [refreshTick, setRefreshTick] = useState(0);
   // Read inside the SSE handler, which is mounted once and cannot see the
   // current state. See the guard in handleData.
   const rangeActiveRef = useRef(false);
+  const filteredActiveRef = useRef(false);
   // Last Process Performance tile click, forwarded to the Product Yield panel
   // so it can select the matching step tab. Nonce, not just step: see
   // YieldStepRequest.
@@ -969,56 +988,71 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
   const rangeActive = isRangeActive(dateRange);
   rangeActiveRef.current = rangeActive;
+  // Which panels read REST instead of the snapshot. Lines reach only the
+  // process strip, so a line alone leaves the KPI cards and the yield table on
+  // the live feed, where they are still exactly right.
+  const kpiFiltered = isFilteredScope({
+    range: dateRange,
+    products: selectedProducts,
+  });
+  const processFiltered = isFilteredScope({
+    range: dateRange,
+    products: selectedProducts,
+    lines: selectedLines,
+  });
+  filteredActiveRef.current = processFiltered;
 
-  // The three range-aware queries. All inert until a date is set, at which
-  // point they take over from the snapshot; see useDashboardFilters.ts.
+  // The filter-aware queries. Each is inert until its panel is filtered, at
+  // which point it takes over from the snapshot; see useDashboardFilters.ts.
   const rangedYield = useRangeProductYield({
     range: dateRange,
     shift: shiftLetter,
     level: LEVEL_PARAM[activeYieldTab],
     products: selectedProducts,
+    active: kpiFiltered,
+    refreshTick,
   });
-  const rangedKpis = useRangeKpis(dateRange, shiftLetter);
-  // The process tiles' equivalent of rangedKpis. Inert until a date is set, at
-  // which point it takes over from the snapshot for the whole strip — before
-  // this only the four KPI tiles followed the picker.
-  const rangedProcess = useRangeProcessPerformance(dateRange);
+  const rangedKpis = useRangeKpis({
+    range: dateRange,
+    shift: shiftLetter,
+    products: selectedProducts,
+    active: kpiFiltered,
+    refreshTick,
+  });
+  const rangedProcess = useRangeProcessPerformance({
+    range: dateRange,
+    products: selectedProducts,
+    lines: selectedLines,
+    active: processFiltered,
+    refreshTick,
+  });
   const productOptions = useProductOptions(dateRange);
+  const filterOptions = useProcessFilterOptions(dateRange);
+  // The cards a line reaches. The filtered response is the authority; the
+  // options call covers the moment before the first filtered response lands.
+  const lineSteps = rangedProcess.lineSteps ?? filterOptions.lineSteps;
+  const linesActive = selectedLines.length > 0;
 
   // Product-yield rows come from one of two sources with an identical row
-  // shape: the SSE snapshot for the current day, or /dashboard/product-yield
-  // once a date range is set. One mapper serves both.
+  // shape: the SSE snapshot for the unfiltered current day, or
+  // /dashboard/product-yield once a range or product is set. One mapper serves
+  // both.
   //
   // The snapshot arrives unfiltered — every shift and level at once — so shift
   // and level filtering is local, which is why switching a tab costs no request.
-  // Re-running the same filter over the ranged rows is intentional and cheap:
-  // the endpoint has already applied it, and passing both through one path means
+  // Re-running the same filter over the REST rows is intentional and cheap: the
+  // endpoint has already applied it, and passing both through one path means
   // the two sources cannot drift into rendering differently.
+  //
+  // Products are never filtered here any more: a product selection moves the
+  // table onto REST, which filters server-side.
   const productYield = React.useMemo(() => {
     const targetShift = shiftLetter;
-    const sourceRows = rangeActive
+    const sourceRows = kpiFiltered
       ? (rangedYield.rows ?? [])
       : rawProductYield;
 
-    // The product filter is a request parameter on the ranged source, so those
-    // rows arrive filtered. The snapshot has no such parameter, so the same
-    // selection is applied here — otherwise the control would appear to do
-    // nothing on the default view.
-    const selected = new Set(selectedProducts);
-    const productFiltered =
-      rangeActive || selected.size === 0
-        ? sourceRows
-        : sourceRows.filter(
-            (row: any) =>
-              selected.has(row?.item) ||
-              // The endpoint accepts the base code before the dot as well, so a
-              // selection made in one window still matches in another where the
-              // suffix differs.
-              selected.has(String(row?.item ?? "").split(".")[0]) ||
-              selected.has(row?.product),
-          );
-
-    return filterYieldRows(productFiltered, activeYieldTab, targetShift).map(
+    return filterYieldRows(sourceRows, activeYieldTab, targetShift).map(
       (row: any) => ({
         id: row.id,
         name: row.product,
@@ -1054,8 +1088,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   }, [
     rawProductYield,
     rangedYield.rows,
-    rangeActive,
-    selectedProducts,
+    kpiFiltered,
     shiftLetter,
     activeYieldTab,
   ]);
@@ -1133,10 +1166,30 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   }, []);
 
   useEffect(() => {
+    // Under a filter the snapshot cannot be shown, but it still says the
+    // pipeline wrote something new. Collapse a burst of pushes (three streams
+    // can fire together) into one refetch of the filtered scope, a few seconds
+    // later.
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer) return;
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        setRefreshTick((t) => t + 1);
+      }, SSE_REFRESH_DEBOUNCE_MS);
+    };
+
     const handleData = (data: any) => {
       if (!data) return;
 
       setAlertsFeedState("ready");
+
+      if (
+        filteredActiveRef.current &&
+        (data.kpis || data.product_yield || data.process_performance)
+      ) {
+        scheduleRefresh();
+      }
 
       if (data.meta) {
         // The feed reports which shift is live and normally moves the selector
@@ -1351,15 +1404,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     });
 
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
       sources.forEach((es) => es.close());
     };
   }, []);
 
   useEffect(() => {
-    // The snapshot feed only ever describes the current production day, so it
-    // must not write over cards that a date range now owns. Clearing the range
-    // re-runs this effect and hands them straight back.
-    if (rangeActive || !rawKpiData) return;
+    // The snapshot feed only ever describes the unfiltered current production
+    // day, so it must not write over cards that a date range or product now
+    // owns. Clearing the filter re-runs this effect and hands them straight back.
+    if (kpiFiltered || !rawKpiData) return;
 
     setKpiCards((prev) => {
       return prev.map((card) => {
@@ -1515,7 +1569,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         return card;
       });
     });
-  }, [activeShift, rawKpiData, hftpyBlock, rangeActive]);
+  }, [activeShift, rawKpiData, hftpyBlock, kpiFiltered]);
 
   // The same five cards, over a date range, from /dashboard/kpis.
   //
@@ -1524,9 +1578,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   // fallback chain and a comparison window that moves, so the only common step
   // is writing a formatted string onto the card.
   useEffect(() => {
-    if (!rangeActive) return;
+    if (!kpiFiltered) return;
     const kpis = rangedKpis.data;
     if (!kpis) return;
+
+    const productActive = selectedProducts.length > 0;
 
     // days_with_data: 0 means nothing ran in the window. Rendering the zeroed
     // totals here would read as a catastrophic yield rather than no production,
@@ -1536,16 +1592,17 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
     setKpiCards((prev) =>
       prev.map((card) => {
-        // UNIT-HFTPY is projection-against-plan for the current day and has no
-        // range equivalent on this endpoint. Blanking it is the honest option:
-        // leaving the last snapshot figure in place would label a current-day
-        // number with a historical range.
+        // UNIT-HFTPY is projection-against-plan for the whole plant on the
+        // current day; this endpoint has neither a range nor a per-product
+        // equivalent. Blanking it is the honest option: leaving the snapshot
+        // figure in place would put a plant number under a product chip, or a
+        // today number under a historical range.
         if (card.id === 9) {
           return {
             ...card,
             value: "—",
             projectedValue: "—",
-            change: "Current day only",
+            change: rangeActive ? "Current day only" : "n/a for a product",
             delta_vs_yesterday: 0,
           };
         }
@@ -1567,7 +1624,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           return {
             ...card,
             value: "—",
-            change: "No production in range",
+            change: rangeActive
+              ? "No production in range"
+              : "No production for selection",
             points: card.points.map(() => null),
             yesterdayPoints: card.yesterdayPoints?.map(() => null),
             delta_vs_yesterday: 0,
@@ -1586,11 +1645,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         // the newest day in a range is normally unaudited and days that were
         // never audited are left out of the average rather than scored zero.
         // A null score means nothing in the range was audited at all.
+        //
+        // Under a product filter it is null for a different reason: the audit
+        // is a plant score with no product. Say that, not "0" or "Not audited".
         if (key === "customer_audit" && !isNum(value)) {
           return {
             ...card,
             value: "—",
-            change: "Not audited",
+            change: productActive ? "n/a for a product" : "Not audited",
             delta_vs_yesterday: 0,
           };
         }
@@ -1621,14 +1683,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         };
       }),
     );
-  }, [rangeActive, rangedKpis.data]);
+  }, [kpiFiltered, rangeActive, rangedKpis.data, selectedProducts.length]);
 
   useEffect(() => {
     // One mapping, two sources. The ranged endpoint returns the same per-step
     // shape the snapshot publishes precisely so this stays a single code path —
     // a second mapping is a second place for the two to disagree about what a
     // card means.
-    const processSource = rangeActive
+    const processSource = processFiltered
       ? rangedProcess.data
       : rawProcessPerformance;
     if (!processSource) return;
@@ -1661,7 +1723,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
          * different mart and so publishes its day figures at the top level
          * rather than under `day`. Same shape underneath, one level up.
          */
-        const rangeBlock = rangeActive
+        const rangeBlock = processFiltered
           ? shiftLetter
             ? (incoming?.by_shift ?? []).find(
                 (b: any) => (b.shift || "").toUpperCase() === shiftLetter,
@@ -1682,8 +1744,31 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
         const item = {
           ...prevItem,
-          trend: rangeActive ? rangeTrend : (incoming?.trend ?? null),
+          trend: processFiltered ? rangeTrend : (incoming?.trend ?? null),
+          // Set while a line is selected and this tile is not a line card. The
+          // tile then greys out and says so (ProcessMetricCard) instead of
+          // showing a figure the line did not narrow.
+          lineFiltered: linesActive && !lineSteps.includes(apiKey),
+          emptyLabel: undefined as string | undefined,
         };
+        // Under a filter a missing step means the selection matched nothing.
+        // Render the empty state — never the unfiltered figure, and never the
+        // "..." that reads as still loading.
+        if (!incoming && processFiltered && !item.lineFiltered) {
+          return {
+            ...item,
+            data:
+              item.type === "yield"
+                ? { done: "0", ok: "0", yield: "—" }
+                : item.type === "dpmo"
+                  ? { defects: "0", opportunities: "0", index: "—" }
+                  : { failure: "—" },
+            status: "Not Run",
+            emptyLabel: "No data for selection",
+            color: palette.accentRail,
+            target: null,
+          };
+        }
         if (incoming) {
           const target = incoming.target !== undefined ? incoming.target : null;
           const targetUnit = incoming.target_unit || null;
@@ -1846,7 +1931,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         return item;
       });
     });
-  }, [activeShift, rawProcessPerformance, rangeActive, rangedProcess.data]);
+  }, [
+    activeShift,
+    rawProcessPerformance,
+    processFiltered,
+    rangedProcess.data,
+    linesActive,
+    lineSteps,
+  ]);
 
   useEffect(() => {
     const isKpiRed = (label: string): boolean => {
@@ -1978,8 +2070,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           item={procItem}
           title={title}
           activeShift={activeShift}
-          // One point is an hour live and a production day over a range.
-          bucketLabel={rangeActive ? "day" : "hr"}
+          // One point is an hour live and a production day once filtered.
+          bucketLabel={processFiltered ? "day" : "hr"}
+          lineFiltered={Boolean(procItem.lineFiltered)}
           onDrill={({ step }) =>
             setYieldStepRequest({ step, nonce: Date.now() })
           }
@@ -1996,7 +2089,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         <KpiMetricCard
           item={kpiItem}
           title={title}
-          bucketLabel={rangeActive ? "day" : "hr"}
+          bucketLabel={kpiFiltered ? "day" : "hr"}
+          lineFiltered={linesActive}
         />
       );
     }
@@ -2165,9 +2259,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             {liveStatus}
           </div>
 
-          {/* Dashboard-wide, because a range moves the KPI strip and the yield
-              table together. The product filter is NOT here: it only reaches the
-              yield table, so it lives on that panel. */}
+          {/* Dashboard-wide, because a range moves the KPI strip, the process
+              cards and the yield table together. */}
           <DateRangeFilter
             value={dateRange}
             onChange={setDateRange}
@@ -2178,6 +2271,18 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   ? `${rangedKpis.data.range.from} – ${rangedKpis.data.range.to} · ${rangedKpis.data.range.days_with_data} of ${rangedKpis.data.range.days} days with data`
                   : null
             }
+          />
+
+          {/* The ONE product selection: KPI cards, process cards, the yield
+              table and its step tabs all read it. Options are every product
+              that ran on any card in the window, so this instance is the one
+              that prunes stale selections. */}
+          <ProductFilter
+            options={filterOptions.products}
+            optionsState={filterOptions.state}
+            value={selectedProducts}
+            onChange={setSelectedProducts}
+            variant="header"
           />
 
           <div className="relative">
@@ -2233,16 +2338,35 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
       <section className="grid grid-cols-1 lg:grid-cols-4 gap-4 mt-1.5">
         <div className="lg:col-span-3 bg-panel border border-line rounded-xl p-4 flex flex-col">
-          <div className="flex items-baseline gap-2 border-b border-line/50 pb-2 mb-3.5 flex-shrink-0">
+          <div className="flex items-center gap-2 border-b border-line/50 pb-2 mb-3.5 flex-shrink-0">
             <span className="text-[12px] font-black tracking-widest text-ink-muted uppercase">
               PROCESS PERFORMANCE
             </span>
             <span className="text-[10px] font-bold tracking-wider text-ink-dim normal-case">
               {/* The grain of the tiles' trend lines, which changes with the
                   source: hourly buckets for the live day, one point per
-                  production day once a range is applied. */}
-              {rangeActive ? "[Daily]" : "[Hourly]"}
+                  production day once a filter is applied. */}
+              {processFiltered ? "[Daily]" : "[Hourly]"}
             </span>
+            {rangedProcess.error && (
+              <span
+                className="text-[10px] font-bold text-critical truncate"
+                title={rangedProcess.error}
+              >
+                {rangedProcess.error}
+              </span>
+            )}
+            <div className="ml-auto flex items-center gap-1.5">
+              {/* Here and not in the header: a line only reaches the cards in
+                  `line_steps`, and this is where those cards are. */}
+              <LineFilter
+                options={filterOptions.lines}
+                optionsState={filterOptions.state}
+                value={selectedLines}
+                onChange={setSelectedLines}
+                appliesTo={lineSteps}
+              />
+            </div>
           </div>
           <div className="flex flex-col gap-3 flex-grow justify-between relative">
             <div className="flex flex-col gap-2">
@@ -2344,9 +2468,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           activeTab={activeYieldTab}
           onTabChange={setActiveYieldTab}
           fetchState={
-            // While a range is applied the table's freshness is the REST query's,
-            // not the stream's.
-            rangeActive
+            // While filtered the table's freshness is the REST query's, not the
+            // stream's.
+            kpiFiltered
               ? rangedYield.state === "ready"
                 ? "ready"
                 : rangedYield.state === "error"
@@ -2368,6 +2492,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           // The step tabs read this too, so a date range narrows IP, RTWP and
           // the rest the same way it narrows UNITS.
           dateRange={dateRange}
+          // And the shared product selection, so the step tabs narrow with it.
+          productScope={selectedProducts}
         />
 
         <AttentionCenterPanel

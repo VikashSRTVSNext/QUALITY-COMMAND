@@ -55,6 +55,27 @@ export const isRangeActive = (range: DateRange): boolean =>
   Boolean(range.from || range.to);
 
 /**
+ * True when the dashboard must read REST rather than the SSE snapshot.
+ *
+ * The streams only ever publish the UNFILTERED current day, so a product or line
+ * selection moves the cards onto the endpoints even for today — not just a date
+ * range. Showing the snapshot under an active filter would put plant-wide
+ * figures beneath a chip that names one product.
+ */
+export const isFilteredScope = ({
+  range,
+  products,
+  lines,
+}: {
+  range: DateRange;
+  products?: string[];
+  lines?: string[];
+}): boolean =>
+  isRangeActive(range) ||
+  (products?.length ?? 0) > 0 ||
+  (lines?.length ?? 0) > 0;
+
+/**
  * Inclusive day count, or null when either end is missing.
  *
  * Parsed as UTC (the `T00:00:00Z` suffix) purely so the subtraction is immune to
@@ -185,6 +206,9 @@ export interface DashboardQuery {
   level?: YieldRequestLevel | null;
   /** Item codes, as returned by /dashboard/products. Empty = all products. */
   products?: string[];
+  /** Line names, sent exactly as listed by process-filter-options. Only
+   *  /dashboard/process-performance reads them. Empty = all lines. */
+  lines?: string[];
 }
 
 /**
@@ -199,6 +223,7 @@ export const buildDashboardParams = ({
   shift,
   level,
   products,
+  lines,
 }: DashboardQuery): URLSearchParams => {
   const q = new URLSearchParams();
   if (range.from) q.set("date_from", range.from);
@@ -207,6 +232,7 @@ export const buildDashboardParams = ({
   if (level) q.set("level", level);
   // .append, never .set — see rule 3 at the top of this file.
   for (const item of products ?? []) q.append("product", item);
+  for (const line of lines ?? []) q.append("line", line);
   return q;
 };
 
@@ -293,6 +319,14 @@ export type KpiMetricKey =
   | "customer_audit";
 
 export interface KpiResponse {
+  /** Present on the current backend. `customer_audit_filtered` is false under
+   *  a product filter: the audit is a plant score with no product, so
+   *  `totals.customer_audit` comes back null rather than unfiltered. */
+  filters?: {
+    products: string[];
+    source: string;
+    customer_audit_filtered: boolean;
+  };
   range: {
     from: string;
     to: string;
@@ -334,12 +368,39 @@ export interface KpiResponse {
 }
 
 export interface ProductOption {
+  /** The value sent back as ?product=. */
   item: string;
   product: string;
-  sub_module: string | null;
+  /** "AKNB (093802A.105)" — what the dropdown shows. Older responses lack it. */
+  label?: string;
+  sub_module?: string | null;
   /** Volume in the window, so the dropdown can sort by it or grey out products
-   *  with barely any production. */
-  tested: number | null;
+   *  with barely any production. /dashboard/products calls it `tested`,
+   *  process-filter-options calls it `done`; they count different operations. */
+  tested?: number | null;
+  done?: number | null;
+  /** KPI entry only: which KPI cards this product moves. */
+  level?: "unit" | "module" | "both";
+}
+
+/** Volume of an option, whichever endpoint it came from. */
+export const optionVolume = (o: ProductOption): number | null =>
+  o.done ?? o.tested ?? null;
+
+export interface ProcessFilterStep {
+  products: ProductOption[];
+  /** [] for every card that takes no line filter. */
+  lines: string[];
+}
+
+export interface ProcessFilterOptions {
+  range: { from: string; to: string };
+  site_code: string;
+  /** The cards a `line` reaches. Read from here, never hard-coded. */
+  line_steps: string[];
+  /** One entry per Process Performance card, keyed by step, plus "KPI" for the
+   *  four FPY/SPY cards. */
+  steps: Record<string, ProcessFilterStep>;
 }
 
 export interface ProductsResponse {

@@ -10,6 +10,9 @@ interface KpiMetricCardProps {
   title: string;
   /** What one trend point is: "hr" live, "day" under a date range. */
   bucketLabel?: string;
+  /** Set while a line filter is on: these four are not line cards, so they
+   *  grey out rather than imply the line narrowed them. */
+  lineFiltered?: boolean;
 }
 
 // A Process Performance slot filled from the KPI feed instead of the process
@@ -29,6 +32,7 @@ export const KpiMetricCard = ({
   item,
   title,
   bucketLabel,
+  lineFiltered = false,
 }: KpiMetricCardProps) => {
   const target = (item as any).target as number | null | undefined;
 
@@ -42,7 +46,10 @@ export const KpiMetricCard = ({
 
   return (
     <div
-      className="relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[112px] 2xl:h-[131px] transition-all duration-300 flex-1 min-w-0"
+      className={`relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[112px] 2xl:h-[131px] transition-all duration-300 flex-1 min-w-0 ${
+        lineFiltered ? "opacity-35 grayscale" : ""
+      }`}
+      title={lineFiltered ? "Not filterable by line" : undefined}
       style={{
         background: `linear-gradient(180deg, ${trendColor}1f 0%, ${trendColor}0a 100%), rgb(var(--c-panel))`,
         borderColor: `${trendColor}40`,
@@ -73,7 +80,7 @@ export const KpiMetricCard = ({
           className="text-[7.5px] 2xl:text-[9.5px] font-bold mt-1 leading-none"
           style={{ color: deltaColor }}
         >
-          {item.change}
+          {lineFiltered ? "Not filterable by line" : item.change}
         </span>
       </div>
 

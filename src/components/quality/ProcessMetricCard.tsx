@@ -15,6 +15,10 @@ interface ProcessMetricCardProps {
   /** Called with the Product Yield tab this tile maps to (see yieldTabs.ts)
    *  when the tile is clicked. Tiles with no tab stay inert. */
   onDrill?: (card: { step: string; title: string }) => void;
+  /** Set while a line filter is on and this tile is not one of the line
+   *  cards. The tile stays in place so the strip does not reflow, but greys out
+   *  and stops drilling: its figure is not narrowed by the selected line. */
+  lineFiltered?: boolean;
 }
 
 // One Process Performance tile: value, hourly trend line and target.
@@ -28,6 +32,7 @@ export const ProcessMetricCard = ({
   activeShift,
   bucketLabel,
   onDrill,
+  lineFiltered = false,
 }: ProcessMetricCardProps) => {
   const { color: cardColor, red: cardIsRed } = cardVerdict(item);
   const { points } = getProcessTrendData(item.trend, activeShift);
@@ -39,7 +44,7 @@ export const ProcessMetricCard = ({
 
   const tabStep = yieldTabForTile(item.name);
 
-  const canDrill = tabStep !== null && Boolean(onDrill);
+  const canDrill = !lineFiltered && tabStep !== null && Boolean(onDrill);
   const openDrilldown = () => {
     if (tabStep !== null) onDrill?.({ step: tabStep, title });
   };
@@ -47,8 +52,8 @@ export const ProcessMetricCard = ({
   return (
     <div
       className={`relative border rounded-lg p-1 2xl:p-2 pb-1 flex flex-col h-[112px] 2xl:h-[131px] transition-all duration-300 flex-1 min-w-0 ${
-    cardIsRed ? "animate-border-pulse-critical" : ""
-      } ${
+    cardIsRed && !lineFiltered ? "animate-border-pulse-critical" : ""
+      } ${lineFiltered ? "opacity-35 grayscale" : ""} ${
     canDrill
       ? "cursor-pointer hover:brightness-125 focus-visible:outline-2 focus-visible:outline-tab-border"
       : ""
@@ -59,6 +64,7 @@ export const ProcessMetricCard = ({
       aria-label={
     canDrill ? `${title} — open in Product Yield` : undefined
       }
+      title={lineFiltered ? "Not filterable by line" : undefined}
       onKeyDown={
     canDrill
       ? (e) => {
@@ -92,6 +98,12 @@ export const ProcessMetricCard = ({
       </div>
 
       <div className="flex-grow flex flex-col justify-center items-center min-h-0 -mt-1.5 2xl:-mt-2">
+    {lineFiltered ? (
+      <span className="text-ink-muted text-[9px] 2xl:text-[11px] font-bold leading-tight text-center">
+        Not filterable by line
+      </span>
+    ) : (
+    <>
     {!hasNoProduction && (
       <span className="text-ink-muted text-[9px] 2xl:text-[11px] leading-none uppercase">
         {item.type === "yield" && "Yield %"}
@@ -101,7 +113,7 @@ export const ProcessMetricCard = ({
     )}
     {hasNoProduction ? (
       <span className="text-ink-muted text-[10px] 2xl:text-[12px] font-bold leading-tight text-center">
-        No production
+        {item.emptyLabel ?? "No production"}
       </span>
     ) : (
       <span
@@ -116,9 +128,12 @@ export const ProcessMetricCard = ({
         {item.type === "failure" && item.data.failure}
       </span>
     )}
+    </>
+    )}
       </div>
 
       <div className="h-[22px] 2xl:h-[28px] w-full flex-shrink-0 mt-auto mb-1 2xl:mb-1.5 overflow-visible relative">
+    {!lineFiltered && (
     <TileSparkline
       points={plotPoints}
       type={item.type}
@@ -127,6 +142,7 @@ export const ProcessMetricCard = ({
       targetDirection={item.targetDirection}
       bucketLabel={bucketLabel}
     />
+    )}
       </div>
 
       {isNum(item.target) && (

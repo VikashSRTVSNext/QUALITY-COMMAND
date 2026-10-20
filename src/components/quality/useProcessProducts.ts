@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
 import type { DateRange } from "./dashboardFilters";
+import { readError } from "./useDashboardFilters";
 
 export type ProcessProductRow = {
-  item: string;
+  /** Null for unattributed production: boards the card counts but that carry
+   *  no item code. Shown as "Unattributed", never dropped, so the rows still
+   *  add up to the card. */
+  item: string | null;
   /** Short name from the Target sheet. Null when the sheet has no row for this
    *  item code, in which case the code stands alone. */
   product_name: string | null;
@@ -142,6 +146,10 @@ export const useProcessProducts = (
   /** Dashboard date range. Both ends null = the live current production day,
    *  which is what every caller did before ranges existed. */
   range?: DateRange | null,
+  /** The dashboard's shared product selection. With it, `rows` and `totals`
+   *  cover only those products, matching the product-filtered card. `card`
+   *  stays the unfiltered mart figure and must not be shown as the total. */
+  products?: string[] | null,
 ) => {
   const [data, setData] = useState<ProcessProductsResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -158,6 +166,8 @@ export const useProcessProducts = (
   // the table on each one.
   const rangeFrom = range?.from ?? null;
   const rangeTo = range?.to ?? null;
+  // Serialised so a fresh array literal from the caller does not refetch.
+  const productKey = (products ?? []).join("\u0001");
 
   /**
    * Drop the previous answer the moment the QUESTION changes.
@@ -176,7 +186,7 @@ export const useProcessProducts = (
    * keeping the previous page visible is right — it is the same question, one
    * page further on, and blanking the table between pages would be worse.
    */
-  const subject = `${step}\u0000${shift ?? ""}\u0000${rangeFrom ?? ""}\u0000${rangeTo ?? ""}`;
+  const subject = `${step}\u0000${shift ?? ""}\u0000${rangeFrom ?? ""}\u0000${rangeTo ?? ""}\u0000${productKey}`;
   const [lastSubject, setLastSubject] = useState(subject);
   if (subject !== lastSubject) {
     setLastSubject(subject);
@@ -205,11 +215,17 @@ export const useProcessProducts = (
         // day, so a range of nulls must NOT become empty query parameters.
         if (range?.from) params.set("date_from", range.from);
         if (range?.to) params.set("date_to", range.to);
+        // Repeated, never .set: several products are several parameters.
+        if (productKey) {
+          for (const item of productKey.split("\u0001")) {
+            params.append("product", item);
+          }
+        }
 
         const res = await fetch(
           apiUrl(`/process/${encodeURIComponent(step)}/products?${params}`),
         );
-        if (!res.ok) throw new Error(`Failed to fetch ${step} products`);
+        if (!res.ok) throw new Error(await readError(res));
         const json: ProcessProductsResponse = await res.json();
         if (cancelled) return;
         setData(json);
@@ -226,7 +242,7 @@ export const useProcessProducts = (
     return () => {
       cancelled = true;
     };
-  }, [step, shift, rangeFrom, rangeTo, page, sort, order]);
+  }, [step, shift, rangeFrom, rangeTo, productKey, page, sort, order]);
 
   // The page/sort reset that used to live here is now part of the subject check
   // above, which runs a frame earlier. It mattered for the same reason the data
