@@ -12,6 +12,7 @@
     "dev:demo": "vite --mode demo",
     "build:demo": "node scripts/validate-demo-fixtures.mjs && node scripts/check-palette.mjs && tsc && vite build --mode demo",
     "preview:demo": "vite preview --mode demo --outDir dist-demo",
+    "serve:demo": "node scripts/serve-demo.mjs",
     "demo:fixtures": "node scripts/generate-demo-fixtures.mjs",
     "demo:validate": "node scripts/validate-demo-fixtures.mjs"
   },

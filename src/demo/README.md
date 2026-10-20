@@ -85,7 +85,9 @@ memory.
 | `scripts/validate-demo-fixtures.mjs` | 48,544 invariant assertions; first step of `build:demo` |
 | `src/demo/types.ts` | Demo-layer types; re-exports the shipped contracts rather than redefining them |
 | `src/demo/demoClock.ts` | Runtime date re-anchoring (`reanchor`) and production-day rules |
-| `src/demo/fixtureLoader.ts` | Partition fetch, cache, in-flight de-duplication |
+| `src/demo/fixtureLoader.ts` | Partition fetch, bounded LRU cache, in-flight de-duplication |
+| `src/demo/cacheSelfTest.ts` | Cache assertions, dev-only; `?demoSelfTest=1` |
+| `scripts/serve-demo.mjs` | Static server for `dist-demo/`, and the deployment spec |
 | `src/demo/fixtureStore.ts` | Manifest, window resolution, typed partition accessors |
 | `src/demo/aggregations.ts` | Shared filter/roll-up/sort/paginate semantics |
 | `src/demo/demoApi.ts` | Route table + matcher. **The MSW migration surface.** |
@@ -284,48 +286,215 @@ Worst case is the full 30-day span, cold cache:
 ### What was NOT tested
 - No automated component or unit tests were added — the repo has no test
   framework and the brief excluded adding one. All UI results above are manual
-  browser verification, driven through the real transport.
-- Production build not served from a static host end-to-end; only
-  `vite build --mode demo` and the dev server were exercised.
+  browser verification, driven through the real transport. The partition cache
+  does have repeatable assertions; see §6.1.
 - Not tested on Firefox or Safari.
-- `--volume` above 1 was never generated, so the 100k–1M row claim is a design
-  property (partitioning + lazy loading + no full-set state), **not a measured
-  one**. See limitations.
+- The image viewer was never opened through the UI during verification. The
+  `content_type` crash described in §7.6 was found by inspection, reproduced by
+  evaluating the viewer's own filter expression against the real demo response,
+  and verified fixed the same way — but not by clicking to it in the browser.
+
+---
+
+## 6.1 Scale test — measured at 100k and 1M rows
+
+Generated with `--volume`, served from the dev server, driven through the real
+transport. The volume multiplier is not the row multiplier: 18,518 rows are
+fixed by the calendar (yield, KPI days, process steps, testers) and only
+`spi_pad_log`, `nc_log` and `smt_log` scale.
+
+| | `--volume 1` | `--volume 2.08` | `--volume 25.1` |
+|---|---|---|---|
+| Rows | 57,622 | **100,203** | **1,008,665** |
+| On disk | 35.29 MB | 55.09 MB | **472.55 MB** |
+| Generation | 3.1 s | **4.2 s** | **31.2 s** |
+| Validation | 48,543 asserts | 91,177 asserts | **1,000,456 asserts, 18.8 s** |
+| Partitions at first paint | 7 | 7 | **7** |
+| Slowest first-paint fetch | 28 ms | 22 ms | **31 ms** |
+| Heap after first paint | 36 MB | 34 MB | **41 MB** |
+
+First paint does not degrade with set size, because the partitions it reads are
+day summaries whose size is fixed by the calendar, not by volume.
+
+Query latency at 1,008,665 rows:
+
+| Query | Cold |
+|---|---|
+| 30-day product-yield | 107 ms |
+| 30-day KPIs | 506 ms |
+| 30-day process-performance | 94 ms |
+| 1-day SPI defects (a 9.98 MB partition) | 390 ms |
+
+**Million-row support is now measured, not inferred.** The generator, the
+validator, first paint, 30-day roll-ups and three-level drill-down all complete
+at 1,008,665 rows.
+
+The real ceiling is partition granularity, not row count: at `--volume 25` one
+day of SPI pad log is a single 9.98 MB JSON file, and the whole of it is parsed
+to answer one drill-down. Beyond roughly 1M rows the `(step, day)` partition
+needs splitting further — by line or by shift — or the detail logs need to move
+out of JSON. Nothing in the loader or the handlers assumes otherwise.
+
+### 6.2 Partition cache — bounded, with assertions
+
+The cache was **unbounded** and that was a real defect, not a theoretical one.
+Exhaustively opening every drill-down for every day:
+
+| | Unbounded | Bounded (24 MB, 250 ms grace) |
+|---|---|---|
+| Partitions retained, 1M rows | 457, still climbing | **23** |
+| Cached bytes | no ceiling | **24.0 MB peak, 0 overshoots** |
+| Final heap, 1M rows | **445 MB** | **71 MB** |
+| Peak heap, 1M rows | 445 MB | **155 MB** |
+| Partitions retained, 100k rows | 751 | 23 |
+| Final heap, 100k rows | 80 MB | — |
+
+Design, and why each part is the way it is:
+
+- **Budgeted on bytes, not entries.** Partitions span ~2 KB to ~10 MB, so an
+  entry count would evict almost nothing or far too much depending on which
+  partitions a session happened to open.
+- **In-flight de-duplication is untouched.** `inFlight` is a separate map from
+  `cache`, so an entry that is still downloading is structurally not a
+  candidate for eviction.
+- **A 250 ms grace window.** An entry used that recently is not evicted, so a
+  handler that loads several partitions and then reads them cannot lose one
+  mid-query. Correctness never actually depends on this — handlers hold their
+  own reference after `await`, so eviction can only ever cost a refetch — which
+  is why 250 ms is enough. At 1000 ms, three 10 MB partitions landing inside one
+  second produced 260 budget overshoots; at 250 ms, zero.
+- **Over-budget rather than unsafe.** If everything is inside the grace window
+  the budget is left overshot and counted in `cacheStats().budgetOvershoots`.
+
+`src/demo/cacheSelfTest.ts` holds the assertions. It runs against the real
+loader in the browser, because the cache depends on `fetch`,
+`import.meta.env.BASE_URL` and real partitions over HTTP, and the repo has no
+test runner:
+
+```
+?demoSelfTest=1   in the URL, or  __demoCacheSelfTest()  in the console
+```
+
+All 10 pass at 1M rows: 8 concurrent callers produce 1 fetch and 1 shared
+object; the in-flight map drains; a warm hit issues no request; the byte budget
+holds; eviction runs with no overshoot; a recently-used entry survives an
+over-budget insert; a partition larger than the whole budget still loads. The
+module is behind `import.meta.env.DEV`, so it is absent from `dist-demo`
+(verified by grepping the built chunks).
+
+### 6.3 Static deployment — verified
+
+`scripts/serve-demo.mjs` serves `dist-demo/` the way the demo is meant to be
+deployed, with no dependencies, and doubles as the deployment spec (it carries
+the equivalent nginx config). `npm run serve:demo`.
+
+| Request | Result |
+|---|---|
+| `/` | 302 → `/factory-command-center/` |
+| `/factory-command-center/` | 200 `text/html` |
+| `/factory-command-center/quality` | 200 `text/html` (SPA fallback) |
+| `/factory-command-center/alerts/ack?t=demo-token-open` | 200 (deep link) |
+| `/factory-command-center/quality/defect/SOLDER_BRIDGE` | 200 (deep link) |
+| `/factory-command-center/demo-data/manifest.json` | 200 `application/json` |
+| `/factory-command-center/demo-data/nope.json` | **404** |
+| `/factory-command-center/assets/missing.js` | **404** |
+
+The last two matter: the SPA fallback must **not** cover `/demo-data/` or
+`/assets/`. If it does, a missing fixture returns `index.html` with a 200 and
+the loader fails parsing HTML as JSON. `fixtureLoader` also guards this
+directly by rejecting a body starting with `<`.
+
+Verified against the served production artifact, not the dev server: dashboard
+renders, three SSE streams open and deliver (6 events in 7 s with correct
+payload shapes), three-level drill-down works, and the acknowledgement deep
+link completes to "Alert resolved".
+
+### 6.4 Network isolation — verified on the production artifact
+
+Every flow exercised against `dist-demo` on `localhost:4173`:
+
+| Check | Result |
+|---|---|
+| Requests leaving the page origin | **0** |
+| Requests to `demo.invalid` or any real API | **0** |
+| `fetch` / `EventSource` patched | both |
+| Unmatched demo path | throws `DemoRouteMissing` |
+| `https://api.github.com/` | blocked by the shim, never dispatched |
+
+`demo.invalid` never appears in resource timing because the shim answers before
+the network layer — the hostname is not resolvable by design, so anything that
+escaped interception would fail rather than reach a host.
+
+Error paths confirmed behaving: unknown ack token → 404 `unknown_token`;
+replaying an acknowledgement → 409 `already_answered`; a date outside the
+window → 200 with an empty, well-formed envelope.
 
 ---
 
 ## 7. Limitations and known gaps
 
-1. **The shift report is CSV, not xlsx.** The real endpoint returns a workbook.
-   Building one needs a spreadsheet library and the brief excluded new
-   dependencies, so the demo serves CSV and names the download `.csv` — rather
-   than handing over a CSV wearing an `.xlsx` extension, which would fail to
-   open and look like a corrupt file. The rest of the flow is real: same 400s,
-   same error envelope, real blob, parsed `Content-Disposition`.
-2. **Scale is designed for, not measured at, 1M rows.** The committed set is
-   57,622 rows / 35 MB. The mechanisms that make a larger set work — per-(kind,
-   day) partitioning, precomputed summaries, a shared cache, server-side paging,
-   nothing held in React state — are all in place and exercised, but the honest
-   statement is that only ~58k rows have actually been run. `--volume 20` would
-   generate ~1.1M rows; the likely first pressure point is the unbounded
-   partition cache in `fixtureLoader.ts`.
-3. **Inspection images are generated SVG placeholders**, not photographs. Layout,
-   paging and zoom work; the pixels are synthetic.
-4. **Acknowledgements do not persist.** `/alerts/ack/reply` writes to a
+1. **The shift report is CSV, not xlsx.** Live returns a server-generated
+   workbook; the frontend only saves the blob and parses
+   `Content-Disposition` (`src/components/alerts/shiftReport.ts:85-111`). The
+   demo builds CSV by hand and names the download `.csv`, rather than handing
+   over a CSV wearing an `.xlsx` extension, which would fail to open and look
+   like a corrupt file.
+
+   **Assessed and kept.** Matching live byte-for-byte needs a workbook writer —
+   `exceljs` (~1 MB) or SheetJS — and that trade is bad in both directions: the
+   demo build would carry a runtime dependency the live app does not have, and
+   the fidelity gained is a file format rather than any behaviour. Everything
+   that can be exercised already is: the same four 400 codes
+   (`missing_range`, `bad_range`, `range_too_long`, `missing_token`), the same
+   31-day ceiling as `SHIFT_REPORT_MAX_DAYS`, a real `Blob`, and a
+   `Content-Disposition` the existing client parses unmodified.
+
+   One cosmetic inconsistency remains, deliberately: the button tooltip still
+   reads "Download the shift report (Excel)"
+   (`ShiftReportDownload.tsx:90`), because that is live UI code and the demo
+   changes transport only — never components. Fixing the tooltip for the demo
+   would break the property that makes this architecture safe.
+2. **Inspection images are generated SVG placeholders**, not photographs
+   (`src/demo/handlers/process.ts:677`). Layout, per-entry paging and zoom all
+   work, the `Content-Type` is a real `image/svg+xml`, and output is
+   deterministic per key and entry. Only the pixels are synthetic.
+
+   **Assessed and kept.** SVG is text, so this costs no dependency, and real
+   captures could not be committed regardless — they are plant data, and
+   megabytes each. Two fidelity gaps stay: the demo always reports exactly 2
+   entries at a fixed 48,000 bytes, where live varies by product (one writes a
+   single ~41 KB PNG, another five JPEGs totalling ~900 KB); and the live 503
+   "image store unreachable from outside the plant network" branch
+   (`useUnitImages.ts:207-212`) is never produced, since the demo always
+   answers 200.
+3. **Acknowledgements do not persist.** `/alerts/ack/reply` writes to a
    module-level map and resets on reload. There is no fixture to write back to
    and faking persistence would misrepresent what the demo is.
-5. **Only the anchor day has SSE frames.** The snapshot is "today" by
+4. **Only the anchor day has SSE frames.** The snapshot is "today" by
    definition, so there is nothing to replay for a historical day.
-6. **The date maths is duplicated** between `scripts/lib/clock.mjs` and
+5. **The date maths is duplicated** between `scripts/lib/clock.mjs` and
    `src/demo/demoClock.ts`, because the generator runs under bare `node` and
    cannot import TypeScript. The validator asserts both satisfy the same
    production-day vectors, so a silent drift fails the build.
+6. **Fixed in this pass, recorded because it was shipped once:** the image
+   archive manifest omitted `content_type`, which `ArchiveEntry` declares as
+   required and `UnitImageViewer.tsx:129` dereferences
+   (`e.content_type.startsWith("image/")`). Opening the image viewer in demo
+   mode threw `TypeError: Cannot read properties of undefined`. The same
+   handler also returned `matched_folders` as strings and `available_folders`
+   as an array, where the live types are an object list and a
+   `Record<string, string[]>`. All three now match the declared contract. The
+   lesson is general: a demo response that merely satisfies the components
+   currently rendering it is not the same as one that satisfies the type.
 7. **`npm run lint` fails repo-wide** with "ESLint couldn't find a configuration
    file". Pre-existing on `deployment/main`, unrelated to this work, not fixed
    here.
 8. **The fixture set is committed** (35 MB). Keeping it in git is what makes the
    demo clone-and-run; regenerating is one command if that trade-off is
    unwanted.
+9. **Beyond ~1M rows, partitions need splitting.** Measured, not guessed: at
+   `--volume 25` a single day of SPI pad log is one 9.98 MB JSON file, parsed
+   whole to answer one drill-down. See §6.1.
 
 ---
 

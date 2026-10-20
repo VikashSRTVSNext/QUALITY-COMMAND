@@ -637,9 +637,16 @@ export const imagesHandler = async (
       ...(store === "axi"
         ? {
             product_name: single(url, "product_name"),
+            // Shapes match ImagesResponse in useUnitImages.ts: `matched_folders`
+            // is a list of objects (NOT bare strings) and `available_folders`
+            // is a machine -> folders record. NcLogTable renders these in its
+            // "nothing matched" branch, so getting the shape wrong would show
+            // garbage there the first time a product had no archive.
             folder_candidates: [item],
-            matched_folders: [item],
-            available_folders: [item],
+            matched_folders: [
+              { machine: `${step}_INSPECTION_IN04`, year: Number(day.slice(0, 4)), folder: item },
+            ],
+            available_folders: { [`${step}_INSPECTION_IN04`]: [item] },
           }
         : {}),
     },
@@ -659,9 +666,14 @@ export const imageArchiveHandler = async (url: URL): Promise<DemoResponse> => {
       store,
       archive_bytes: 48_000,
       images: 2,
+      // `content_type` is REQUIRED by ArchiveEntry in useUnitImages.ts, and
+      // UnitImageViewer filters on `e.content_type.startsWith("image/")`.
+      // Omitting it threw "Cannot read properties of undefined (reading
+      // 'startsWith')" the moment the image viewer opened — a crash that only
+      // appeared in demo mode, because live always sends the field.
       entries: [
-        { entry: "top.svg", bytes: 24_000 },
-        { entry: "bottom.svg", bytes: 24_000 },
+        { entry: "top.svg", bytes: 24_000, content_type: "image/svg+xml" },
+        { entry: "bottom.svg", bytes: 24_000, content_type: "image/svg+xml" },
       ],
     },
   };

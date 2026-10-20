@@ -173,6 +173,10 @@ export const bootstrapDemo = async (): Promise<void> => {
   await startSimulator();
 
   if (import.meta.env.DEV) {
+    // Dropped from a production demo build by the DEV guard inside.
+    const { installCacheSelfTest } = await import("./cacheSelfTest");
+    installCacheSelfTest();
+
     const info = storeInfo();
     console.info(
       `%c[demo] standalone mode`,
@@ -181,6 +185,7 @@ export const bootstrapDemo = async (): Promise<void> => {
         `\n  window    ${info.window} (${info.days} production days)` +
         `\n  anchored  ${info.anchorDate} -> ${info.today} (${info.offsetDays >= 0 ? "+" : ""}${info.offsetDays}d)` +
         `\n  fixtures  ${info.rows.toLocaleString("en-US")} rows, ${(info.bytes / 1024 / 1024).toFixed(2)} MB` +
+        `\n  cache     __demoCacheSelfTest() in the console, or ?demoSelfTest=1` +
         `\n  no request leaves this machine; unmatched URLs throw.`,
     );
   }
