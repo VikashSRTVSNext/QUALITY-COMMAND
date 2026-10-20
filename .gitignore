@@ -11,6 +11,9 @@ lerna-debug.log*
 node_modules/
 dist/
 dist-ssr/
+# Standalone demo build artifact. Separate from dist/ so a demo build cannot
+# overwrite the live one; ignored for the same reason dist/ is.
+dist-demo/
 *.local
 
 # Editor directories and files
@@ -37,3 +40,4 @@ temp/
 .gemini/
 .claude/
 .agents/
+.snowflake/
