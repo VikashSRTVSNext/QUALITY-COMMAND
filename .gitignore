@@ -37,3 +37,4 @@ temp/
 .gemini/
 .claude/
 .agents/
+.snowflake/

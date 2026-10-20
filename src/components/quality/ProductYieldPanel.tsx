@@ -238,6 +238,9 @@ interface ProductYieldPanelProps {
   /** The shared product selection, passed to the per-product step tables so
    *  their rows and totals match the product-filtered card. */
   productScope?: string[];
+  /** The Process strip's line selection. Only the screw breakdown takes it;
+   *  the DPMOI breakdown reports itself not filterable while it is set. */
+  lineScope?: string[];
 }
 
 // Product Yield panel: level tabs, a sortable and paginated table, and the AI
@@ -263,6 +266,7 @@ export const ProductYieldPanel = ({
   rangeError = null,
   dateRange = null,
   productScope = [],
+  lineScope = [],
 }: ProductYieldPanelProps) => {
   // Product opened from a UNITS row. Lives here rather than in StepPane because
   // the UNITS tab is the panel's own table, not a step pane.
@@ -399,13 +403,11 @@ export const ProductYieldPanel = ({
             )}
           </div>
 
-          {/* Hidden on the DPMOI and screw tabs: those breakdowns already list
-              per item/line in their own rows and take no product parameter, so
-              the control would be inert there. Same state as the header pill,
-              but this list is narrower, so it must not prune. */}
-          {activeStep !== DPMOI_TAB &&
-            activeStep !== SCREW_DEFECTS_TAB &&
-            onProductsChange && (
+          {/* On every tab: the level tables, the per-product step tables and
+              both breakdowns (screw, DPMOI) all take ?product=. Same state as
+              the header pill, but this list is narrower, so it must not
+              prune. */}
+          {onProductsChange && (
             <ProductFilter
               options={productOptions}
               optionsState={productOptionsState}
@@ -468,7 +470,13 @@ export const ProductYieldPanel = ({
         ) : activeStep === "SMT_DEFECTS" ? (
           <SmtStepPane shift={shift} range={dateRange} products={productScope} />
         ) : activeStep === DPMOI_TAB ? (
-          <DpmoiPane businessDate={null} range={dateRange} shift={shift} />
+          <DpmoiPane
+            businessDate={null}
+            range={dateRange}
+            shift={shift}
+            products={productScope}
+            lineFiltered={lineScope.length > 0}
+          />
         ) : activeStep === SCREW_DEFECTS_TAB ? (
           // Its own pane: screws-driven denominator, and a line/station/item
           // grouping the per-product table has no column for.
@@ -476,6 +484,8 @@ export const ProductYieldPanel = ({
             businessDate={null}
             range={dateRange}
             shift={shift}
+            products={productScope}
+            lineScope={lineScope}
           />
         ) : activeStep ? (
           <StepPane

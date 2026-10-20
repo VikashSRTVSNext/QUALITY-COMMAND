@@ -30,6 +30,8 @@ export type DpmoiResponse = {
    *  A + B + C up. mart_dpmo gained this grain on 2026-09-23. */
   shift: string | null;
   operations: string[];
+  /** What the backend applied. Absent on older responses. */
+  filters?: { products: string[] };
   rows: DpmoiRow[];
   totals: {
     qty: number | null;
@@ -54,6 +56,9 @@ export const useDpmoiProducts = (
   range?: DateRange | null,
   /** "A" | "B" | "C", or null for the whole production day. */
   shift?: string | null,
+  /** The dashboard's shared product selection. Rows, totals and
+   *  missing_opportunities then cover only these products. */
+  products?: string[] | null,
 ) => {
   const [data, setData] = useState<DpmoiResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -63,6 +68,9 @@ export const useDpmoiProducts = (
   // on every render and an object dependency would refetch on each one.
   const rangeFrom = range?.from ?? null;
   const rangeTo = range?.to ?? null;
+  // Serialised so a fresh array literal from the caller does not refetch.
+  // No `line`: mart_dpmo has no line column, so this breakdown cannot take one.
+  const productKey = (products ?? []).join("\u0001");
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +82,12 @@ export const useDpmoiProducts = (
         if (range?.from) params.set("date_from", range.from);
         if (range?.to) params.set("date_to", range.to);
         if (shift) params.set("shift", shift);
+        // Repeated, never .set: several products are several parameters.
+        if (productKey) {
+          for (const item of productKey.split("\u0001")) {
+            params.append("product", item);
+          }
+        }
         const qs = params.toString();
         const res = await fetch(
           apiUrl(`/process/dpmoi/breakdown${qs ? `?${qs}` : ""}`),
@@ -97,7 +111,7 @@ export const useDpmoiProducts = (
     return () => {
       cancelled = true;
     };
-  }, [businessDate, rangeFrom, rangeTo, shift]);
+  }, [businessDate, rangeFrom, rangeTo, shift, productKey]);
 
   return { data, state, error };
 };

@@ -66,12 +66,23 @@ export const ScrewDefectsPane = ({
   businessDate,
   range,
   shift,
+  products,
+  lineScope,
 }: {
   businessDate?: string | null;
   range?: DateRange | null;
   shift?: string | null;
+  /** Shared product and line selections. This breakdown takes both. */
+  products?: string[];
+  lineScope?: string[];
 }) => {
-  const { data, state, error } = useScrewDefects(businessDate, range, shift);
+  const { data, state, error } = useScrewDefects(
+    businessDate,
+    range,
+    shift,
+    products,
+    lineScope,
+  );
   // The line whose stations are open in the modal. One at a time, which is what
   // a modal implies -- the trade-off against the accordion this replaced is that
   // two lines can no longer be compared station by station on one screen.
@@ -119,7 +130,9 @@ export const ScrewDefectsPane = ({
   if (data.rows.length === 0) {
     return (
       <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
-        No screws driven on {data.business_date}.
+        {(products?.length ?? 0) > 0 || (lineScope?.length ?? 0) > 0
+          ? `No screws driven for the selected filter on ${data.business_date}.`
+          : `No screws driven on ${data.business_date}.`}
       </div>
     );
   }

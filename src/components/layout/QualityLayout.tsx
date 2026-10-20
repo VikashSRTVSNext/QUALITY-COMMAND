@@ -2494,6 +2494,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           dateRange={dateRange}
           // And the shared product selection, so the step tabs narrow with it.
           productScope={selectedProducts}
+          // The screw breakdown also narrows by line; DPMOI's cannot.
+          lineScope={selectedLines}
         />
 
         <AttentionCenterPanel

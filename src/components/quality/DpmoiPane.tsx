@@ -42,15 +42,46 @@ const opLabel = (op: string | null) =>
  * card above it.
  */
 export const DpmoiPane = ({
-  businessDate,
-  range,
-  shift,
+  lineFiltered = false,
+  ...props
 }: {
   businessDate?: string | null;
   range?: DateRange | null;
   shift?: string | null;
+  products?: string[];
+  /** True while a line is selected. This breakdown reads mart_dpmo, which has
+   *  no line, so it says so rather than showing rows the line did not narrow.
+   *  (The DPMOI CARD does honour the line; only this table cannot.) */
+  lineFiltered?: boolean;
 }) => {
-  const { data, state, error } = useDpmoiProducts(businessDate, range, shift);
+  if (lineFiltered) {
+    return (
+      <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
+        The DPMOI breakdown is not filterable by line. Clear the line filter to
+        see it.
+      </div>
+    );
+  }
+  return <DpmoiPaneBody {...props} />;
+};
+
+const DpmoiPaneBody = ({
+  businessDate,
+  range,
+  shift,
+  products,
+}: {
+  businessDate?: string | null;
+  range?: DateRange | null;
+  shift?: string | null;
+  products?: string[];
+}) => {
+  const { data, state, error } = useDpmoiProducts(
+    businessDate,
+    range,
+    shift,
+    products,
+  );
 
   /**
    * Column sorting. Every row is already here -- this pane is not paginated --
@@ -89,7 +120,9 @@ export const DpmoiPane = ({
   if (data.rows.length === 0) {
     return (
       <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
-        No AOI production on {data.business_date}.
+        {(products?.length ?? 0) > 0
+          ? `No AOI production for the selected product${products!.length === 1 ? "" : "s"} on ${data.business_date}.`
+          : `No AOI production on ${data.business_date}.`}
       </div>
     );
   }

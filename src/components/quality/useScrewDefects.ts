@@ -30,6 +30,8 @@ export type ScrewDefectsResponse = {
   /** The shift the rows were narrowed to, or null for the whole day. */
   shift: string | null;
   operations: string[];
+  /** What the backend applied. Absent on older responses. */
+  filters?: { products: string[]; lines: string[] };
   rows: ScrewRow[];
   totals: {
     boards: number | null;
@@ -62,6 +64,12 @@ export const useScrewDefects = (
   range?: DateRange | null,
   /** "A" | "B" | "C", or null for the whole production day. */
   shift?: string | null,
+  /** Shared product selection. Rows, totals and `uncovered` then cover only
+   *  these products. */
+  products?: string[] | null,
+  /** Selected lines (MAC_LINE01 etc). This breakdown takes them, unlike
+   *  DPMOI's. */
+  lines?: string[] | null,
 ) => {
   const [data, setData] = useState<ScrewDefectsResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -70,6 +78,9 @@ export const useScrewDefects = (
   // The two strings, not the object — see the DPMOI hook for why.
   const rangeFrom = range?.from ?? null;
   const rangeTo = range?.to ?? null;
+  // Serialised so fresh array literals from the caller do not refetch.
+  const productKey = (products ?? []).join("\u0001");
+  const lineKey = (lines ?? []).join("\u0001");
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +92,17 @@ export const useScrewDefects = (
         if (range?.from) params.set("date_from", range.from);
         if (range?.to) params.set("date_to", range.to);
         if (shift) params.set("shift", shift);
+        // Repeated, never .set: several values are several parameters.
+        if (productKey) {
+          for (const item of productKey.split("\u0001")) {
+            params.append("product", item);
+          }
+        }
+        if (lineKey) {
+          for (const line of lineKey.split("\u0001")) {
+            params.append("line", line);
+          }
+        }
         const qs = params.toString();
         const res = await fetch(
           apiUrl(`/process/screw-defects/breakdown${qs ? `?${qs}` : ""}`),
@@ -104,7 +126,7 @@ export const useScrewDefects = (
     return () => {
       cancelled = true;
     };
-  }, [businessDate, rangeFrom, rangeTo, shift]);
+  }, [businessDate, rangeFrom, rangeTo, shift, productKey, lineKey]);
 
   return { data, state, error };
 };
