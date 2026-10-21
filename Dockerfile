@@ -20,9 +20,13 @@ FROM nginx:alpine
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 
 # Privileged setup while still root:
-#  - move pid file to /tmp so it works under readOnlyRootFilesystem
+#  - move the pid file to /tmp, writable by nginx, regardless of the image default
+#  - remove the user directive because Docker already selects the runtime user
 #  - fix ownership of directories Nginx writes to
-RUN sed -i 's|/var/run/nginx.pid|/tmp/nginx.pid|' /etc/nginx/nginx.conf && \
+RUN sed -i \
+      -e 's|^[[:space:]]*pid[[:space:]][^;]*;|pid /tmp/nginx.pid;|' \
+      -e '/^[[:space:]]*user[[:space:]]/d' \
+      /etc/nginx/nginx.conf && \
     chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
 
 # Copy build output with final ownership set
@@ -30,6 +34,9 @@ COPY --from=build --chown=nginx:nginx /app/dist-demo /usr/share/nginx/html/facto
 
 # Drop privileges to nginx user (UID 101, matching runAsUser: 101 in deployment.yaml)
 USER nginx
+
+# Fail the image build if the runtime user cannot use the Nginx configuration.
+RUN nginx -t
 
 # Keep the Kubernetes container port; Docker Compose publishes it on localhost:8082.
 EXPOSE 8080
