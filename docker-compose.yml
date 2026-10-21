@@ -1,9 +1,9 @@
 services:
-  nokia-command-center:
+  nokia-quality-command-center:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nokia-command-center
+    container_name: nokia-quality-command-center
     ports:
       - "8082:8080"
     restart: unless-stopped

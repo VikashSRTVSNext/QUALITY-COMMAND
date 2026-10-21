@@ -18,8 +18,8 @@ docker compose down
 Or build and run without Compose:
 
 ```bash
-docker build -t nokia-command-center .
-docker run --rm -p 8082:8080 nokia-command-center
+docker build -t nokia-quality-command-center .
+docker run --rm -p 8082:8080 nokia-quality-command-center
 ```
 
 The image runs `npm run build:demo` and serves `dist-demo/`, including the bundled
