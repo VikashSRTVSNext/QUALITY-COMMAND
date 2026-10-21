@@ -1,6 +1,11 @@
 node_modules
 dist
+dist-demo
 dist-electron
 release
 .git
 .gitignore
+nginx/nginx/certs
+.env
+.env.*
+!.env.demo

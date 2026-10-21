@@ -10,18 +10,8 @@ RUN npm ci --legacy-peer-deps
 
 COPY . .
 
-# Build arguments for Vite environment variables
-ARG VITE_API_URL=https://digitwin.dyn.nesc.nokia.net/api/factory-command-center
-ARG VITE_API_BASE_URL=https://digitwin.dyn.nesc.nokia.net/api/factory-command-center
-ARG VITE_DASHBOARD_STREAM_URL=https://digitwin.dyn.nesc.nokia.net/api/factory-command-center/dashboard/stream
-ARG VITE_USE_MOCKS=false
-
-ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-ENV VITE_DASHBOARD_STREAM_URL=$VITE_DASHBOARD_STREAM_URL
-ENV VITE_USE_MOCKS=$VITE_USE_MOCKS
-
-RUN npm run build
+# .env.demo enables the fixture-backed transport; no backend is required.
+RUN npm run build:demo
 
 # ---- Production stage ----
 FROM nginx:alpine
@@ -36,12 +26,12 @@ RUN sed -i 's|/var/run/nginx.pid|/tmp/nginx.pid|' /etc/nginx/nginx.conf && \
     chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
 
 # Copy build output with final ownership set
-COPY --from=build --chown=nginx:nginx /app/dist /usr/share/nginx/html
+COPY --from=build --chown=nginx:nginx /app/dist-demo /usr/share/nginx/html/factory-command-center
 
 # Drop privileges to nginx user (UID 101, matching runAsUser: 101 in deployment.yaml)
 USER nginx
 
-# Unprivileged port (matches containerPort: 8080 and targetPort: 8080 in deployment.yaml)
+# Keep the Kubernetes container port; Docker Compose publishes it on localhost:8082.
 EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]

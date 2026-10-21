@@ -1,37 +1,32 @@
-## Frontend NESC Deployment Steps
-
-#### Build Image
+## Run the standalone demo with Docker and Nginx
 
 ```bash
-docker build -t tvsnext.azurecr.io/factory-command-center:latest .
+docker compose up --build -d
 ```
 
-#### Push to ACR
+Open http://localhost:8082. Nginx redirects to
+http://localhost:8082/factory-command-center/ and supports refreshing app routes.
+The container listens on port 8080; Compose publishes it on host port 8082.
+Local serving uses HTTP and does not require TLS certificates.
 
-```
-docker push tvsnext.azurecr.io/factory-command-center:latest
-```
-
-#### Apply K8s config
-```
-kubectl apply -f k8s/
-```
-
-#### Restart Pod
-```
-kubectl rollout restart deployment/factory-command-center
-```
-
----
-
-### Oneshot
+To stop the app:
 
 ```bash
-docker build -t tvsnext.azurecr.io/factory-command-center:latest .
-
-docker push tvsnext.azurecr.io/factory-command-center:latest
-
-kubectl apply -f k8s/
-
-kubectl rollout restart deployment/factory-command-center -n nokia-factory-command-center
+docker compose down
 ```
+
+Or build and run without Compose:
+
+```bash
+docker build -t nokia-command-center .
+docker run --rm -p 8082:8080 nokia-command-center
+```
+
+The image runs `npm run build:demo` and serves `dist-demo/`, including the bundled
+fixtures, through Nginx. No backend API, database, Snowflake connection, or other
+service is required at runtime. The build still downloads the base images and
+npm packages. Only `.env.demo` is included from the environment files, so local
+API settings cannot override the demo configuration.
+
+Missing fixture and asset URLs return 404; app routes fall back to the demo shell.
+See [the demo documentation](src/demo/README.md) for fixture details and limitations.
