@@ -244,6 +244,26 @@ export const LEVEL_PARAM: Record<"UNITS" | "TRX" | "PA", YieldRequestLevel> = {
   PA: "PA",
 };
 
+/**
+ * Group rank for the shared line dropdown: the `SMT nn` lines first (DPMOI, SMT
+ * defects and SPI all filter on them), then the `MAC_LINExx` lines, then AXI,
+ * then anything unrecognised — including the pre-2026-10-22 `AOI_n` names an
+ * older window still lists.
+ */
+const lineGroup = (line: string): number => {
+  if (/^SMT\b/i.test(line)) return 0;
+  if (/^MAC_LINE/i.test(line)) return 1;
+  if (/^AXI$/i.test(line)) return 2;
+  return 3;
+};
+
+const naturalCollator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+
+/** Order for the shared line dropdown, per the handoff: grouped, then natural
+ *  within a group, so `SMT 01` < `SMT 07B` < `SMT 10` rather than lexical. */
+export const compareLines = (a: string, b: string): number =>
+  lineGroup(a) - lineGroup(b) || naturalCollator.compare(a, b);
+
 // ── Response shapes ─────────────────────────────────────────────────────────
 // Typed rather than `any` because two fields below are easy to misread and the
 // compiler is the cheapest place to catch it: the two different `days`, and the

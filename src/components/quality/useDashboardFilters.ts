@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { apiUrl } from "../../core/api/config";
 import {
   buildDashboardParams,
+  compareLines,
   isRangeActive,
   optionVolume,
   rangeError,
@@ -345,7 +346,7 @@ export const useProcessFilterOptions = (range: DateRange) => {
     for (const step of lineSteps) {
       for (const line of steps[step]?.lines ?? []) lineSet.add(line);
     }
-    const lines = [...lineSet].sort();
+    const lines = [...lineSet].sort(compareLines);
 
     return {
       products,

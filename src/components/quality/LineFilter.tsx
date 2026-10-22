@@ -1,12 +1,15 @@
 // Line multi-select for the Process Performance strip.
 //
 // Lives on the strip, not in the header, because a line reaches only the cards
-// in process-filter-options' `line_steps` (AXI, THERMAL_AVI, SCREW_DEFECTS,
-// DPMOI today). Every other card is greyed out while a line is selected; see
-// ProcessMetricCard's `lineFiltered`.
+// in process-filter-options' `line_steps` (AXI, DPMOI, SCREW_DEFECTS,
+// SMT_DEFECTS, SPI, THERMAL_AVI as of 2026-10-22). Every other card is greyed
+// out while a line is selected; see ProcessMetricCard's `lineFiltered`.
 //
-// Values are sent exactly as listed (MAC_LINE02, AOI_7B, SMT, AXI) — no
-// normalising, the endpoint matches them verbatim.
+// Values are sent exactly as listed (SMT 07B, MAC_LINE02, AXI) — no
+// normalising, the endpoint matches them verbatim. SMT names carry a space;
+// URLSearchParams encodes it. The SMT names are shared by DPMOI, SMT defects
+// and SPI, so one pick filters all three to the same physical line. An older
+// window may still list the pre-rename AOI_n names; they are offered as-is.
 
 import { useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Network, X } from "lucide-react";

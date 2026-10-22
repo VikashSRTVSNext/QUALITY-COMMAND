@@ -7,6 +7,7 @@ import {
   EMPTY_RANGE,
   rangeDayCount,
   type DateRange,
+  type YieldRequestLevel,
 } from "./dashboardFilters";
 import ChartViewToggle, {
   paretoAvailable,
@@ -14,6 +15,7 @@ import ChartViewToggle, {
 } from "./ChartViewToggle";
 import FailedStepChart from "./FailedStepChart";
 import NcLogTable from "./NcLogTable";
+import ReworkAnalysisPane from "./ReworkAnalysisPane";
 import TesterYieldTable from "./TesterYieldTable";
 import UnitImageViewer from "./UnitImageViewer";
 import { useProductDefects } from "./useProductDefects";
@@ -33,6 +35,10 @@ type Props = {
   /** The dashboard's date range at the moment the modal was opened. Seeds
    *  the picker below; the modal then owns its own copy. */
   range?: DateRange | null;
+  /** The Product Yield tab (UNIT / TRX / PA) this was opened from. Set only
+   *  from those tabs, and the only thing that offers the rework view -- the
+   *  rework endpoints are keyed by level, not by step. */
+  level?: YieldRequestLevel | null;
   onClose: () => void;
 };
 
@@ -43,7 +49,7 @@ type Selection = { resource: string | null; category: string | null } | null;
 /** How level 2 is drawn. The table is the plant's own report and stays the
  *  default; the chart answers "what fails most, and is it one machine", which a
  *  table can hold but cannot show. */
-type Level2View = "table" | "chart";
+type Level2View = "table" | "chart" | "rework";
 
 const fmtPct = (v: number | null | undefined) =>
   isNum(v) ? `${v.toFixed(2)}%` : "—";
@@ -72,6 +78,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
   productName,
   businessDate,
   range = null,
+  level = null,
   onClose,
 }) => {
   /**
@@ -85,6 +92,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
   const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
   const [selection, setSelection] = useState<Selection>(null);
   const [view, setView] = useState<Level2View>("table");
+  const views: Level2View[] = level ? ["table", "chart", "rework"] : ["table", "chart"];
   /** Bars or Pareto inside the chart view. */
   const [chartView, setChartView] = useState<ChartView>("bars");
   // The plant's two NC-log filters. Off by default: their screen hides later
@@ -220,7 +228,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
               switch there would offer a chart of a single selection. */}
           {!selection && (
             <div className="flex items-center gap-1">
-              {(["table", "chart"] as const).map((v) => (
+              {views.map((v) => (
                 <button
                   key={v}
                   type="button"
@@ -233,7 +241,9 @@ export const ProductDrilldownModal: React.FC<Props> = ({
                   title={
                     v === "table"
                       ? "The plant's tester yield report, cell for cell"
-                      : "Failures by NC code, stacked by tester"
+                      : v === "chart"
+                        ? "Failures by NC code, stacked by tester"
+                        : "Defect category and failure-id paretos by fiscal day, week or month"
                   }
                 >
                   {v}
@@ -255,6 +265,13 @@ export const ProductDrilldownModal: React.FC<Props> = ({
               and behaves identically in both places. With no range set it shows
               the day the data is for, which is what the static label used to
               say. */}
+          {/* The rework view has its own period selector, so the picker is
+              swapped for a label rather than left doing nothing. */}
+          {view === "rework" && !selection ? (
+            <span className="text-[10px] font-bold text-ink-dim uppercase tracking-wider whitespace-nowrap">
+              Rework analysis
+            </span>
+          ) : (
           <DateRangeFilter
             value={modalRange}
             onChange={setModalRange}
@@ -264,6 +281,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
                 : (testers.data?.business_date ?? businessDate ?? null)
             }
           />
+          )}
           {selection && (
             <button
               onClick={() => setSelection(null)}
@@ -276,7 +294,12 @@ export const ProductDrilldownModal: React.FC<Props> = ({
       }
     >
       {/* ---- level 2: testers ------------------------------------------ */}
-      {!selection && (
+      {/* The rework view is not gated on the tester table: it has its own
+          requests and period, and a quiet TODAY must not hide last week. */}
+      {!selection && view === "rework" && level && (
+        <ReworkAnalysisPane level={level} item={item} />
+      )}
+      {!selection && view !== "rework" && (
         <>
           {testers.state === "loading" && (
             <div className="py-16 text-center text-[12px] font-bold text-ink-dim">

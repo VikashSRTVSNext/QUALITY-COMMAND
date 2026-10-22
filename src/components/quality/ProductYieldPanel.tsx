@@ -25,10 +25,12 @@ import {
   type YieldStepRequest,
 } from "./yieldTabs";
 import ProductFilter from "./ProductFilter";
-import type {
-  DateRange,
-  ProductOption,
-  ProductYieldMeta,
+import {
+  LEVEL_PARAM,
+  type DateRange,
+  type ProductOption,
+  type ProductYieldMeta,
+  type YieldRequestLevel,
 } from "./dashboardFilters";
 
 export type YieldTab = "UNITS" | "TRX" | "PA";
@@ -278,6 +280,7 @@ export const ProductYieldPanel = ({
     step: string;
     item: string;
     name: string | null;
+    level: YieldRequestLevel;
   } | null>(null);
 
   const [sort, setSort] = useState<SortState<SortKey>>({
@@ -401,6 +404,21 @@ export const ProductYieldPanel = ({
                 {rangeMeta.from} – {rangeMeta.to} · {rangeMeta.days}d
               </span>
             )}
+            {/* Neither the level tables (MFT testers have no line) nor
+                /process/{step}/products take ?line=, so with a line chosen on
+                the strip this panel says it is still reading every line rather
+                than implying it is filtered. The screw breakdown does take the
+                line, and DPMOI states its own limitation, so neither shows it. */}
+            {lineScope.length > 0 &&
+              activeStep !== SCREW_DEFECTS_TAB &&
+              activeStep !== DPMOI_TAB && (
+                <span
+                  className="text-[9.5px] font-black uppercase tracking-wider text-ink-dim border border-line rounded px-1.5 py-px whitespace-nowrap"
+                  title={`Line filter (${lineScope.join(", ")}) does not apply to this table`}
+                >
+                  All lines
+                </span>
+              )}
           </div>
 
           {/* On every tab: the level tables, the per-product step tables and
@@ -599,11 +617,10 @@ export const ProductYieldPanel = ({
                     {(safePage - 1) * ITEMS_PER_PAGE + idx + 1}.
                   </td>
                   <td className="py-[2.5px] text-white font-sans font-bold">
-                    {/* Only the UNITS level maps to a step whose failures can be
-                        explained (UNIT_TEST). TRX and PA have no rework mapping,
-                        so their names stay inert rather than opening a modal that
-                        would report 501. Gated on the same list the step panes
-                        use, so unmapping the step removes this click too. */}
+                    {/* All three levels map to a step whose failures can be
+                        explained: UNITS to UNIT_TEST, TRX and PA to MODULE_TEST.
+                        Gated on the same list the step panes use, so unmapping
+                        the step removes this click too. */}
                     {DEFECT_DRILLDOWN_STEPS[LEVEL_STEP[activeTab]] &&
                     row.item ? (
                       <button
@@ -613,6 +630,7 @@ export const ProductYieldPanel = ({
                             step: LEVEL_STEP[activeTab],
                             item: row.item,
                             name: row.name,
+                            level: LEVEL_PARAM[activeTab],
                           })
                         }
                         className="text-white font-bold hover:text-info focus-visible:outline focus-visible:outline-1 cursor-pointer text-left"
@@ -919,6 +937,7 @@ export const ProductYieldPanel = ({
             productName={levelSelection.name}
             businessDate={null}
             range={dateRange}
+            level={levelSelection.level}
             onClose={() => setLevelSelection(null)}
           />
         )}
