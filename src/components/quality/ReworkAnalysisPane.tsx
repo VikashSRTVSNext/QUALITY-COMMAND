@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import ServerParetoChart from "../charts/ServerParetoChart.lazy";
 import type { ServerParetoBar } from "../charts/ServerParetoChart";
@@ -79,6 +79,9 @@ type Props = {
   level: YieldRequestLevel;
   /** The row's item code, never its display name. */
   item: string;
+  /** Reports whether either pareto is in flight, so the modal's shell can show
+   *  its loading lock -- the pane's requests are its own, not the modal's. */
+  onBusyChange?: (busy: boolean) => void;
 };
 
 /**
@@ -89,7 +92,7 @@ type Props = {
  * the dashboard's 30-day limit and the line filter do not apply: the endpoints
  * take an `anchor` up to 365 days back, and rework is per product with no line.
  */
-export const ReworkAnalysisPane = ({ level, item }: Props) => {
+export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
   const [scope, setScope] = useState<ReworkScope>({
     granularity: "week",
     // Unset on open so the server picks today. Afterwards only ever an anchor
@@ -108,6 +111,12 @@ export const ReworkAnalysisPane = ({ level, item }: Props) => {
   const head = category.data ?? failureId.data;
   const period = head?.period ?? null;
   const loading = category.state === "loading" || failureId.state === "loading";
+  useEffect(() => {
+    onBusyChange?.(loading);
+  }, [loading, onBusyChange]);
+  // Unmounting mid-request (switching back to Table) must not leave the
+  // modal locked on a request nobody is waiting for.
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
   const tooFarBack = category.status === 400 || failureId.status === 400;
 
   const prevDisabled =

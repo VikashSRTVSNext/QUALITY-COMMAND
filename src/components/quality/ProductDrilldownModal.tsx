@@ -92,6 +92,8 @@ export const ProductDrilldownModal: React.FC<Props> = ({
   const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
   const [selection, setSelection] = useState<Selection>(null);
   const [view, setView] = useState<Level2View>("table");
+  // The rework pane fetches on its own; it reports here so the shell can lock.
+  const [reworkBusy, setReworkBusy] = useState(false);
   const views: Level2View[] = level ? ["table", "chart", "rework"] : ["table", "chart"];
   /** Bars or Pareto inside the chart view. */
   const [chartView, setChartView] = useState<ChartView>("bars");
@@ -152,7 +154,12 @@ export const ProductDrilldownModal: React.FC<Props> = ({
       // Either level can be in flight: the tester table on open, the NC log on
       // a drill, and the chart view refetches the log when the dimension changes.
       busy={
-        testers.state === "loading" || (needsLog && defects.state === "loading")
+        // Only what is ON SCREEN counts: the tester table keeps loading behind
+        // the rework view, and must not lock a pane that does not show it.
+        view === "rework" && !selection
+          ? reworkBusy
+          : testers.state === "loading" ||
+            (needsLog && defects.state === "loading")
       }
       // Escape steps back to the tester list first, and only closes from there.
       onBack={selection ? () => setSelection(null) : null}
@@ -297,7 +304,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
       {/* The rework view is not gated on the tester table: it has its own
           requests and period, and a quiet TODAY must not hide last week. */}
       {!selection && view === "rework" && level && (
-        <ReworkAnalysisPane level={level} item={item} />
+        <ReworkAnalysisPane level={level} item={item} onBusyChange={setReworkBusy} />
       )}
       {!selection && view !== "rework" && (
         <>

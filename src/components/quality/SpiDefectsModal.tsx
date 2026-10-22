@@ -158,6 +158,7 @@ export const SpiDefectsModal: React.FC<Props> = ({
   return (
     <DrilldownModalShell
       onClose={onClose}
+      busy={state === "loading"}
       // Escape clears a board selection first, so a mistyped key does not throw
       // away the whole drill-down.
       onBack={sfc ? () => setSfc(null) : null}
