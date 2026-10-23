@@ -33,12 +33,31 @@ export type ServerParetoBar = {
   note?: string | null;
 };
 
+export type ServerParetoColors = {
+  vital: string;
+  tail: string;
+  muted: string;
+  line: string;
+  cutoff: string;
+};
+
+/** The dashboard's status colours: red vital few, blue tail, amber line. */
+const DEFAULT_COLORS: ServerParetoColors = {
+  vital: palette.critical,
+  tail: palette.accentRail,
+  muted: OTHER_COLOR,
+  line: palette.warning,
+  cutoff: palette.warning,
+};
+
 export type ServerParetoChartProps = {
   bars: ServerParetoBar[];
   /** Left-axis title: "Units", "Events". */
   valueLabel: string;
   height?: number;
   labelChars?: number;
+  /** Override the bar / line colours for one screen's own palette. */
+  colors?: ServerParetoColors;
 };
 
 const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -61,6 +80,7 @@ export const ServerParetoChart = ({
   valueLabel,
   height = 260,
   labelChars = 12,
+  colors = DEFAULT_COLORS,
 }: ServerParetoChartProps) => {
   const cutoffIndex = bars.findIndex((b) => b.cumPct >= CUTOFF_PCT);
   const vitalCount = cutoffIndex === -1 ? bars.length : cutoffIndex + 1;
@@ -130,7 +150,7 @@ export const ServerParetoChart = ({
           axisLine={false}
         />
         {bars.length > 1 && (
-          <ReferenceLine yAxisId="pct" y={CUTOFF_PCT} stroke={palette.warning} strokeDasharray="3 3" strokeOpacity={0.65} />
+          <ReferenceLine yAxisId="pct" y={CUTOFF_PCT} stroke={colors.cutoff} strokeDasharray="3 3" strokeOpacity={0.65} />
         )}
         <Tooltip
           cursor={{ fill: palette.white, fillOpacity: 0.04 }}
@@ -142,8 +162,8 @@ export const ServerParetoChart = ({
           {bars.map((b, i) => (
             <Cell
               key={b.key}
-              fill={b.muted ? OTHER_COLOR : i < vitalCount ? palette.critical : palette.accentRail}
-              fillOpacity={b.muted || i < vitalCount ? 0.9 : 0.45}
+              fill={b.muted ? colors.muted : i < vitalCount ? colors.vital : colors.tail}
+              fillOpacity={b.muted || i < vitalCount ? 0.9 : 0.75}
             />
           ))}
           <LabelList dataKey="value" position="top" fill={palette.inkMuted} fontSize={9.5} fontWeight={700} />
@@ -152,9 +172,9 @@ export const ServerParetoChart = ({
           yAxisId="pct"
           type="monotone"
           dataKey="cumPct"
-          stroke={palette.warning}
+          stroke={colors.line}
           strokeWidth={1.6}
-          dot={{ r: 2, fill: palette.warning, strokeWidth: 0 }}
+          dot={{ r: 2, fill: colors.line, strokeWidth: 0 }}
           isAnimationActive={false}
         />
       </ComposedChart>

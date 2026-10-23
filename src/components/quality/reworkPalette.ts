@@ -1,0 +1,46 @@
+/**
+ * The rework analysis view's palette, as supplied 2026-10-23 (dark theme).
+ *
+ * Scoped to the rework view on purpose: the rest of the dashboard keeps the
+ * colours in src/index.css / theme/palette.ts, so nothing here is checked by
+ * `npm run check:palette` and nothing here should be imported elsewhere.
+ */
+export const REWORK_SURFACE = {
+  /** Behind the whole rework view. */
+  background: "#0B1220",
+  /** The chart cards. */
+  panel: "#111827",
+} as const;
+
+/**
+ * One colour per cause code, FIXED rather than by rank, so FCR is the same
+ * teal on every product and period. Keyed by the API's `category` code; the
+ * labels it shows (PP MP/A, PP FILTER, PP ASSY…) are in the comments.
+ */
+export const REWORK_CATEGORY_COLORS: Record<string, string> = {
+  FCR: "#2DD4BF",
+  SMT: "#FBBF24",
+  PPH: "#38BDF8", // PP MP/A
+  PPF: "#F472B6", // PP FILTER
+  PPA: "#A3E635", // PP ASSY
+  SQA: "#C4B5FD",
+  MOD_REJ: "#FB923C",
+  UNCATEGORISED: "#64748B",
+};
+
+/** A code a newer backend adds before this map knows it. */
+export const REWORK_UNKNOWN_CATEGORY = "#94A3B8";
+
+/**
+ * The paretos, derived from the same set so the two views read as one:
+ * vital-few bars in FCR teal, the tail as that teal dimmed, the buckets that
+ * are not causes in the Uncategorised slate, and the cumulative line in SMT
+ * amber.
+ */
+export const REWORK_PARETO_COLORS = {
+  vital: REWORK_CATEGORY_COLORS.FCR,
+  tail: "#0F766E",
+  muted: REWORK_CATEGORY_COLORS.UNCATEGORISED,
+  line: REWORK_CATEGORY_COLORS.SMT,
+  cutoff: REWORK_CATEGORY_COLORS.SMT,
+} as const;

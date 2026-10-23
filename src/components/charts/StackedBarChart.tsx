@@ -52,6 +52,9 @@ export type StackedBarChartProps = {
    *  carries two facts (which category, which series) and throwing the second
    *  one away is what makes most stacked charts a dead end. */
   onSegmentClick?: (categoryKey: string, seriesKey: string) => void;
+  /** The surface the chart sits on, for the 2px separator between segments.
+   *  Defaults to the dashboard panel; pass it when a card uses its own. */
+  surfaceColor?: string;
 };
 
 const AXIS_TICK = {
@@ -97,6 +100,7 @@ export const StackedBarChart = ({
   className = "",
   showLegend = true,
   onSegmentClick,
+  surfaceColor = palette.panel,
 }: StackedBarChartProps) => {
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -272,7 +276,7 @@ export const StackedBarChart = ({
               fill={s.color}
               fillOpacity={hovered && hovered !== s.key ? 0.25 : 1}
               // The 2px surface-coloured separator between stacked segments.
-              stroke={palette.panel}
+              stroke={surfaceColor}
               strokeWidth={2}
               isAnimationActive={false}
               cursor={onSegmentClick ? "pointer" : "default"}

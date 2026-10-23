@@ -4,7 +4,12 @@ import ServerParetoChart from "../charts/ServerParetoChart.lazy";
 import type { ServerParetoBar } from "../charts/ServerParetoChart";
 import StackedBarChart from "../charts/StackedBarChart.lazy";
 import type { BarCategory, BarSeries } from "../charts/StackedBarChart";
-import { OTHER_COLOR, seriesColor } from "../charts/seriesPalette";
+import {
+  REWORK_CATEGORY_COLORS,
+  REWORK_PARETO_COLORS,
+  REWORK_UNKNOWN_CATEGORY,
+  REWORK_SURFACE,
+} from "./reworkPalette";
 import { shortDay, type YieldRequestLevel } from "./dashboardFilters";
 import {
   useCategoryTrend,
@@ -25,19 +30,10 @@ const GRANULARITIES: { key: ReworkGranularity; label: string }[] = [
 const SHIFTS = [null, "A", "B", "C"] as const;
 const TOP_OPTIONS = [5, 10, 15, 20, 30, 50];
 
-/**
- * The cause codes in a FIXED order, which is what gives each its colour in the
- * trend stack — so FCR is the same hue on every product and every period, no
- * matter how this one ranks it. Seven codes, inside the palette's eight slots.
- */
-const CATEGORY_ORDER = ["FCR", "SMT", "PPH", "PPF", "PPA", "SQA", "MOD_REJ"];
+const categoryColor = (code: string): string =>
+  REWORK_CATEGORY_COLORS[code] ?? REWORK_UNKNOWN_CATEGORY;
 
-const categoryColor = (code: string): string => {
-  if (code === "UNCATEGORISED") return OTHER_COLOR;
-  const i = CATEGORY_ORDER.indexOf(code);
-  // An unknown code from a newer backend takes the one spare slot.
-  return seriesColor(i >= 0 ? i : CATEGORY_ORDER.length);
-};
+const CARD_STYLE = { backgroundColor: REWORK_SURFACE.panel };
 
 const trendChart = (
   data: CategoryTrendResponse,
@@ -225,7 +221,10 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
     `${o.label} (${shortDay(o.from)} – ${shortDay(o.to)})${o.partial ? " · in progress" : ""}`;
 
   return (
-    <div className="flex-1 overflow-auto px-6 pt-3 pb-4 space-y-3">
+    <div
+      className="flex-1 overflow-auto px-6 pt-3 pb-4 space-y-3"
+      style={{ backgroundColor: REWORK_SURFACE.background }}
+    >
       {/* ---- period, shift --------------------------------------------- */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-2 min-w-0">
@@ -431,7 +430,7 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           {/* ---- defect category ---------------------------------------- */}
-          <section className="bg-inset/40 border border-line rounded-lg px-4 pt-3 pb-3 min-w-0">
+          <section className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
             <div className="flex items-center justify-between gap-2 mb-1">
               <span className="text-[10px] font-black uppercase tracking-wider text-ink-dim">
                 Defect category
@@ -461,7 +460,7 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
               </div>
             ) : (
               <>
-                <ServerParetoChart bars={categoryBars(category.data)} valueLabel="Units" labelChars={12} />
+                <ServerParetoChart bars={categoryBars(category.data)} valueLabel="Units" labelChars={12} colors={REWORK_PARETO_COLORS} />
                 <div className="text-[10px] text-ink-dim leading-snug mt-1">
                   A unit reworked under two causes counts under both, so % of failed
                   units can add up past 100. The line is share of all assignments.
@@ -471,7 +470,7 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
           </section>
 
           {/* ---- failure id --------------------------------------------- */}
-          <section className="bg-inset/40 border border-line rounded-lg px-4 pt-3 pb-3 min-w-0">
+          <section className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
               <span className="text-[10px] font-black uppercase tracking-wider text-ink-dim">
                 Failure id
@@ -515,7 +514,7 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                 No failure records
               </div>
             ) : (
-              <ServerParetoChart bars={failureIdBars(failureId.data)} valueLabel="Events" labelChars={14} />
+              <ServerParetoChart bars={failureIdBars(failureId.data)} valueLabel="Events" labelChars={14} colors={REWORK_PARETO_COLORS} />
             )}
           </section>
 
@@ -524,7 +523,7 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
               endpoint refuses it. Full width, under the paretos, because its
               totals are the category pareto's for the same weeks. */}
           {scope.granularity !== "day" && (
-            <section className="xl:col-span-2 bg-inset/40 border border-line rounded-lg px-4 pt-3 pb-3 min-w-0">
+            <section className="xl:col-span-2 border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
               <div className="text-[10px] font-black uppercase tracking-wider text-ink-dim mb-1">
                 Defect category by fiscal week
                 {scope.granularity === "week" && period?.span_label && (
@@ -547,6 +546,7 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                     maxCategories={31}
                     maxLabelChars={10}
                     emptyLabel="No dispositioned failures to stack in this period."
+                    surfaceColor={REWORK_SURFACE.panel}
                   />
                   <div className="text-[10px] text-ink-dim leading-snug mt-2">
                     Units per rework category per fiscal week, biggest at the bottom.
