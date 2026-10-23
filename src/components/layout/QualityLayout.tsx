@@ -2279,6 +2279,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               that prunes stale selections. */}
           <ProductFilter
             options={filterOptions.products}
+            productNames={filterOptions.productNames}
             optionsState={filterOptions.state}
             value={selectedProducts}
             onChange={setSelectedProducts}

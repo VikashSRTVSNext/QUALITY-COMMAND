@@ -2,10 +2,16 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import ServerParetoChart from "../charts/ServerParetoChart.lazy";
 import type { ServerParetoBar } from "../charts/ServerParetoChart";
-import type { YieldRequestLevel } from "./dashboardFilters";
+import StackedBarChart from "../charts/StackedBarChart.lazy";
+import type { BarCategory, BarSeries } from "../charts/StackedBarChart";
+import { OTHER_COLOR, seriesColor } from "../charts/seriesPalette";
+import { shortDay, type YieldRequestLevel } from "./dashboardFilters";
 import {
+  useCategoryTrend,
   useReworkParetos,
+  useReworkPeriods,
   type CategoryParetoResponse,
+  type CategoryTrendResponse,
   type FailureIdParetoResponse,
   type ReworkGranularity,
   type ReworkScope,
@@ -17,7 +23,44 @@ const GRANULARITIES: { key: ReworkGranularity; label: string }[] = [
   { key: "month", label: "Month" },
 ];
 const SHIFTS = [null, "A", "B", "C"] as const;
-const TOP_OPTIONS = [10, 15, 20, 30, 50];
+const TOP_OPTIONS = [5, 10, 15, 20, 30, 50];
+
+/**
+ * The cause codes in a FIXED order, which is what gives each its colour in the
+ * trend stack — so FCR is the same hue on every product and every period, no
+ * matter how this one ranks it. Seven codes, inside the palette's eight slots.
+ */
+const CATEGORY_ORDER = ["FCR", "SMT", "PPH", "PPF", "PPA", "SQA", "MOD_REJ"];
+
+const categoryColor = (code: string): string => {
+  if (code === "UNCATEGORISED") return OTHER_COLOR;
+  const i = CATEGORY_ORDER.indexOf(code);
+  // An unknown code from a newer backend takes the one spare slot.
+  return seriesColor(i >= 0 ? i : CATEGORY_ORDER.length);
+};
+
+const trendChart = (
+  data: CategoryTrendResponse,
+): { categories: BarCategory[]; series: BarSeries[] } => ({
+  // In the server's order, biggest first: Recharts stacks the first series at
+  // the bottom, which is where the handoff wants the biggest.
+  series: data.categories.map((c) => ({
+    key: c.category,
+    label: c.label,
+    color: categoryColor(c.category),
+  })),
+  // Every bucket, future ones included, so a week always reads as seven bars.
+  categories: data.buckets.map((b) => ({
+    key: b.from,
+    // Week buckets are dates; month buckets are already "WK37".
+    label: data.bucket === "day" ? shortDay(b.label) : b.label,
+    values: b.by_category,
+    hint: b.in_future
+      ? "Not reached yet"
+      : `${fmt(b.failed_units)} failed` +
+        (b.awaiting_disposition > 0 ? ` · ${fmt(b.awaiting_disposition)} awaiting` : ""),
+  })),
+});
 
 /** The anchor limit, kept here only to grey out ‹ before a request that is
  *  certain to 400. The server is the authority — and this is deliberately NOT
@@ -86,7 +129,9 @@ type Props = {
 
 /**
  * Rework analysis for one Product Yield row: failures by defect category and by
- * failure id, for one fiscal day, week or period (handoff Part 3.4).
+ * failure id, for one fiscal day, a span of fiscal weeks (the selected week and
+ * the four before it by default, or a From–To range) or one fiscal period
+ * (handoff Part 3.4).
  *
  * Owns its own period, shift and window rules. The drill-down's date picker,
  * the dashboard's 30-day limit and the line filter do not apply: the endpoints
@@ -99,18 +144,25 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
     // the server returned — fiscal periods do not follow calendar weeks or
     // months, so a date computed here would land in the wrong one.
     anchor: null,
+    weekFrom: null,
+    weekTo: null,
     shift: null,
   });
-  const [top, setTop] = useState(15);
+  const [top, setTop] = useState(5);
   const [firstPassOnly, setFirstPassOnly] = useState(false);
 
   const { category, failureId } = useReworkParetos(level, item, scope, top, firstPassOnly);
+  const trend = useCategoryTrend(level, item, scope);
+  const periods = useReworkPeriods(scope.granularity);
 
   // The period both charts are on. Read from whichever answered last; they are
   // requested with the same scope, so they agree.
   const head = category.data ?? failureId.data;
   const period = head?.period ?? null;
-  const loading = category.state === "loading" || failureId.state === "loading";
+  const loading =
+    category.state === "loading" ||
+    failureId.state === "loading" ||
+    trend.state === "loading";
   useEffect(() => {
     onBusyChange?.(loading);
   }, [loading, onBusyChange]);
@@ -141,6 +193,37 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
   const failedUnits = category.data?.totals.failed_units ?? null;
   const noFailures = category.state === "ready" && failedUnits === 0;
 
+  // Week / Month dropdowns, from /rework/periods. Read only when the list is
+  // for the granularity on screen, so a stale month list never fills the
+  // week dropdowns for a frame.
+  const periodOptions =
+    scope.granularity !== "day" && periods.data?.granularity === scope.granularity
+      ? periods.data.options
+      : [];
+  const optionFrom = (from: string | undefined) =>
+    from ? periodOptions.find((o) => o.from === from) ?? null : null;
+  // Month: the one period on screen.
+  const selectedOption = optionFrom(period?.from);
+  // Week: the span on screen, as From and To. Read off `period.weeks` rather
+  // than the range in state, so the default five weeks — sent as no range at
+  // all — and the arrows' sliding window both show as what they are.
+  const spanWeeks = period?.weeks ?? [];
+  const fromOption = optionFrom(spanWeeks[0]?.from);
+  const toOption = optionFrom(spanWeeks[spanWeeks.length - 1]?.from);
+  const isRange = scope.granularity === "week" && Boolean(scope.weekFrom && scope.weekTo);
+
+  /** Pick one end of the week range; the other end stays where it is on screen. */
+  const setWeekRange = (end: "from" | "to", anchor: string) => {
+    const from = end === "from" ? anchor : (fromOption?.anchor ?? anchor);
+    const to = end === "to" ? anchor : (toOption?.anchor ?? anchor);
+    setScope((s) => ({ ...s, anchor: null, weekFrom: from, weekTo: to }));
+  };
+
+  const trendData = scope.granularity !== "day" ? trend.data : null;
+  const trendView = trendData ? trendChart(trendData) : null;
+  const weekOptionLabel = (o: (typeof periodOptions)[number]) =>
+    `${o.label} (${shortDay(o.from)} – ${shortDay(o.to)})${o.partial ? " · in progress" : ""}`;
+
   return (
     <div className="flex-1 overflow-auto px-6 pt-3 pb-4 space-y-3">
       {/* ---- period, shift --------------------------------------------- */}
@@ -153,7 +236,7 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
           {period && (
             <>
               <span className="text-[13px] font-black text-info whitespace-nowrap">
-                – {period.label}
+                – {period.span_label ?? period.label}
                 {period.partial && <span className="ml-1 text-[11px] font-bold text-warning">(in progress)</span>}
               </span>
               <span className="text-[10.5px] font-bold text-ink-dim whitespace-nowrap">
@@ -171,14 +254,28 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                 key={g.key}
                 type="button"
                 disabled={loading && scope.granularity !== g.key}
-                // Keeps the anchor, so the user stays around the same date.
-                onClick={() => setScope((s) => ({ ...s, granularity: g.key }))}
+                // Keeps the date, so the user stays around the same place: the
+                // last week of a range becomes the anchor. A week range is
+                // Week-only, so it is dropped on the way out.
+                onClick={() =>
+                  setScope((s) => ({
+                    ...s,
+                    granularity: g.key,
+                    anchor: s.weekTo ?? s.anchor,
+                    weekFrom: null,
+                    weekTo: null,
+                  }))
+                }
                 className={pill(scope.granularity === g.key)}
               >
                 {g.label}
               </button>
             ))}
           </div>
+          {/* Hidden on a picked range: the API sends no prev/next anchors
+              there, and the From/To dropdowns are the navigation. On the
+              default five weeks they slide the window by one week. */}
+          {!isRange && (
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -186,7 +283,13 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
               disabled={prevDisabled}
               onClick={() => period?.prev_anchor && setScope((s) => ({ ...s, anchor: period.prev_anchor }))}
               className={`${pill(false)} !px-1.5`}
-              title={tooFarBack ? "Older than 365 days is not available" : "Previous period"}
+              title={
+                tooFarBack
+                  ? "Older than 365 days is not available"
+                  : scope.granularity === "week"
+                    ? "Slide the five weeks back by one"
+                    : "Previous period"
+              }
             >
               <ChevronLeft size={12} />
             </button>
@@ -196,11 +299,106 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
               disabled={nextDisabled}
               onClick={() => period?.next_anchor && setScope((s) => ({ ...s, anchor: period.next_anchor }))}
               className={`${pill(false)} !px-1.5`}
-              title={period && !period.next_anchor ? "This is the current period" : "Next period"}
+              title={
+                period && !period.next_anchor
+                  ? "This is the current period"
+                  : scope.granularity === "week"
+                    ? "Slide the five weeks forward by one"
+                    : "Next period"
+              }
             >
               <ChevronRight size={12} />
             </button>
           </div>
+          )}
+
+          {/* Week: From and To over the same last-8-weeks list. Each sends that
+              option's own anchor, never a computed date. Weeks after To are
+              disabled in From and weeks before From in To, which the server
+              would refuse. A span end older than the list (the arrows can
+              reach one) shows as itself rather than blank. */}
+          {scope.granularity === "week" && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9.5px] font-black uppercase tracking-wider text-ink-dim">From</span>
+              <select
+                value={fromOption?.anchor ?? ""}
+                disabled={periodOptions.length === 0}
+                onChange={(e) => e.target.value && setWeekRange("from", e.target.value)}
+                className="bg-page border border-line rounded px-2 py-1 text-[10px] font-bold text-white cursor-pointer disabled:opacity-40"
+                aria-label="From week"
+              >
+                {!fromOption && (
+                  <option value="">
+                    {periods.state === "loading" ? "Loading…" : (spanWeeks[0]?.label ?? "—")}
+                  </option>
+                )}
+                {periodOptions.map((o) => (
+                  <option key={o.anchor} value={o.anchor} disabled={!!toOption && o.from > toOption.from}>
+                    {weekOptionLabel(o)}
+                  </option>
+                ))}
+              </select>
+              <span className="text-[9.5px] font-black uppercase tracking-wider text-ink-dim">To</span>
+              <select
+                value={toOption?.anchor ?? ""}
+                disabled={periodOptions.length === 0}
+                onChange={(e) => e.target.value && setWeekRange("to", e.target.value)}
+                className="bg-page border border-line rounded px-2 py-1 text-[10px] font-bold text-white cursor-pointer disabled:opacity-40"
+                aria-label="To week"
+              >
+                {!toOption && (
+                  <option value="">
+                    {periods.state === "loading"
+                      ? "Loading…"
+                      : (spanWeeks[spanWeeks.length - 1]?.label ?? period?.label ?? "—")}
+                  </option>
+                )}
+                {periodOptions.map((o) => (
+                  <option key={o.anchor} value={o.anchor} disabled={!!fromOption && o.from < fromOption.from}>
+                    {weekOptionLabel(o)}
+                  </option>
+                ))}
+              </select>
+              {/* Back to the server's default: the current week and the four
+                  before it, with the arrows. */}
+              {(isRange || scope.anchor) && (
+                <button
+                  type="button"
+                  onClick={() => setScope((s) => ({ ...s, anchor: null, weekFrom: null, weekTo: null }))}
+                  className={pill(false)}
+                  title="The current week and the four before it"
+                >
+                  Last 5 weeks
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Month: one fiscal period of the last twelve. */}
+          {scope.granularity === "month" && (
+            <select
+              value={selectedOption?.anchor ?? ""}
+              disabled={periodOptions.length === 0}
+              onChange={(e) => e.target.value && setScope((s) => ({ ...s, anchor: e.target.value }))}
+              className="bg-page border border-line rounded px-2 py-1 text-[10px] font-bold text-white cursor-pointer disabled:opacity-40"
+              aria-label="Fiscal period"
+            >
+              {!selectedOption && (
+                <option value="">
+                  {periods.state === "loading"
+                    ? "Loading…"
+                    : period
+                      ? `${period.label} (${shortDay(period.from)} – ${shortDay(period.to)})`
+                      : "—"}
+                </option>
+              )}
+              {periodOptions.map((o) => (
+                <option key={o.anchor} value={o.anchor}>
+                  {weekOptionLabel(o)}
+                </option>
+              ))}
+            </select>
+          )}
           <select
             value={scope.shift ?? ""}
             onChange={(e) =>
@@ -320,6 +518,47 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
               <ServerParetoChart bars={failureIdBars(failureId.data)} valueLabel="Events" labelChars={14} />
             )}
           </section>
+
+          {/* ---- defect category trend (3.5) ----------------------------- */}
+          {/* Week and Month only: a single day has nothing to stack, and the
+              endpoint refuses it. Full width, under the paretos, because its
+              totals are the category pareto's for the same weeks. */}
+          {scope.granularity !== "day" && (
+            <section className="xl:col-span-2 bg-inset/40 border border-line rounded-lg px-4 pt-3 pb-3 min-w-0">
+              <div className="text-[10px] font-black uppercase tracking-wider text-ink-dim mb-1">
+                Defect category by fiscal week
+                {scope.granularity === "week" && period?.span_label && (
+                  <span className="ml-1.5 normal-case font-bold text-ink-dim/80">· {period.span_label}</span>
+                )}
+              </div>
+              {trend.state === "error" ? (
+                <div className="py-10 text-center text-[11px] font-bold text-warning">{trend.error}</div>
+              ) : !trendView ? (
+                <div className="py-16 text-center text-[11px] font-bold text-ink-dim">
+                  Loading category trend…
+                </div>
+              ) : (
+                <>
+                  <StackedBarChart
+                    categories={trendView.categories}
+                    series={trendView.series}
+                    height={260}
+                    yLabel="Units"
+                    maxCategories={31}
+                    maxLabelChars={10}
+                    emptyLabel="No dispositioned failures to stack in this period."
+                  />
+                  <div className="text-[10px] text-ink-dim leading-snug mt-2">
+                    Units per rework category per fiscal week, biggest at the bottom.
+                    A unit reworked for two causes sits in both stacks, so a bar can
+                    stand taller than that week&apos;s failed units. The current week is
+                    drawn while still in progress; a week with nothing stays on the
+                    axis, empty.
+                  </div>
+                </>
+              )}
+            </section>
+          )}
         </div>
       )}
 

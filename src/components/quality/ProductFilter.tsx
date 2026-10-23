@@ -7,19 +7,34 @@
 // it really did not run. The yield table's list is narrower, and letting it
 // prune would silently drop a product that ran on, say, SPI but not UNITS.
 //
-// Selection is by ITEM CODE, which is what ?product= takes. The label is shown
-// to the user and never sent — the endpoint also accepts names and base codes,
-// but mixing spellings in state would make de-duplication guesswork.
+// Selection is by ITEM CODE, which is what ?product= takes — or, from the
+// "Product names" group, by product NAME (ARDC), which the API expands to every
+// item filed under it so one pick moves the unit, TRX and PA codes together.
+// Both are plain ?product= values and live in the same array. The label is shown
+// to the user and never sent.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, Package, Search, X } from "lucide-react";
+import { Check, ChevronDown, Layers, Package, Search, X } from "lucide-react";
 import { isNum } from "../../core/format";
-import { optionVolume, type ProductOption } from "./dashboardFilters";
+import {
+  optionVolume,
+  type ProductNameOption,
+  type ProductOption,
+} from "./dashboardFilters";
+import { matchesSearch } from "./searchMatch";
+
+// Stable default, so the prune effect below does not re-run on every render of
+// an instance that offers no names.
+const NO_NAMES: ProductNameOption[] = [];
 
 interface ProductFilterProps {
   options: ProductOption[];
-  /** Selected item codes. Empty = every product, which is how the endpoint
-   *  reads an absent `product` parameter. */
+  /** Product names offered above the item codes. Omit where the list it
+   *  sits on cannot expand names — and leave it off a non-pruning instance
+   *  too, since the header one already offers them. */
+  productNames?: ProductNameOption[];
+  /** Selected item codes and/or product names. Empty = every product, which
+   *  is how the endpoint reads an absent `product` parameter. */
   value: string[];
   onChange: (items: string[]) => void;
   optionsState?: "idle" | "loading" | "ready" | "error";
@@ -37,6 +52,7 @@ interface ProductFilterProps {
 
 export const ProductFilter = ({
   options,
+  productNames = NO_NAMES,
   value,
   onChange,
   optionsState = "ready",
@@ -68,21 +84,26 @@ export const ProductFilter = ({
   useEffect(() => {
     if (!pruneUnavailable) return;
     if (optionsState !== "ready" || options.length === 0) return;
-    const available = new Set(options.map((o) => o.item));
+    const available = new Set([
+      ...options.map((o) => o.item),
+      ...productNames.map((n) => n.product),
+    ]);
     const kept = value.filter((item) => available.has(item));
     if (kept.length !== value.length) onChange(kept);
-  }, [options, optionsState]);
+  }, [options, productNames, optionsState]);
 
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return options;
-    return options.filter(
-      (o) =>
-        o.product.toLowerCase().includes(needle) ||
-        o.item.toLowerCase().includes(needle) ||
-        (o.label ?? "").toLowerCase().includes(needle),
-    );
-  }, [options, search]);
+  const filteredNames = useMemo(
+    () => productNames.filter((n) => matchesSearch(search, [n.product, ...(n.items ?? [])])),
+    [productNames, search],
+  );
+
+  const filtered = useMemo(
+    () =>
+      options.filter((o) =>
+        matchesSearch(search, [o.product, o.item, o.label, o.sub_module]),
+      ),
+    [options, search],
+  );
 
   const selectedSet = useMemo(() => new Set(value), [value]);
 
@@ -94,7 +115,11 @@ export const ProductFilter = ({
     );
   };
 
+  const nameOption = (v: string) => productNames.find((n) => n.product === v);
+
   const nameOf = (item: string) => {
+    const n = nameOption(item);
+    if (n) return `${n.product} (all ${n.items.length} items)`;
     const o = options.find((opt) => opt.item === item);
     return o?.label ?? o?.product ?? item;
   };
@@ -183,7 +208,7 @@ export const ProductFilter = ({
                 ref={searchRef}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search product or code"
+                placeholder="Search name, code or level"
                 className="bg-transparent text-[11px] text-white outline-none w-full placeholder:text-ink-dim"
               />
             </div>
@@ -197,7 +222,7 @@ export const ProductFilter = ({
                 <div className="px-2 py-2 text-[11px] text-critical">
                   Product list unavailable.
                 </div>
-              ) : filtered.length === 0 ? (
+              ) : filtered.length === 0 && filteredNames.length === 0 ? (
                 <div className="px-2 py-2 text-[11px] text-ink-dim">
                   {/* An empty list is information, not a fault: this endpoint
                       only offers products that actually ran in the window. */}
@@ -206,7 +231,51 @@ export const ProductFilter = ({
                     : "No match."}
                 </div>
               ) : (
-                filtered.map((o) => {
+                <>
+                {filteredNames.length > 0 && (
+                  <div className="px-2 pt-1.5 pb-0.5 text-[9px] font-black uppercase tracking-wider text-ink-dim">
+                    Product names · every item
+                  </div>
+                )}
+                {filteredNames.map((n) => {
+                  const on = selectedSet.has(n.product);
+                  return (
+                    <div
+                      key={`name:${n.product}`}
+                      onClick={() => toggle(n.product)}
+                      title={n.items.join(", ")}
+                      className={`flex items-center gap-2 px-2 py-1.5 cursor-pointer transition-colors ${
+                        on
+                          ? "bg-line text-white"
+                          : "text-ink-muted hover:bg-tab-active hover:text-white"
+                      }`}
+                    >
+                      <span
+                        className={`w-3 h-3 rounded-sm border flex items-center justify-center flex-shrink-0 ${
+                          on ? "border-line-strong bg-tab-active" : "border-line"
+                        }`}
+                      >
+                        {on && <Check size={9} className="text-white" />}
+                      </span>
+                      <Layers size={11} className="flex-shrink-0 text-info" />
+                      <span className="flex flex-col min-w-0 flex-1">
+                        <span className="text-[11px] font-bold truncate">{n.product}</span>
+                        <span className="text-[9px] text-ink-dim truncate">
+                          {n.items.length} item{n.items.length === 1 ? "" : "s"} · {n.items.join(", ")}
+                        </span>
+                      </span>
+                      <span className="text-[9px] text-ink-dim tabular-nums flex-shrink-0">
+                        {isNum(n.done) ? n.done.toLocaleString("en-US") : "—"}
+                      </span>
+                    </div>
+                  );
+                })}
+                {filteredNames.length > 0 && filtered.length > 0 && (
+                  <div className="px-2 pt-2 pb-0.5 text-[9px] font-black uppercase tracking-wider text-ink-dim border-t border-line/60 mt-1">
+                    Item codes
+                  </div>
+                )}
+                {filtered.map((o) => {
                   const on = selectedSet.has(o.item);
                   const volume = optionVolume(o);
                   return (
@@ -228,7 +297,7 @@ export const ProductFilter = ({
                       </span>
                       <span className="flex flex-col min-w-0 flex-1">
                         <span className="text-[11px] font-bold truncate">
-                          {o.product}
+                          {o.product || o.item}
                         </span>
                         <span className="text-[9px] text-ink-dim truncate">
                           {o.label ?? o.item}
@@ -242,7 +311,8 @@ export const ProductFilter = ({
                       </span>
                     </div>
                   );
-                })
+                })}
+                </>
               )}
             </div>
 

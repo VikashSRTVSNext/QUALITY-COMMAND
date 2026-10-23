@@ -5,14 +5,16 @@
 // SMT_DEFECTS, SPI, THERMAL_AVI as of 2026-10-22). Every other card is greyed
 // out while a line is selected; see ProcessMetricCard's `lineFiltered`.
 //
-// Values are sent exactly as listed (SMT 07B, MAC_LINE02, AXI) — no
-// normalising, the endpoint matches them verbatim. SMT names carry a space;
-// URLSearchParams encodes it. The SMT names are shared by DPMOI, SMT defects
-// and SPI, so one pick filters all three to the same physical line. An older
-// window may still list the pre-rename AOI_n names; they are offered as-is.
+// Values are sent exactly as listed (SMT line 07B, MAC_LINE02) — no
+// normalising; the endpoint matches them case-insensitively. SMT names carry
+// spaces; URLSearchParams encodes them. The SMT line names are shared by DPMOI,
+// SMT defects, SPI and AXI, so one pick filters all four to the same physical
+// line. An older window may still list the pre-rename AOI_n names or the
+// interim `SMT nn` spelling; they are offered as-is.
 
-import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Network, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronDown, Network, Search, X } from "lucide-react";
+import { matchesSearch } from "./searchMatch";
 
 interface LineFilterProps {
   options: string[];
@@ -34,6 +36,14 @@ export const LineFilter = ({
   appliesTo = [],
 }: LineFilterProps) => {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Same as the product pill: focus on open, forget the query on close.
+  useEffect(() => {
+    if (open) searchRef.current?.focus();
+    else setSearch("");
+  }, [open]);
 
   // Same rule as the header's product pill: a line that did not run in the
   // new window would send a ?line= that matches nothing and blank the cards
@@ -47,6 +57,10 @@ export const LineFilter = ({
   }, [options, optionsState]);
 
   const selectedSet = useMemo(() => new Set(value), [value]);
+  const filtered = useMemo(
+    () => options.filter((l) => matchesSearch(search, [l])),
+    [options, search],
+  );
   const toggle = (line: string) =>
     onChange(
       selectedSet.has(line) ? value.filter((v) => v !== line) : [...value, line],
@@ -109,6 +123,16 @@ export const LineFilter = ({
             <div className="px-2 py-1.5 border-b border-line text-[10px] text-ink-dim">
               {scope}
             </div>
+            <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-line">
+              <Search size={11} className="text-ink-dim flex-shrink-0" />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search line, e.g. smt 7b"
+                className="bg-transparent text-[11px] text-white outline-none w-full placeholder:text-ink-dim"
+              />
+            </div>
             <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
               {optionsState === "loading" && options.length === 0 ? (
                 <div className="px-2 py-2 text-[11px] text-ink-dim">
@@ -122,8 +146,10 @@ export const LineFilter = ({
                 <div className="px-2 py-2 text-[11px] text-ink-dim">
                   No lines ran in this window.
                 </div>
+              ) : filtered.length === 0 ? (
+                <div className="px-2 py-2 text-[11px] text-ink-dim">No match.</div>
               ) : (
-                options.map((line) => {
+                filtered.map((line) => {
                   const on = selectedSet.has(line);
                   return (
                     <div

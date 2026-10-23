@@ -348,8 +348,15 @@ export const useProcessFilterOptions = (range: DateRange) => {
     }
     const lines = [...lineSet].sort(compareLines);
 
+    // Biggest first, like the item list beneath it. Only names that actually
+    // expand to something are offered.
+    const productNames = [...(last?.product_names ?? [])]
+      .filter((n) => n.product && n.items?.length)
+      .sort((a, b) => (b.done ?? 0) - (a.done ?? 0));
+
     return {
       products,
+      productNames,
       lines,
       lineSteps,
       kpiProducts: steps.KPI?.products ?? [],

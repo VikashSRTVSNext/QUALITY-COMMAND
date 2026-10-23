@@ -403,16 +403,21 @@ export const AlertAckPage = () => {
               {fmtWhen(detail.acknowledged_at ?? detail.closed_at)}
             </p>
           )}
-          {detail.resolution_comment && (
-            <p className="text-[13px] text-ink-secondary leading-relaxed mt-3 whitespace-pre-wrap">
-              {detail.resolution_comment}
-            </p>
-          )}
+          {/* Cause first, then the fix, in the same order the form asks for
+              them, so a reply reads back the way it was written. */}
           {detail.cause && (
             <div className="mt-3">
               <div className={LABEL}>Cause</div>
               <p className="text-[13px] text-ink-secondary leading-relaxed mt-1 whitespace-pre-wrap">
                 {detail.cause}
+              </p>
+            </div>
+          )}
+          {detail.resolution_comment && (
+            <div className="mt-3">
+              <div className={LABEL}>Problem Resolution</div>
+              <p className="text-[13px] text-ink-secondary leading-relaxed mt-1 whitespace-pre-wrap">
+                {detail.resolution_comment}
               </p>
             </div>
           )}
@@ -444,19 +449,8 @@ export const AlertAckPage = () => {
               send("resolve");
             }}
           >
-            <TextField
-              id="ack-comment"
-              label="What did you find, and what did you do?"
-              value={comment}
-              onChange={(v) => {
-                setComment(v);
-                clearFieldError("comment");
-              }}
-              error={fieldErrors.comment}
-              maxLength={detail.comment_max_length}
-              rows={5}
-              placeholder="Fixture on tester 7 re-seated and re-calibrated; re-ran 20 boards, all passed."
-            />
+            {/* Cause first: naming what went wrong comes before describing
+                what was done about it. */}
             <TextField
               id="ack-cause"
               label="Cause"
@@ -469,6 +463,19 @@ export const AlertAckPage = () => {
               maxLength={detail.comment_max_length}
               rows={2}
               placeholder="Loose RF cable on the fixture"
+            />
+            <TextField
+              id="ack-comment"
+              label="Issue fix"
+              value={comment}
+              onChange={(v) => {
+                setComment(v);
+                clearFieldError("comment");
+              }}
+              error={fieldErrors.comment}
+              maxLength={detail.comment_max_length}
+              rows={5}
+              placeholder="Fixture on tester 7 re-seated and re-calibrated; re-ran 20 boards, all passed."
             />
 
             {/* Optional. Hides this alert — and the same product + stage +

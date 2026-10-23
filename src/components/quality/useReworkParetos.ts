@@ -13,9 +13,19 @@ export type ReworkGranularity = "day" | "week" | "month";
 
 export type ReworkPeriod = {
   granularity: ReworkGranularity;
-  /** "2026-10-21", "WK43" or "P10". */
+  /** "2026-10-21", "WK43" or "P10". On Week this is always the SELECTED
+   *  week — the last of the span — which is what keeps a dropdown in sync. */
   label: string;
   fiscal_year: number | null;
+  /** Week only: "WK39–WK43", the weeks the figures actually cover. */
+  span_label?: string | null;
+  /** Week only: true when the span came from week_from / week_to rather than
+   *  the default five weeks. prev/next anchors are null then. */
+  is_range?: boolean;
+  /** Week only: every fiscal week in the span, oldest first. Can straddle a
+   *  year end (WK50–WK02); fiscal_year tells them apart. */
+  weeks?: { label: string; fiscal_year: number | null; from: string; to: string }[];
+  /** The whole span: the first week's first day to the last week's last. */
   from: string;
   to: string;
   /** Where the data actually stops: `to` on a closed period, today on the
@@ -92,13 +102,36 @@ export type ParetoQuery<T> = {
 
 export type ReworkScope = {
   granularity: ReworkGranularity;
-  /** null on open, so the server picks today. */
+  /** null on open, so the server picks today. On Week this is the LAST week
+   *  of the default five-week span. */
   anchor: string | null;
+  /** Week only, and only together: an explicit From–To range, each the
+   *  `anchor` of a /rework/periods option. Sent INSTEAD of `anchor` — the API
+   *  refuses both with different values. */
+  weekFrom: string | null;
+  weekTo: string | null;
   shift: "A" | "B" | "C" | null;
 };
 
+/**
+ * The parameters every rework endpoint shares, built in one place so the two
+ * paretos and the stacked trend can never disagree about which weeks they
+ * cover — the handoff relies on their totals matching.
+ */
+const scopeParams = (scope: ReworkScope): URLSearchParams => {
+  const q = new URLSearchParams({ granularity: scope.granularity });
+  if (scope.granularity === "week" && scope.weekFrom && scope.weekTo) {
+    q.set("week_from", scope.weekFrom);
+    q.set("week_to", scope.weekTo);
+  } else if (scope.anchor) {
+    q.set("anchor", scope.anchor);
+  }
+  if (scope.shift) q.set("shift", scope.shift);
+  return q;
+};
+
 /** One request, abortable, keeping the last good body while the next loads. */
-const useParetoFetch = <T,>(url: string | null, label: string): ParetoQuery<T> => {
+export const useParetoFetch = <T,>(url: string | null, label: string): ParetoQuery<T> => {
   const [query, setQuery] = useState<ParetoQuery<T>>({
     data: null,
     state: "idle",
@@ -175,9 +208,7 @@ export const useReworkParetos = (
     const base =
       `/rework/${encodeURIComponent(level)}/products/` +
       `${encodeURIComponent(item)}/pareto`;
-    const common = new URLSearchParams({ granularity: scope.granularity });
-    if (scope.anchor) common.set("anchor", scope.anchor);
-    if (scope.shift) common.set("shift", scope.shift);
+    const common = scopeParams(scope);
 
     const fid = new URLSearchParams(common);
     fid.set("top", String(top));
@@ -190,4 +221,87 @@ export const useReworkParetos = (
   const category = useParetoFetch<CategoryParetoResponse>(categoryUrl, "defect category");
   const failureId = useParetoFetch<FailureIdParetoResponse>(failureIdUrl, "failure id");
   return { category, failureId };
+};
+
+// ── Part 3.5: the category trend and its period dropdown ─────────────────────────
+
+export type ReworkPeriodOption = {
+  /** "WK43" or "P10". */
+  label: string;
+  fiscal_year: number | null;
+  from: string;
+  to: string;
+  /** What to send back as ?anchor= to land on this period. */
+  anchor: string;
+  partial: boolean;
+};
+
+export type ReworkPeriodsResponse = {
+  granularity: "week" | "month";
+  since: string;
+  /** Newest first. */
+  options: ReworkPeriodOption[];
+};
+
+export type CategoryTrendBucket = {
+  /** A date for a week's days, "WK37" for a period's weeks. */
+  label: string;
+  from: string;
+  to: string;
+  /** Days or weeks not reached yet. Kept on the axis, empty, so a week
+   *  always reads as seven bars. */
+  in_future: boolean;
+  failed_units: number;
+  dispositioned_units: number;
+  awaiting_disposition: number;
+  by_category: Record<string, number>;
+};
+
+export type CategoryTrendResponse = Envelope & {
+  bucket: "day" | "week";
+  /** Stack order, biggest first — so the biggest sits at the bottom. */
+  categories: { category: string; label: string; units: number }[];
+  buckets: CategoryTrendBucket[];
+  /** Equal to /pareto/category's totals for the same anchor. */
+  totals: {
+    failed_units: number;
+    dispositioned_units: number;
+    awaiting_disposition: number;
+    assignments: number;
+  };
+};
+
+/**
+ * The period dropdowns: the last 8 fiscal weeks (From and To share the list),
+ * or fiscal periods of the last twelve months, newest first. Product-independent, so it is
+ * fetched per granularity and not per row. `day` has no dropdown — the arrows
+ * cover it — so it idles.
+ */
+export const useReworkPeriods = (granularity: ReworkGranularity) =>
+  useParetoFetch<ReworkPeriodsResponse>(
+    granularity === "day"
+      ? null
+      : apiUrl(`/rework/periods?${new URLSearchParams({ granularity })}`),
+    "period list",
+  );
+
+/**
+ * Defect categories stacked per fiscal week — the weeks of the span on Week,
+ * the weeks of the period on Month. Same scope as the paretos; idles on `day`,
+ * which the endpoint refuses (one day has nothing to stack).
+ */
+export const useCategoryTrend = (
+  level: YieldRequestLevel | null,
+  item: string | null,
+  scope: ReworkScope,
+) => {
+  let url: string | null = null;
+  if (level && item && scope.granularity !== "day") {
+    const q = scopeParams(scope);
+    url = apiUrl(
+      `/rework/${encodeURIComponent(level)}/products/` +
+        `${encodeURIComponent(item)}/trend/category?${q}`,
+    );
+  }
+  return useParetoFetch<CategoryTrendResponse>(url, "category trend");
 };

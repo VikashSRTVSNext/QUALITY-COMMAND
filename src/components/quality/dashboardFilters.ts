@@ -245,10 +245,11 @@ export const LEVEL_PARAM: Record<"UNITS" | "TRX" | "PA", YieldRequestLevel> = {
 };
 
 /**
- * Group rank for the shared line dropdown: the `SMT nn` lines first (DPMOI, SMT
- * defects and SPI all filter on them), then the `MAC_LINExx` lines, then AXI,
- * then anything unrecognised — including the pre-2026-10-22 `AOI_n` names an
- * older window still lists.
+ * Group rank for the shared line dropdown: the SMT lines first (DPMOI, SMT
+ * defects, SPI and AXI all filter on them), then the `MAC_LINExx` lines, then
+ * the bare AXI machine name, then anything unrecognised — including the
+ * pre-2026-10-22 `AOI_n` names an older window still lists. Both the current
+ * `SMT line nn` and the interim `SMT nn` spelling land in the SMT group.
  */
 const lineGroup = (line: string): number => {
   if (/^SMT\b/i.test(line)) return 0;
@@ -260,7 +261,8 @@ const lineGroup = (line: string): number => {
 const naturalCollator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 
 /** Order for the shared line dropdown, per the handoff: grouped, then natural
- *  within a group, so `SMT 01` < `SMT 07B` < `SMT 10` rather than lexical. */
+ *  within a group, so `SMT line 01` < `SMT line 07B` < `SMT line 10` rather
+ *  than lexical. */
 export const compareLines = (a: string, b: string): number =>
   lineGroup(a) - lineGroup(b) || naturalCollator.compare(a, b);
 
@@ -418,9 +420,22 @@ export interface ProcessFilterOptions {
   site_code: string;
   /** The cards a `line` reaches. Read from here, never hard-coded. */
   line_steps: string[];
+  /** One entry per product NAME, with every item code the target sheet files
+   *  under it. Sending the name as ?product= moves all of them at once.
+   *  Absent on backends older than 2026-10-22. */
+  product_names?: ProductNameOption[];
   /** One entry per Process Performance card, keyed by step, plus "KPI" for the
    *  four FPY/SPY cards. */
   steps: Record<string, ProcessFilterStep>;
+}
+
+/** A product name and the item codes it expands to (ARDC -> 476708A unit,
+ *  094853A TRX, 094855A / 094855E PA). */
+export interface ProductNameOption {
+  /** The value sent back as ?product=. */
+  product: string;
+  items: string[];
+  done?: number | null;
 }
 
 export interface ProductsResponse {
