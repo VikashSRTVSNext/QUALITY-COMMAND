@@ -118,7 +118,7 @@ export type ReworkScope = {
  * paretos and the stacked trend can never disagree about which weeks they
  * cover — the handoff relies on their totals matching.
  */
-const scopeParams = (scope: ReworkScope): URLSearchParams => {
+export const scopeParams = (scope: ReworkScope): URLSearchParams => {
   const q = new URLSearchParams({ granularity: scope.granularity });
   if (scope.granularity === "week" && scope.weekFrom && scope.weekTo) {
     q.set("week_from", scope.weekFrom);

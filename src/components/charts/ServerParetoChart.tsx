@@ -58,6 +58,11 @@ export type ServerParetoChartProps = {
   labelChars?: number;
   /** Override the bar / line colours for one screen's own palette. */
   colors?: ServerParetoColors;
+  /** Makes bars clickable. Muted bars (Others, (none)) never fire: they are
+   *  folds, not something the next level can be asked about. */
+  onBarClick?: (key: string) => void;
+  /** The bar currently drilled into; the others dim around it. */
+  selectedKey?: string | null;
 };
 
 const truncate = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -81,6 +86,8 @@ export const ServerParetoChart = ({
   height = 260,
   labelChars = 12,
   colors = DEFAULT_COLORS,
+  onBarClick,
+  selectedKey = null,
 }: ServerParetoChartProps) => {
   const cutoffIndex = bars.findIndex((b) => b.cumPct >= CUTOFF_PCT);
   const vitalCount = cutoffIndex === -1 ? bars.length : cutoffIndex + 1;
@@ -158,12 +165,28 @@ export const ServerParetoChart = ({
           wrapperStyle={{ outline: "none", zIndex: 60 }}
           content={renderTooltip}
         />
-        <Bar yAxisId="count" dataKey="value" maxBarSize={64} radius={[3, 3, 0, 0]} isAnimationActive={false}>
+        <Bar
+          yAxisId="count"
+          dataKey="value"
+          maxBarSize={64}
+          radius={[3, 3, 0, 0]}
+          isAnimationActive={false}
+          onClick={(_: unknown, i: number) => {
+            const b = bars[i];
+            if (b && !b.muted) onBarClick?.(b.key);
+          }}
+        >
           {bars.map((b, i) => (
             <Cell
               key={b.key}
+              cursor={onBarClick && !b.muted ? "pointer" : "default"}
               fill={b.muted ? colors.muted : i < vitalCount ? colors.vital : colors.tail}
-              fillOpacity={b.muted || i < vitalCount ? 0.9 : 0.75}
+              fillOpacity={
+                (b.muted || i < vitalCount ? 0.9 : 0.75) *
+                (selectedKey && selectedKey !== b.key ? 0.35 : 1)
+              }
+              stroke={selectedKey === b.key ? palette.white : "none"}
+              strokeWidth={selectedKey === b.key ? 1.5 : 0}
             />
           ))}
           <LabelList dataKey="value" position="top" fill={palette.inkMuted} fontSize={9.5} fontWeight={700} />

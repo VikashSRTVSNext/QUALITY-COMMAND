@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import ServerParetoChart from "../charts/ServerParetoChart.lazy";
 import type { ServerParetoBar } from "../charts/ServerParetoChart";
 import StackedBarChart from "../charts/StackedBarChart.lazy";
@@ -11,23 +10,19 @@ import {
   REWORK_SURFACE,
 } from "./reworkPalette";
 import { shortDay, type YieldRequestLevel } from "./dashboardFilters";
+import ReworkPeriodControls, {
+  DEFAULT_REWORK_SCOPE,
+  ReworkPeriodTitle,
+} from "./ReworkPeriodControls";
 import {
   useCategoryTrend,
   useReworkParetos,
-  useReworkPeriods,
   type CategoryParetoResponse,
   type CategoryTrendResponse,
   type FailureIdParetoResponse,
-  type ReworkGranularity,
   type ReworkScope,
 } from "./useReworkParetos";
 
-const GRANULARITIES: { key: ReworkGranularity; label: string }[] = [
-  { key: "day", label: "Day" },
-  { key: "week", label: "Week" },
-  { key: "month", label: "Month" },
-];
-const SHIFTS = [null, "A", "B", "C"] as const;
 const TOP_OPTIONS = [5, 10, 15, 20, 30, 50];
 
 const categoryColor = (code: string): string =>
@@ -58,24 +53,8 @@ const trendChart = (
   })),
 });
 
-/** The anchor limit, kept here only to grey out ‹ before a request that is
- *  certain to 400. The server is the authority — and this is deliberately NOT
- *  the dashboard's 30-day validator, which does not apply to these endpoints. */
-const MAX_ANCHOR_DAYS_BACK = 365;
-
-const oldestAnchor = (): string => {
-  const d = new Date();
-  d.setDate(d.getDate() - MAX_ANCHOR_DAYS_BACK);
-  return `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, "0")}-${`${d.getDate()}`.padStart(2, "0")}`;
-};
-
 const fmt = (n: number | null | undefined) =>
   typeof n === "number" ? n.toLocaleString("en-US") : "—";
-
-const pill = (on: boolean) =>
-  `border text-[10px] font-bold px-2.5 py-1 rounded uppercase transition-colors cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed ${
-    on ? "bg-tab-active text-white border-tab-border/50" : "bg-page text-ink-dim border-line hover:bg-line"
-  }`;
 
 const categoryBars = (data: CategoryParetoResponse): ServerParetoBar[] =>
   data.rows.map((r) => ({
@@ -134,22 +113,12 @@ type Props = {
  * take an `anchor` up to 365 days back, and rework is per product with no line.
  */
 export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
-  const [scope, setScope] = useState<ReworkScope>({
-    granularity: "week",
-    // Unset on open so the server picks today. Afterwards only ever an anchor
-    // the server returned — fiscal periods do not follow calendar weeks or
-    // months, so a date computed here would land in the wrong one.
-    anchor: null,
-    weekFrom: null,
-    weekTo: null,
-    shift: null,
-  });
+  const [scope, setScope] = useState<ReworkScope>(DEFAULT_REWORK_SCOPE);
   const [top, setTop] = useState(5);
   const [firstPassOnly, setFirstPassOnly] = useState(false);
 
   const { category, failureId } = useReworkParetos(level, item, scope, top, firstPassOnly);
   const trend = useCategoryTrend(level, item, scope);
-  const periods = useReworkPeriods(scope.granularity);
 
   // The period both charts are on. Read from whichever answered last; they are
   // requested with the same scope, so they agree.
@@ -166,10 +135,6 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
   // modal locked on a request nobody is waiting for.
   useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
   const tooFarBack = category.status === 400 || failureId.status === 400;
-
-  const prevDisabled =
-    loading || !period?.prev_anchor || period.prev_anchor < oldestAnchor() || tooFarBack;
-  const nextDisabled = loading || !period?.next_anchor;
 
   // 404 = this item belongs to the other module tab. Nothing to show for any
   // period, so it replaces the whole pane rather than sitting in one chart.
@@ -189,36 +154,8 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
   const failedUnits = category.data?.totals.failed_units ?? null;
   const noFailures = category.state === "ready" && failedUnits === 0;
 
-  // Week / Month dropdowns, from /rework/periods. Read only when the list is
-  // for the granularity on screen, so a stale month list never fills the
-  // week dropdowns for a frame.
-  const periodOptions =
-    scope.granularity !== "day" && periods.data?.granularity === scope.granularity
-      ? periods.data.options
-      : [];
-  const optionFrom = (from: string | undefined) =>
-    from ? periodOptions.find((o) => o.from === from) ?? null : null;
-  // Month: the one period on screen.
-  const selectedOption = optionFrom(period?.from);
-  // Week: the span on screen, as From and To. Read off `period.weeks` rather
-  // than the range in state, so the default five weeks — sent as no range at
-  // all — and the arrows' sliding window both show as what they are.
-  const spanWeeks = period?.weeks ?? [];
-  const fromOption = optionFrom(spanWeeks[0]?.from);
-  const toOption = optionFrom(spanWeeks[spanWeeks.length - 1]?.from);
-  const isRange = scope.granularity === "week" && Boolean(scope.weekFrom && scope.weekTo);
-
-  /** Pick one end of the week range; the other end stays where it is on screen. */
-  const setWeekRange = (end: "from" | "to", anchor: string) => {
-    const from = end === "from" ? anchor : (fromOption?.anchor ?? anchor);
-    const to = end === "to" ? anchor : (toOption?.anchor ?? anchor);
-    setScope((s) => ({ ...s, anchor: null, weekFrom: from, weekTo: to }));
-  };
-
   const trendData = scope.granularity !== "day" ? trend.data : null;
   const trendView = trendData ? trendChart(trendData) : null;
-  const weekOptionLabel = (o: (typeof periodOptions)[number]) =>
-    `${o.label} (${shortDay(o.from)} – ${shortDay(o.to)})${o.partial ? " · in progress" : ""}`;
 
   return (
     <div
@@ -232,187 +169,15 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
             {head?.product_name ?? item}
             <span className="ml-1.5 text-[11px] font-mono font-bold text-ink-dim normal-case">({item})</span>
           </span>
-          {period && (
-            <>
-              <span className="text-[13px] font-black text-info whitespace-nowrap">
-                – {period.span_label ?? period.label}
-                {period.partial && <span className="ml-1 text-[11px] font-bold text-warning">(in progress)</span>}
-              </span>
-              <span className="text-[10.5px] font-bold text-ink-dim whitespace-nowrap">
-                {period.from === period.to ? period.from : `${period.from} – ${period.to}`}
-                {period.partial && period.read_to !== period.to && ` · data to ${period.read_to}`}
-              </span>
-            </>
-          )}
+          <ReworkPeriodTitle period={period} />
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1">
-            {GRANULARITIES.map((g) => (
-              <button
-                key={g.key}
-                type="button"
-                disabled={loading && scope.granularity !== g.key}
-                // Keeps the date, so the user stays around the same place: the
-                // last week of a range becomes the anchor. A week range is
-                // Week-only, so it is dropped on the way out.
-                onClick={() =>
-                  setScope((s) => ({
-                    ...s,
-                    granularity: g.key,
-                    anchor: s.weekTo ?? s.anchor,
-                    weekFrom: null,
-                    weekTo: null,
-                  }))
-                }
-                className={pill(scope.granularity === g.key)}
-              >
-                {g.label}
-              </button>
-            ))}
-          </div>
-          {/* Hidden on a picked range: the API sends no prev/next anchors
-              there, and the From/To dropdowns are the navigation. On the
-              default five weeks they slide the window by one week. */}
-          {!isRange && (
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="Previous period"
-              disabled={prevDisabled}
-              onClick={() => period?.prev_anchor && setScope((s) => ({ ...s, anchor: period.prev_anchor }))}
-              className={`${pill(false)} !px-1.5`}
-              title={
-                tooFarBack
-                  ? "Older than 365 days is not available"
-                  : scope.granularity === "week"
-                    ? "Slide the five weeks back by one"
-                    : "Previous period"
-              }
-            >
-              <ChevronLeft size={12} />
-            </button>
-            <button
-              type="button"
-              aria-label="Next period"
-              disabled={nextDisabled}
-              onClick={() => period?.next_anchor && setScope((s) => ({ ...s, anchor: period.next_anchor }))}
-              className={`${pill(false)} !px-1.5`}
-              title={
-                period && !period.next_anchor
-                  ? "This is the current period"
-                  : scope.granularity === "week"
-                    ? "Slide the five weeks forward by one"
-                    : "Next period"
-              }
-            >
-              <ChevronRight size={12} />
-            </button>
-          </div>
-          )}
-
-          {/* Week: From and To over the same last-8-weeks list. Each sends that
-              option's own anchor, never a computed date. Weeks after To are
-              disabled in From and weeks before From in To, which the server
-              would refuse. A span end older than the list (the arrows can
-              reach one) shows as itself rather than blank. */}
-          {scope.granularity === "week" && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9.5px] font-black uppercase tracking-wider text-ink-dim">From</span>
-              <select
-                value={fromOption?.anchor ?? ""}
-                disabled={periodOptions.length === 0}
-                onChange={(e) => e.target.value && setWeekRange("from", e.target.value)}
-                className="bg-page border border-line rounded px-2 py-1 text-[10px] font-bold text-white cursor-pointer disabled:opacity-40"
-                aria-label="From week"
-              >
-                {!fromOption && (
-                  <option value="">
-                    {periods.state === "loading" ? "Loading…" : (spanWeeks[0]?.label ?? "—")}
-                  </option>
-                )}
-                {periodOptions.map((o) => (
-                  <option key={o.anchor} value={o.anchor} disabled={!!toOption && o.from > toOption.from}>
-                    {weekOptionLabel(o)}
-                  </option>
-                ))}
-              </select>
-              <span className="text-[9.5px] font-black uppercase tracking-wider text-ink-dim">To</span>
-              <select
-                value={toOption?.anchor ?? ""}
-                disabled={periodOptions.length === 0}
-                onChange={(e) => e.target.value && setWeekRange("to", e.target.value)}
-                className="bg-page border border-line rounded px-2 py-1 text-[10px] font-bold text-white cursor-pointer disabled:opacity-40"
-                aria-label="To week"
-              >
-                {!toOption && (
-                  <option value="">
-                    {periods.state === "loading"
-                      ? "Loading…"
-                      : (spanWeeks[spanWeeks.length - 1]?.label ?? period?.label ?? "—")}
-                  </option>
-                )}
-                {periodOptions.map((o) => (
-                  <option key={o.anchor} value={o.anchor} disabled={!!fromOption && o.from < fromOption.from}>
-                    {weekOptionLabel(o)}
-                  </option>
-                ))}
-              </select>
-              {/* Back to the server's default: the current week and the four
-                  before it, with the arrows. */}
-              {(isRange || scope.anchor) && (
-                <button
-                  type="button"
-                  onClick={() => setScope((s) => ({ ...s, anchor: null, weekFrom: null, weekTo: null }))}
-                  className={pill(false)}
-                  title="The current week and the four before it"
-                >
-                  Last 5 weeks
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Month: one fiscal period of the last twelve. */}
-          {scope.granularity === "month" && (
-            <select
-              value={selectedOption?.anchor ?? ""}
-              disabled={periodOptions.length === 0}
-              onChange={(e) => e.target.value && setScope((s) => ({ ...s, anchor: e.target.value }))}
-              className="bg-page border border-line rounded px-2 py-1 text-[10px] font-bold text-white cursor-pointer disabled:opacity-40"
-              aria-label="Fiscal period"
-            >
-              {!selectedOption && (
-                <option value="">
-                  {periods.state === "loading"
-                    ? "Loading…"
-                    : period
-                      ? `${period.label} (${shortDay(period.from)} – ${shortDay(period.to)})`
-                      : "—"}
-                </option>
-              )}
-              {periodOptions.map((o) => (
-                <option key={o.anchor} value={o.anchor}>
-                  {weekOptionLabel(o)}
-                </option>
-              ))}
-            </select>
-          )}
-          <select
-            value={scope.shift ?? ""}
-            onChange={(e) =>
-              setScope((s) => ({ ...s, shift: (e.target.value || null) as ReworkScope["shift"] }))
-            }
-            className="bg-page border border-line rounded px-2 py-1 text-[10px] font-bold text-white uppercase cursor-pointer"
-            aria-label="Shift"
-          >
-            {SHIFTS.map((s) => (
-              <option key={s ?? "all"} value={s ?? ""}>
-                {s ? `Shift ${s}` : "All shifts"}
-              </option>
-            ))}
-          </select>
-        </div>
+        <ReworkPeriodControls
+          scope={scope}
+          onScopeChange={setScope}
+          period={period}
+          loading={loading}
+          rejected={tooFarBack}
+        />
       </div>
 
       {/* A 400 keeps the last good period on screen — the hook holds the old

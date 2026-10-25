@@ -18,6 +18,7 @@ import { DEFECT_DRILLDOWN_STEPS } from "./useProductDefects";
 import { defectCountTone, yieldRowTone } from "./metrics";
 import SmtDefectsModal from "./SmtDefectsModal";
 import SpiDefectsModal from "./SpiDefectsModal";
+import SpiReworkPane from "./SpiReworkPane";
 import {
   DPMOI_TAB,
   SCREW_DEFECTS_TAB,
@@ -123,9 +124,37 @@ const SpiStepPane = ({
     item: string;
     product_name: string | null;
   } | null>(null);
+  // The products table, or the SPI rework paretos (handoff 3.6). Kept here so
+  // the choice survives a refetch but resets when the tab is left.
+  const [view, setView] = useState<"products" | "rework">("products");
 
   return (
     <>
+      <div className="flex items-center gap-1 mb-1.5">
+        {([
+          ["products", "By product", "Yield and failed boards per product"],
+          ["rework", "Rework", "Which defect types failed the boards, and which components carried them"],
+        ] as const).map(([v, label, hint]) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            title={hint}
+            className={`border text-[10px] font-bold px-2.5 py-0.5 rounded uppercase transition-colors cursor-pointer ${
+              view === v
+                ? "bg-tab-active text-white border-tab-border/50"
+                : "bg-page text-ink-dim border-line hover:bg-line"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === "rework" ? (
+        // Its own period selector (fiscal weeks, up to a year back), so the
+        // dashboard's date range does not apply; the product selection does.
+        <SpiReworkPane products={products} />
+      ) : (
       <ProcessProductsTable
         query={query}
         onRowClick={setSelected}
@@ -134,6 +163,7 @@ const SpiStepPane = ({
         isRowClickable={(row) => (row.failed ?? 0) > 0}
         rowActionLabel="Show the pad defects"
       />
+      )}
       {selected && (
         <SpiDefectsModal
           item={selected.item}
