@@ -3,6 +3,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   LabelList,
   ResponsiveContainer,
   Tooltip,
@@ -27,6 +28,9 @@ export type BarCategory = {
   values: Record<string, number>;
   /** Extra line in the tooltip — the full name, a description. */
   hint?: string;
+  /** Greyed on the axis and in its segments — e.g. a week not reached yet,
+   *  kept so the axis keeps its full length. */
+  dimmed?: boolean;
 };
 
 export type StackedBarChartProps = {
@@ -55,6 +59,8 @@ export type StackedBarChartProps = {
   /** The surface the chart sits on, for the 2px separator between segments.
    *  Defaults to the dashboard panel; pass it when a card uses its own. */
   surfaceColor?: string;
+  /** The tooltip's last line when segments are clickable. */
+  segmentClickHint?: string;
 };
 
 const AXIS_TICK = {
@@ -101,6 +107,7 @@ export const StackedBarChart = ({
   showLegend = true,
   onSegmentClick,
   surfaceColor = palette.panel,
+  segmentClickHint = "Click a segment to open that tester's log",
 }: StackedBarChartProps) => {
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -113,6 +120,7 @@ export const StackedBarChart = ({
       label: truncate(c.label, maxLabelChars),
       fullLabel: c.label,
       hint: c.hint,
+      __dimmed: Boolean(c.dimmed),
       total: series.reduce((acc, s) => acc + (c.values[s.key] ?? 0), 0),
       // Which series ends up on top of THIS bar. Recharts stacks in series
       // order, so it is the last one with a value — and it differs per bar,
@@ -146,6 +154,7 @@ export const StackedBarChart = ({
 
     return { rows, shown: head.length, folded: tail.length };
   }, [categories, series, maxCategories, maxLabelChars]);
+  const anyDimmed = rows.some((r) => r.__dimmed);
 
   if (rows.length === 0 || series.length === 0) {
     return (
@@ -208,7 +217,7 @@ export const StackedBarChart = ({
         </div>
         {onSegmentClick && (
           <div className="text-[9.5px] text-ink-dim/80 mt-1.5">
-            Click a segment to open that tester&apos;s log
+            {segmentClickHint}
           </div>
         )}
       </div>
@@ -232,9 +241,33 @@ export const StackedBarChart = ({
           />
           <XAxis
             dataKey="label"
-            tick={AXIS_TICK}
-            angle={-35}
-            textAnchor="end"
+            // A custom tick only when some bar is dimmed, so every other
+            // caller keeps Recharts' own angled tick exactly as before.
+            tick={
+              anyDimmed
+                ? (props: any) => {
+                    const { x, y, payload, index } = props;
+                    const dim = rows[index]?.__dimmed;
+                    return (
+                      <text
+                        x={x}
+                        y={y + 4}
+                        dy={8}
+                        textAnchor="end"
+                        transform={`rotate(-35, ${x}, ${y + 4})`}
+                        fill={AXIS_TICK.fill}
+                        fillOpacity={dim ? 0.45 : 1}
+                        fontSize={AXIS_TICK.fontSize}
+                        fontWeight={AXIS_TICK.fontWeight}
+                      >
+                        {payload.value}
+                      </text>
+                    );
+                  }
+                : AXIS_TICK
+            }
+            angle={anyDimmed ? undefined : -35}
+            textAnchor={anyDimmed ? undefined : "end"}
             interval={0}
             height={64}
             tickLine={false}
@@ -290,6 +323,14 @@ export const StackedBarChart = ({
               // bar with a 4px cap rather than a pile of lozenges.
               radius={i === series.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
             >
+              {rows.map((r) => (
+                <Cell
+                  key={r.key}
+                  fillOpacity={
+                    (hovered && hovered !== s.key ? 0.25 : 1) * (r.__dimmed ? 0.35 : 1)
+                  }
+                />
+              ))}
               {/* Every Bar carries the label, and each one draws it only for
                   the rows where IT is the topmost segment — so exactly one
                   label lands on each bar, at the top of the stack. Hanging it

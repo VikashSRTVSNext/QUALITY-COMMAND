@@ -46,9 +46,10 @@ const plural = (v: number | null | undefined, one: string, many?: string) => {
   return `${fmtNum(v)} ${word}`;
 };
 
-/** AOI_TOP_REWORK_IN04 -> "AOI TOP". Same rule as the pane behind this modal. */
+/** AOI_TOP_REWORK_IN04 -> "AOI TOP". Same rule as the pane behind this modal;
+ *  an empty operation is a both-sides row from a line-filtered table. */
 const opLabel = (op: string) =>
-  op.replace(/_REWORK_IN04$/, "").replace(/_/g, " ");
+  op ? op.replace(/_REWORK_IN04$/, "").replace(/_/g, " ") : "AOI TOP + BOT";
 
 /**
  * Bars per cut.
@@ -172,7 +173,10 @@ export const DpmoiDetailModal: React.FC<Props> = ({
   const [chartView, setChartView] = useState<ChartView>("bars");
   /** The AOI detail for the picked window, or the rework paretos (handoff
    *  3.7), which run on fiscal weeks and have their own selector. */
-  const [tab, setTab] = useState<"details" | "rework">("details");
+  const [tab, setTab] = useState<"details" | "rework">(operation ? "details" : "rework");
+  // A row with no operation covers TOP and BOT together (line filter on).
+  // The detail endpoint is per side, so only the rework tab can answer it.
+  const detailsAvailable = Boolean(operation);
   const [reworkBusy, setReworkBusy] = useState(false);
   const rework = tab === "rework";
 
@@ -355,7 +359,9 @@ export const DpmoiDetailModal: React.FC<Props> = ({
             {([
               ["details", "Details", "Category rates, cuts and the defect log for the picked dates"],
               ["rework", "Rework", "NC code → component → ref_des by fiscal week or month"],
-            ] as const).map(([v, label, hint]) => (
+            ] as const)
+              .filter(([v]) => detailsAvailable || v !== "details")
+              .map(([v, label, hint]) => (
               <button
                 key={v}
                 type="button"

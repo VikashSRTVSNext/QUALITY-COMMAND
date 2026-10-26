@@ -32,6 +32,26 @@ export const REWORK_CATEGORY_COLORS: Record<string, string> = {
 export const REWORK_UNKNOWN_CATEGORY = "#94A3B8";
 
 /**
+ * Stack colours for an OPEN vocabulary — DPMOI NC codes, which no fixed map
+ * can cover. Drawn from the same set as the categories, in an order that keeps
+ * neighbouring stack segments warm/cool apart, and assigned by the series'
+ * position in the server's (stable, biggest-first) list. Past the last slot a
+ * series folds to the "Others" slate rather than reusing a colour.
+ */
+export const REWORK_SERIES_COLORS = [
+  "#2DD4BF",
+  "#FBBF24",
+  "#38BDF8",
+  "#F472B6",
+  "#A3E635",
+  "#C4B5FD",
+  "#FB923C",
+] as const;
+
+export const reworkSeriesColor = (i: number): string =>
+  REWORK_SERIES_COLORS[i] ?? REWORK_CATEGORY_COLORS.UNCATEGORISED;
+
+/**
  * The paretos, derived from the same set so the two views read as one:
  * vital-few bars in FCR teal, the tail as that teal dimmed, the buckets that
  * are not causes in the Uncategorised slate, and the cumulative line in SMT

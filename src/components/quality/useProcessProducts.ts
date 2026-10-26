@@ -40,10 +40,12 @@ type ProcessProductsResponse = {
   metric: "yield" | "failure";
   business_date: string;
   shift: string | null;
+  /** Echo of the applied filters. `lines` is present under a line. */
+  filters?: { products?: string[]; lines?: string[] };
   /** What the rows actually cover. Always present — a single day is a range of
    *  one — so a caller never has to choose between this and `business_date`. */
   range: { from: string; to: string; days: number };
-  operations: { in?: string[]; like?: string };
+  operations: { in?: string[]; like?: string; source?: string };
   target: number | null;
   target_unit: string | null;
   target_direction: string | null;
@@ -100,6 +102,18 @@ export const DRILLDOWN_STEPS: Record<string, true> = {
 
 export const PAGE_SIZE = 12;
 
+/**
+ * Steps whose per-product table takes `line` (handoff 1.4, 2026-10-26). Any
+ * other step answers 400 to a line, so it is sent ONLY for these — the rest
+ * stay "all lines" and say so.
+ */
+export const LINE_PRODUCT_STEPS: Record<string, true> = {
+  AXI: true,
+  SMT_DEFECTS: true,
+  SPI: true,
+  THERMAL_AVI: true,
+};
+
 export const isNum = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v);
 
@@ -150,6 +164,11 @@ export const useProcessProducts = (
    *  cover only those products, matching the product-filtered card. `card`
    *  stays the unfiltered mart figure and must not be shown as the total. */
   products?: string[] | null,
+  /** The Process strip's line selection. Sent only for LINE_PRODUCT_STEPS;
+   *  ignored on every other step. Under a line the table reads the rows the
+   *  line-filtered card sums, so `boards` is null except on SPI,
+   *  `defect_records` is null and `card` is []. */
+  lines?: string[] | null,
 ) => {
   const [data, setData] = useState<ProcessProductsResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -168,6 +187,7 @@ export const useProcessProducts = (
   const rangeTo = range?.to ?? null;
   // Serialised so a fresh array literal from the caller does not refetch.
   const productKey = (products ?? []).join("\u0001");
+  const lineKey = LINE_PRODUCT_STEPS[step] ? (lines ?? []).join("\u0001") : "";
 
   /**
    * Drop the previous answer the moment the QUESTION changes.
@@ -186,7 +206,7 @@ export const useProcessProducts = (
    * keeping the previous page visible is right — it is the same question, one
    * page further on, and blanking the table between pages would be worse.
    */
-  const subject = `${step}\u0000${shift ?? ""}\u0000${rangeFrom ?? ""}\u0000${rangeTo ?? ""}\u0000${productKey}`;
+  const subject = `${step}\u0000${shift ?? ""}\u0000${rangeFrom ?? ""}\u0000${rangeTo ?? ""}\u0000${productKey}\u0000${lineKey}`;
   const [lastSubject, setLastSubject] = useState(subject);
   if (subject !== lastSubject) {
     setLastSubject(subject);
@@ -221,6 +241,9 @@ export const useProcessProducts = (
             params.append("product", item);
           }
         }
+        if (lineKey) {
+          for (const line of lineKey.split("\u0001")) params.append("line", line);
+        }
 
         const res = await fetch(
           apiUrl(`/process/${encodeURIComponent(step)}/products?${params}`),
@@ -242,7 +265,7 @@ export const useProcessProducts = (
     return () => {
       cancelled = true;
     };
-  }, [step, shift, rangeFrom, rangeTo, productKey, page, sort, order]);
+  }, [step, shift, rangeFrom, rangeTo, productKey, lineKey, page, sort, order]);
 
   // The page/sort reset that used to live here is now part of the subject check
   // above, which runs a frame earlier. It mattered for the same reason the data

@@ -119,6 +119,14 @@ export const useDpmoiDetail = ({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // No operation = a line-filtered row covering TOP and BOT together. The
+    // detail is per side, so there is nothing to ask for; the modal opens on
+    // its Rework tab instead.
+    if (!operation) {
+      setData(null);
+      setState("ready");
+      return;
+    }
     let cancelled = false;
 
     const fetchDetail = async () => {

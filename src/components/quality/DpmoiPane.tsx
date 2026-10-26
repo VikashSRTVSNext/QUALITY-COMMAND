@@ -26,9 +26,10 @@ const idxColour = (v: number | null) => {
   return "#ff4c4c";
 };
 
-/** AOI_TOP_REWORK_IN04 -> "AOI TOP". The _REWORK_IN04 suffix is on every row. */
+/** AOI_TOP_REWORK_IN04 -> "AOI TOP". The _REWORK_IN04 suffix is on every row.
+ *  A null operation is an item-grain row (line filter on): both sides. */
 const opLabel = (op: string | null) =>
-  op ? op.replace(/_REWORK_IN04$/, "").replace(/_/g, " ") : "—";
+  op ? op.replace(/_REWORK_IN04$/, "").replace(/_/g, " ") : "TOP + BOT";
 
 /**
  * DPMOI per item and operation — the table behind the card.
@@ -40,47 +41,33 @@ const opLabel = (op: string | null) =>
  * Reads mart_dpmo, which is ALREADY at (item, operation) grain — so unlike the
  * screw breakdown nothing is recomputed and this table cannot drift from the
  * card above it.
+ *
+ * With a line selected (2026-10-26) the endpoint reads the rows the
+ * line-filtered DPMOI card sums instead, because mart_dpmo has no line. That
+ * source is per item and line only, so rows come back at `grain: "item"`: TOP
+ * and BOT together, with the solder / component / placement split null. Their
+ * totals equal the line-filtered card.
  */
 export const DpmoiPane = ({
-  lineFiltered = false,
-  ...props
-}: {
-  businessDate?: string | null;
-  range?: DateRange | null;
-  shift?: string | null;
-  products?: string[];
-  /** True while a line is selected. This breakdown reads mart_dpmo, which has
-   *  no line, so it says so rather than showing rows the line did not narrow.
-   *  (The DPMOI CARD does honour the line; only this table cannot.) */
-  lineFiltered?: boolean;
-}) => {
-  if (lineFiltered) {
-    return (
-      <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
-        The DPMOI breakdown is not filterable by line. Clear the line filter to
-        see it.
-      </div>
-    );
-  }
-  return <DpmoiPaneBody {...props} />;
-};
-
-const DpmoiPaneBody = ({
   businessDate,
   range,
   shift,
   products,
+  lines,
 }: {
   businessDate?: string | null;
   range?: DateRange | null;
   shift?: string | null;
   products?: string[];
+  /** The Process strip's line selection. */
+  lines?: string[];
 }) => {
   const { data, state, error } = useDpmoiProducts(
     businessDate,
     range,
     shift,
     products,
+    lines,
   );
 
   /**
@@ -120,8 +107,8 @@ const DpmoiPaneBody = ({
   if (data.rows.length === 0) {
     return (
       <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
-        {(products?.length ?? 0) > 0
-          ? `No AOI production for the selected product${products!.length === 1 ? "" : "s"} on ${data.business_date}.`
+        {(products?.length ?? 0) > 0 || (lines?.length ?? 0) > 0
+          ? `No AOI production for the selected ${(lines?.length ?? 0) > 0 ? "line / product" : "product"} filter on ${data.business_date}.`
           : `No AOI production on ${data.business_date}.`}
       </div>
     );
@@ -206,7 +193,11 @@ const DpmoiPaneBody = ({
                   }}
                   tabIndex={0}
                   role="button"
-                  title={`What the ${opLabel(r.operation)} defects on ${r.item} were, and which process they came from`}
+                  title={
+                    r.operation
+                      ? `What the ${opLabel(r.operation)} defects on ${r.item} were, and which process they came from`
+                      : `Rework analysis for ${r.item}: NC code, component and ref_des (TOP and BOT together under a line filter)`
+                  }
                 >
                   <td className={`${TD} text-left text-white font-bold`}>
                     <span className="inline-flex items-center gap-1.5">

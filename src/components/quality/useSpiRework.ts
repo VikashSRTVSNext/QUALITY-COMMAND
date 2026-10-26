@@ -167,3 +167,49 @@ export const useDpmoiRefDesPareto = (
       : null,
     "DPMOI ref_des",
   );
+
+// ── DPMOI (3.7): NC codes by fiscal week ────────────────────────────────────
+
+export type DpmoiNcTrendBucket = {
+  /** "WK39". */
+  label: string;
+  from: string;
+  to: string;
+  /** A week not reached yet. Kept on the axis, greyed. */
+  in_future: boolean;
+  /** The bar's total. */
+  defects: number;
+  /** nc -> defects; a code missing here is 0 that week. */
+  by_nc: Record<string, number>;
+};
+
+export type DpmoiNcTrendResponse = {
+  step: "DPMOI";
+  item: string;
+  bucket: "week";
+  period: ReworkPeriod;
+  /** The stack series in drawing order, biggest first: the NC chart's own
+   *  top codes plus Others, so the two charts add up to the same totals. */
+  ncs: {
+    nc: string;
+    label: string;
+    description: string | null;
+    defects: number;
+    folded?: number;
+  }[];
+  buckets: DpmoiNcTrendBucket[];
+  /** `defects` equals the NC pareto's totals.defects. */
+  totals: { defects: number; distinct_ncs: number };
+};
+
+/** One bar per fiscal week, stacked by NC code. Same params as the NC pareto. */
+export const useDpmoiNcTrend = (
+  item: string,
+  operation: string | null,
+  scope: ReworkScope,
+  top: number,
+) =>
+  useParetoFetch<DpmoiNcTrendResponse>(
+    chainUrl(`${dpmoiBase(item)}/trend/nc`, scope, top, { operation }),
+    "DPMOI NC trend",
+  );

@@ -4,13 +4,16 @@ import type { DateRange } from "./dashboardFilters";
 
 export type DpmoiRow = {
   item: string | null;
-  /** AOI_TOP_REWORK_IN04 / AOI_BOT_REWORK_IN04. */
+  /** AOI_TOP_REWORK_IN04 / AOI_BOT_REWORK_IN04. Null on `grain: "item"`
+   *  rows, which cover TOP and BOT together. */
   operation: string | null;
   /** From the opportunity master (TBL_PLCM_ITEM_DPMO). */
   description: string | null;
   /** Boards — COUNT(DISTINCT sfc) x qty_started, because these rows are lots. */
   qty: number | null;
   defects_total: number | null;
+  /** The three splits are null on `grain: "item"` rows: the line-filtered
+   *  source has no category. */
   defects_comp: number | null;
   defects_solder: number | null;
   defects_place: number | null;
@@ -30,8 +33,13 @@ export type DpmoiResponse = {
    *  A + B + C up. mart_dpmo gained this grain on 2026-09-23. */
   shift: string | null;
   operations: string[];
+  /** "item_operation" without a line (one row per TOP / BOT side, from
+   *  mart_dpmo); "item" with one (one row per item, both sides together, read
+   *  from the rows the line-filtered card sums, so totals equal that card).
+   *  Absent on backends older than 2026-10-26, which are item_operation. */
+  grain?: "item" | "item_operation";
   /** What the backend applied. Absent on older responses. */
-  filters?: { products: string[] };
+  filters?: { products: string[]; lines?: string[] };
   rows: DpmoiRow[];
   totals: {
     qty: number | null;
@@ -59,6 +67,9 @@ export const useDpmoiProducts = (
   /** The dashboard's shared product selection. Rows, totals and
    *  missing_opportunities then cover only these products. */
   products?: string[] | null,
+  /** The Process strip's line selection (repeatable `line`). With one, rows
+   *  come back at item grain — see `grain`. */
+  lines?: string[] | null,
 ) => {
   const [data, setData] = useState<DpmoiResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -69,8 +80,8 @@ export const useDpmoiProducts = (
   const rangeFrom = range?.from ?? null;
   const rangeTo = range?.to ?? null;
   // Serialised so a fresh array literal from the caller does not refetch.
-  // No `line`: mart_dpmo has no line column, so this breakdown cannot take one.
   const productKey = (products ?? []).join("\u0001");
+  const lineKey = (lines ?? []).join("\u0001");
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +98,9 @@ export const useDpmoiProducts = (
           for (const item of productKey.split("\u0001")) {
             params.append("product", item);
           }
+        }
+        if (lineKey) {
+          for (const line of lineKey.split("\u0001")) params.append("line", line);
         }
         const qs = params.toString();
         const res = await fetch(
@@ -111,7 +125,7 @@ export const useDpmoiProducts = (
     return () => {
       cancelled = true;
     };
-  }, [businessDate, rangeFrom, rangeTo, shift, productKey]);
+  }, [businessDate, rangeFrom, rangeTo, shift, productKey, lineKey]);
 
   return { data, state, error };
 };

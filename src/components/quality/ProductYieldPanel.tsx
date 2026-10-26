@@ -13,7 +13,7 @@ import ProcessProductsTable from "./ProcessProductsTable";
 import ProductDrilldownModal from "./ProductDrilldownModal";
 import DpmoiPane from "./DpmoiPane";
 import ScrewDefectsPane from "./ScrewDefectsPane";
-import { useProcessProducts } from "./useProcessProducts";
+import { LINE_PRODUCT_STEPS, useProcessProducts } from "./useProcessProducts";
 import { DEFECT_DRILLDOWN_STEPS } from "./useProductDefects";
 import { defectCountTone, yieldRowTone } from "./metrics";
 import SmtDefectsModal from "./SmtDefectsModal";
@@ -48,6 +48,15 @@ const LEVEL_STEP: Record<YieldTab, string> = {
 
 const TAB_CLASS =
   "border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors whitespace-nowrap flex-shrink-0";
+
+/** The six step tabs that send the strip's line (handoff 2026-10-26): the four
+ *  per-product tables that take `line`, and the two breakdowns. Every other
+ *  tab, and the UNITS / TRX / PA level tables, stays product-only. */
+const LINE_TABS = new Set<string>([
+  ...Object.keys(LINE_PRODUCT_STEPS),
+  SCREW_DEFECTS_TAB,
+  DPMOI_TAB,
+]);
 const TAB_ON = "bg-tab-active text-white border-tab-border/50";
 const TAB_OFF = "bg-page text-ink-dim border-line hover:bg-line";
 
@@ -64,13 +73,17 @@ const StepPane = ({
   shift,
   range,
   products,
+  lines,
 }: {
   step: string;
   shift: string | null;
   range?: DateRange | null;
   products?: string[];
+  /** Sent only where the step takes it (AXI, THERMAL_AVI); see
+   *  LINE_PRODUCT_STEPS. The hook drops it for every other step. */
+  lines?: string[];
 }) => {
-  const query = useProcessProducts(step, shift, range, products);
+  const query = useProcessProducts(step, shift, range, products, lines);
   const [selected, setSelected] = useState<{
     item: string;
     product_name: string | null;
@@ -113,12 +126,14 @@ const SpiStepPane = ({
   shift,
   range,
   products,
+  lines,
 }: {
   shift: string | null;
   range?: DateRange | null;
   products?: string[];
+  lines?: string[];
 }) => {
-  const query = useProcessProducts("SPI", shift, range, products);
+  const query = useProcessProducts("SPI", shift, range, products, lines);
   const [selected, setSelected] = useState<{
     item: string;
     product_name: string | null;
@@ -159,12 +174,14 @@ const SmtStepPane = ({
   shift,
   range,
   products,
+  lines,
 }: {
   shift: string | null;
   range?: DateRange | null;
   products?: string[];
+  lines?: string[];
 }) => {
-  const query = useProcessProducts("SMT_DEFECTS", shift, range, products);
+  const query = useProcessProducts("SMT_DEFECTS", shift, range, products, lines);
   const [selected, setSelected] = useState<{
     item: string;
     product_name: string | null;
@@ -404,21 +421,26 @@ export const ProductYieldPanel = ({
                 {rangeMeta.from} – {rangeMeta.to} · {rangeMeta.days}d
               </span>
             )}
-            {/* Neither the level tables (MFT testers have no line) nor
-                /process/{step}/products take ?line=, so with a line chosen on
-                the strip this panel says it is still reading every line rather
-                than implying it is filtered. The screw breakdown does take the
-                line, and DPMOI states its own limitation, so neither shows it. */}
+            {/* Under a line selection, say which way THIS table reads it.
+                The six line tabs (handoff 2026-10-26) send the line and show
+                it; the level tables and the test-step tabs cannot take one and
+                say "All lines" rather than imply they are filtered. */}
             {lineScope.length > 0 &&
-              activeStep !== SCREW_DEFECTS_TAB &&
-              activeStep !== DPMOI_TAB && (
+              (activeStep !== null && LINE_TABS.has(activeStep) ? (
+                <span
+                  className="text-[9.5px] font-black uppercase tracking-wider text-info border border-info/40 rounded px-1.5 py-px whitespace-nowrap max-w-[220px] truncate"
+                  title={`Filtered to ${lineScope.join(", ")}`}
+                >
+                  {lineScope.length === 1 ? lineScope[0] : `${lineScope.length} lines`}
+                </span>
+              ) : (
                 <span
                   className="text-[9.5px] font-black uppercase tracking-wider text-ink-dim border border-line rounded px-1.5 py-px whitespace-nowrap"
                   title={`Line filter (${lineScope.join(", ")}) does not apply to this table`}
                 >
                   All lines
                 </span>
-              )}
+              ))}
           </div>
 
           {/* On every tab: the level tables, the per-product step tables and
@@ -484,16 +506,16 @@ export const ProductYieldPanel = ({
         </div>
 
         {activeStep === "SPI" ? (
-          <SpiStepPane shift={shift} range={dateRange} products={productScope} />
+          <SpiStepPane shift={shift} range={dateRange} products={productScope} lines={lineScope} />
         ) : activeStep === "SMT_DEFECTS" ? (
-          <SmtStepPane shift={shift} range={dateRange} products={productScope} />
+          <SmtStepPane shift={shift} range={dateRange} products={productScope} lines={lineScope} />
         ) : activeStep === DPMOI_TAB ? (
           <DpmoiPane
             businessDate={null}
             range={dateRange}
             shift={shift}
             products={productScope}
-            lineFiltered={lineScope.length > 0}
+            lines={lineScope}
           />
         ) : activeStep === SCREW_DEFECTS_TAB ? (
           // Its own pane: screws-driven denominator, and a line/station/item
@@ -511,6 +533,7 @@ export const ProductYieldPanel = ({
             shift={shift}
             range={dateRange}
             products={productScope}
+            lines={lineScope}
           />
         ) : (
           <>
