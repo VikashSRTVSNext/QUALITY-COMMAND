@@ -56,6 +56,8 @@ type Props = {
   loading: boolean;
   /** A 400 from the view's requests — almost always "older than 365 days". */
   rejected: boolean;
+  /** Off for the SPI and DPMOI charts, whose endpoints refuse `day`. */
+  allowDay?: boolean;
 };
 
 /**
@@ -72,6 +74,7 @@ export const ReworkPeriodControls = ({
   period,
   loading,
   rejected,
+  allowDay = true,
 }: Props) => {
   const periods = useReworkPeriods(scope.granularity);
 
@@ -110,7 +113,7 @@ export const ReworkPeriodControls = ({
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-1">
-        {GRANULARITIES.map((g) => (
+        {GRANULARITIES.filter((g) => allowDay || g.key !== "day").map((g) => (
           <button
             key={g.key}
             type="button"

@@ -17,6 +17,7 @@ import {
   type DateRange,
 } from "./dashboardFilters";
 import SpiPadLogTable from "./SpiPadLogTable";
+import SpiReworkPane from "./SpiReworkPane";
 import { EMPTY_SPI_FILTERS, useSpiDefects, type SpiFilters } from "./useSpiDefects";
 
 const fmtPct = (v: number | null | undefined) =>
@@ -88,6 +89,11 @@ export const SpiDefectsModal: React.FC<Props> = ({
   /** Which board's pads to show. Client-side — every board's pads are already in
    *  the one response, so narrowing to an SFC costs no request. */
   const [sfc, setSfc] = useState<string | null>(null);
+  /** The pad-defect detail for the picked window, or the rework paretos
+   *  (handoff 3.6), which run on fiscal weeks and have their own selector. */
+  const [tab, setTab] = useState<"details" | "rework">("details");
+  const [reworkBusy, setReworkBusy] = useState(false);
+  const rework = tab === "rework";
 
   const { data, state, error } = useSpiDefects(item, businessDate, filters, modalRange);
 
@@ -158,7 +164,7 @@ export const SpiDefectsModal: React.FC<Props> = ({
   return (
     <DrilldownModalShell
       onClose={onClose}
-      busy={state === "loading"}
+      busy={rework ? reworkBusy : state === "loading"}
       // Escape clears a board selection first, so a mistyped key does not throw
       // away the whole drill-down.
       onBack={sfc ? () => setSfc(null) : null}
@@ -188,7 +194,27 @@ export const SpiDefectsModal: React.FC<Props> = ({
       }
       meta={
         <>
-          {anyFilter && (
+          <div className="flex items-center gap-1">
+            {([
+              ["details", "Details", "Pad defects, components and boards for the picked dates"],
+              ["rework", "Rework", "Defect types by fiscal week or month, and the components behind each"],
+            ] as const).map(([v, label, hint]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setTab(v)}
+                title={hint}
+                className={`border text-[10px] font-bold px-2.5 py-1 rounded uppercase transition-colors cursor-pointer ${
+                  tab === v
+                    ? "bg-tab-active text-white border-tab-border/50"
+                    : "bg-page text-ink-dim border-line hover:bg-line"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {!rework && anyFilter && (
             <button
               type="button"
               onClick={() => {
@@ -200,7 +226,7 @@ export const SpiDefectsModal: React.FC<Props> = ({
               Clear filters
             </button>
           )}
-          {canPareto && (
+          {!rework && canPareto && (
             <ChartViewToggle
               value={view}
               onChange={setChartView}
@@ -211,6 +237,7 @@ export const SpiDefectsModal: React.FC<Props> = ({
               uses, so the range reads and behaves identically in both places —
               and with no range set it still shows the day the data is for,
               which is all the label ever said. */}
+          {!rework && (
           <DateRangeFilter
             value={modalRange}
             onChange={setModalRange}
@@ -220,10 +247,14 @@ export const SpiDefectsModal: React.FC<Props> = ({
                 : (data?.business_date ?? businessDate ?? null)
             }
           />
+          )}
         </>
       }
     >
-      {state === "loading" && !data && (
+      {rework && (
+        <SpiReworkPane item={item} productName={productName} onBusyChange={setReworkBusy} />
+      )}
+      {!rework && state === "loading" && !data && (
         <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
           Loading pad defects…
         </div>
@@ -231,7 +262,7 @@ export const SpiDefectsModal: React.FC<Props> = ({
 
       {/* 404 rather than an error: the item had no boards that day, almost
           always a business_date that moved between the two calls. */}
-      {state === "stale" && (
+      {!rework && state === "stale" && (
         <div className="py-16 px-8 text-center">
           <div className="text-[12px] font-bold text-warning mb-1.5">
             No inspected boards for this product
@@ -243,13 +274,13 @@ export const SpiDefectsModal: React.FC<Props> = ({
         </div>
       )}
 
-      {state === "error" && (
+      {!rework && state === "error" && (
         <div className="py-16 text-center text-[12px] font-bold text-critical">
           {error}
         </div>
       )}
 
-      {data && (state === "ready" || state === "loading") && (
+      {!rework && data && (state === "ready" || state === "loading") && (
         <>
           {/* ---- summary: always the product's FULL figures ---------------- */}
           <div className="flex-shrink-0 px-6 pt-3 pb-3 border-b border-line/60 bg-page/25">

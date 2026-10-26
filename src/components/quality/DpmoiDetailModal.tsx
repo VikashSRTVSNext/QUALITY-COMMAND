@@ -15,6 +15,7 @@ import RankedBarChart from "../charts/RankedBarChart.lazy";
 import type { RankedBar } from "../charts/RankedBarChart";
 import { seriesColor } from "../charts/seriesPalette";
 import DrilldownModalShell from "./DrilldownModalShell";
+import DpmoiReworkPane from "./DpmoiReworkPane";
 import DateRangeFilter from "./DateRangeFilter";
 import ParetoChart from "../charts/ParetoChart.lazy";
 import { defectDateBars } from "./defectDateBars";
@@ -169,6 +170,11 @@ export const DpmoiDetailModal: React.FC<Props> = ({
   const [modalRange, setModalRange] = useState<DateRange>(range ?? EMPTY_RANGE);
   /** Bars or Pareto for the three cuts. */
   const [chartView, setChartView] = useState<ChartView>("bars");
+  /** The AOI detail for the picked window, or the rework paretos (handoff
+   *  3.7), which run on fiscal weeks and have their own selector. */
+  const [tab, setTab] = useState<"details" | "rework">("details");
+  const [reworkBusy, setReworkBusy] = useState(false);
+  const rework = tab === "rework";
 
   const { data, state, error } = useDpmoiDetail({
     item,
@@ -292,8 +298,8 @@ export const DpmoiDetailModal: React.FC<Props> = ({
   return (
     <DrilldownModalShell
       onClose={onClose}
-      busy={state === "loading"}
-      onBack={category !== null ? () => setCategory(null) : null}
+      busy={rework ? reworkBusy : state === "loading"}
+      onBack={!rework && category !== null ? () => setCategory(null) : null}
       maxWidth="max-w-[1250px]"
       header={
         <>
@@ -345,17 +351,38 @@ export const DpmoiDetailModal: React.FC<Props> = ({
         // the sort of clutter this pass exists to remove. Escape still steps out
         // of a category before it closes the modal, via onBack above.
         <>
+          <div className="flex items-center gap-1">
+            {([
+              ["details", "Details", "Category rates, cuts and the defect log for the picked dates"],
+              ["rework", "Rework", "NC code → component → ref_des by fiscal week or month"],
+            ] as const).map(([v, label, hint]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setTab(v)}
+                title={hint}
+                className={`border text-[10px] font-bold px-2.5 py-1 rounded uppercase transition-colors cursor-pointer ${
+                  tab === v
+                    ? "bg-tab-active text-white border-tab-border/50"
+                    : "bg-page text-ink-dim border-line hover:bg-line"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {/* Was a static date chip. The same control the dashboard header
               uses, so the range reads and behaves identically in both places —
               and with no range set it still shows the day the data is for,
               which is all the chip ever said. */}
-          {canPareto && (
+          {!rework && canPareto && (
             <ChartViewToggle
               value={view}
               onChange={setChartView}
               days={rangeDays}
             />
           )}
+          {!rework && (
           <DateRangeFilter
             value={modalRange}
             onChange={setModalRange}
@@ -365,9 +392,19 @@ export const DpmoiDetailModal: React.FC<Props> = ({
                 : (data?.business_date ?? businessDate ?? null)
             }
           />
+          )}
         </>
       }
     >
+      {rework ? (
+        <DpmoiReworkPane
+          item={item}
+          // "" is how the breakdown hands over a row that covers both sides.
+          operation={operation || null}
+          onBusyChange={setReworkBusy}
+        />
+      ) : (
+      <>
       {state === "loading" && !data && (
         <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
           Loading DPMOI detail…
@@ -715,6 +752,8 @@ export const DpmoiDetailModal: React.FC<Props> = ({
             </span>
           </div>
         </>
+      )}
+      </>
       )}
     </DrilldownModalShell>
   );
