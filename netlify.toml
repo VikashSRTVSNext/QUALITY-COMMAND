@@ -1,0 +1,23 @@
+[build]
+  command = "npm run build:demo"
+  publish = "dist-demo"
+
+[build.environment]
+  NODE_VERSION = "22"
+  VITE_BASE_PATH = "/"
+
+# Existing static files take precedence; missing ones must not serve the SPA.
+[[redirects]]
+  from = "/assets/*"
+  to = "/not-found.txt"
+  status = 404
+
+[[redirects]]
+  from = "/demo-data/*"
+  to = "/not-found.txt"
+  status = 404
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

@@ -1,3 +1,19 @@
+## Deploy the standalone demo on Netlify
+
+Deploy branch `demo/nokia` with the repository root as the base directory.
+`netlify.toml` configures `npm run build:demo`, publish directory `dist-demo`,
+and `VITE_BASE_PATH=/`. Netlify serves the app at the site root; Docker continues
+to use `/factory-command-center/`. Netlify does not use the Dockerfile.
+
+After pushing these settings, trigger a new deploy. Do not publish `dist/` or
+reuse a Docker-path build: its JavaScript and CSS URLs have the wrong prefix
+for Netlify. For a manual upload, build with `VITE_BASE_PATH=/` and upload
+`dist-demo/`; the repository-based deployment is recommended because it also
+applies the redirects in `netlify.toml`.
+
+App routes fall back to `index.html`; missing assets and demo fixtures return
+404 instead of the app shell.
+
 ## Run the standalone demo with Docker and Nginx
 
 ```bash
