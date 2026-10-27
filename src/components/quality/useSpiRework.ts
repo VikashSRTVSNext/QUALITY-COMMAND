@@ -124,7 +124,9 @@ export const useSpiComponentPareto = (
 
 // ── DPMOI (3.7): NC code → component → ref_des ─────────────────────────────
 
-const dpmoiBase = (item: string) => `/rework/dpmoi/products/${encodeURIComponent(item)}/pareto`;
+/** Product root. The paretos sit under `pareto/`; the weekly trend does not. */
+const dpmoiItem = (item: string) => `/rework/dpmoi/products/${encodeURIComponent(item)}`;
+const dpmoiBase = (item: string) => `${dpmoiItem(item)}/pareto`;
 
 export const useDpmoiNcPareto = (
   item: string,
@@ -210,6 +212,6 @@ export const useDpmoiNcTrend = (
   top: number,
 ) =>
   useParetoFetch<DpmoiNcTrendResponse>(
-    chainUrl(`${dpmoiBase(item)}/trend/nc`, scope, top, { operation }),
+    chainUrl(`${dpmoiItem(item)}/trend/nc`, scope, top, { operation }),
     "DPMOI NC trend",
   );
