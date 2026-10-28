@@ -82,6 +82,9 @@ export type FailureIdParetoRow = {
   cum_pct: number;
   /** "Others" only. */
   folded_ids?: string[];
+  /** A grouped row only (2026-10-28): the raw ids that differ from
+   *  `failure_id` only by numbers or hex addresses. Absent on an exact id. */
+  variants?: string[];
 };
 
 export type FailureIdParetoResponse = Envelope & {
@@ -304,4 +307,55 @@ export const useCategoryTrend = (
     );
   }
   return useParetoFetch<CategoryTrendResponse>(url, "category trend");
+};
+
+// ── Part 3.8: weekly yield trend ─────────────────────────────────────────────
+
+export type YieldTrendBucket = {
+  /** "WK39". */
+  label: string;
+  from: string;
+  to: string;
+  in_future: boolean;
+  tested: number;
+  failed: number;
+  passed: number;
+  /** null for a week with nothing tested — a gap in the line, not 0%. */
+  fpy_pct: number | null;
+  /** null with no target or nothing tested. */
+  below_target: boolean | null;
+};
+
+export type YieldTrendResponse = Envelope & {
+  bucket: "week";
+  metric: "fpy";
+  /** null when the item has no target: no target line. */
+  target_yield_pct: number | null;
+  buckets: YieldTrendBucket[];
+  totals: {
+    tested: number;
+    failed: number;
+    passed: number;
+    fpy_pct: number | null;
+    below_target: boolean | null;
+  };
+};
+
+/**
+ * Tested / failed / FPY per fiscal week. Same scope and the same buckets as
+ * the category trend, so the two charts line up; idles on `day` (a 400).
+ */
+export const useYieldTrend = (
+  level: YieldRequestLevel | null,
+  item: string | null,
+  scope: ReworkScope,
+) => {
+  let url: string | null = null;
+  if (level && item && scope.granularity !== "day") {
+    url = apiUrl(
+      `/rework/${encodeURIComponent(level)}/products/` +
+        `${encodeURIComponent(item)}/trend/yield?${scopeParams(scope)}`,
+    );
+  }
+  return useParetoFetch<YieldTrendResponse>(url, "yield trend");
 };

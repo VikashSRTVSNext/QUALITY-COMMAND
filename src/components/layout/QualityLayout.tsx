@@ -24,6 +24,7 @@ import {
   comparisonLabel,
   isFilteredScope,
   isRangeActive,
+  shortDay,
   type DateRange,
 } from "../quality/dashboardFilters";
 import {
@@ -81,6 +82,11 @@ interface EriData {
   target_pct: number | null;
   status: string;
 }
+
+// A daily trend point's x / hover text (2026-10-28): the server's `label`
+// ("27 Oct"), or its business_date shortened on a backend that predates it.
+const dayLabel = (d: { label?: string | null; business_date?: string | null }) =>
+  d.label || (d.business_date ? shortDay(d.business_date) : null);
 
 // Inline SVG icons for the few tiles lucide-react has no equivalent for.
 const ScrewIcon = ({
@@ -1667,6 +1673,11 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         const points = kpis.by_date?.length
           ? kpis.by_date.map((d) => (isNum(d[key]) ? (d[key] as number) : null))
           : card.points;
+        // The day each point is, for the hover ("27 Oct · 93.3"). The server's
+        // `label` when it sends one, else its business_date shortened.
+        const pointLabels = kpis.by_date?.length
+          ? kpis.by_date.map((d) => dayLabel(d))
+          : undefined;
 
         return {
           ...card,
@@ -1675,6 +1686,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             ? `${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(1)}% ${label}`
             : label,
           points,
+          pointLabels,
           // No equivalent series on the range source, and leaving the
           // current-day comparison line in place would plot yesterday against a
           // fortnight.
@@ -1736,6 +1748,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               buckets: rangeBlock.by_date.map((d: any, i: number) => ({
                 index: i,
                 label: d.business_date,
+                pointLabel: dayLabel(d),
                 shift: shiftLetter ?? undefined,
                 value: d.value,
               })),
@@ -2090,6 +2103,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           item={kpiItem}
           title={title}
           bucketLabel={kpiFiltered ? "day" : "hr"}
+          // Only under a filter: a live card's points are hours, and a label
+          // left over from a filtered render would name the wrong thing.
+          pointLabels={
+            kpiFiltered
+              ? (kpiItem as { pointLabels?: (string | null)[] }).pointLabels
+              : undefined
+          }
           lineFiltered={linesActive}
         />
       );
@@ -2280,6 +2300,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           <ProductFilter
             options={filterOptions.products}
             productNames={filterOptions.productNames}
+            productLevels={filterOptions.productLevels}
             optionsState={filterOptions.state}
             value={selectedProducts}
             onChange={setSelectedProducts}

@@ -23,6 +23,7 @@ import {
   compareLines,
   isRangeActive,
   optionVolume,
+  PRODUCT_LEVELS,
   rangeError,
   type DateRange,
   type KpiResponse,
@@ -333,6 +334,7 @@ export const useProcessFilterOptions = (range: DateRange) => {
             item: p.item,
             product: p.product,
             label: p.label,
+            product_level: p.product_level,
             done: vol,
           });
         }
@@ -357,6 +359,7 @@ export const useProcessFilterOptions = (range: DateRange) => {
     return {
       products,
       productNames,
+      productLevels: last?.product_levels?.length ? last.product_levels : PRODUCT_LEVELS,
       lines,
       lineSteps,
       kpiProducts: steps.KPI?.products ?? [],

@@ -3,11 +3,14 @@ import ServerParetoChart from "../charts/ServerParetoChart.lazy";
 import type { ServerParetoBar } from "../charts/ServerParetoChart";
 import StackedBarChart from "../charts/StackedBarChart.lazy";
 import type { BarCategory, BarSeries } from "../charts/StackedBarChart";
+import YieldTrendChart from "../charts/YieldTrendChart.lazy";
+import type { YieldTrendPoint } from "../charts/YieldTrendChart";
 import {
   REWORK_CATEGORY_COLORS,
   REWORK_PARETO_COLORS,
   REWORK_UNKNOWN_CATEGORY,
   REWORK_SURFACE,
+  REWORK_YIELD_COLORS,
 } from "./reworkPalette";
 import { shortDay, type YieldRequestLevel } from "./dashboardFilters";
 import ReworkPeriodControls, {
@@ -17,10 +20,12 @@ import ReworkPeriodControls, {
 import {
   useCategoryTrend,
   useReworkParetos,
+  useYieldTrend,
   type CategoryParetoResponse,
   type CategoryTrendResponse,
   type FailureIdParetoResponse,
   type ReworkScope,
+  type YieldTrendResponse,
 } from "./useReworkParetos";
 
 const TOP_OPTIONS = [5, 10, 15, 20, 30, 50];
@@ -56,6 +61,19 @@ const trendChart = (
 const fmt = (n: number | null | undefined) =>
   typeof n === "number" ? n.toLocaleString("en-US") : "—";
 
+const yieldPoints = (data: YieldTrendResponse): YieldTrendPoint[] =>
+  data.buckets.map((b) => ({
+    key: b.from,
+    label: b.label,
+    range: `${shortDay(b.from)} – ${shortDay(b.to)}`,
+    passed: b.passed,
+    failed: b.failed,
+    tested: b.tested,
+    fpyPct: b.fpy_pct,
+    belowTarget: b.below_target,
+    future: b.in_future,
+  }));
+
 const categoryBars = (data: CategoryParetoResponse): ServerParetoBar[] =>
   data.rows.map((r) => ({
     key: r.category,
@@ -89,6 +107,11 @@ const failureIdBars = (data: FailureIdParetoResponse): ServerParetoBar[] =>
           ? `${r.folded_ids.slice(0, 8).join(", ")}${r.folded_ids.length > 8 ? ` +${r.folded_ids.length - 8} more` : ""}`
           : null
         : r.sample_comment,
+      // A grouped bar (BIAS CHECKING XXXX DACX BXCHX) lists the raw ids it
+      // stands for; an exact id has no `variants`.
+      list: r.variants?.length
+        ? { title: `${r.variants.length} variants`, items: r.variants }
+        : null,
     };
   });
 
@@ -119,6 +142,7 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
 
   const { category, failureId } = useReworkParetos(level, item, scope, top, firstPassOnly);
   const trend = useCategoryTrend(level, item, scope);
+  const yieldTrend = useYieldTrend(level, item, scope);
 
   // The period both charts are on. Read from whichever answered last; they are
   // requested with the same scope, so they agree.
@@ -127,7 +151,8 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
   const loading =
     category.state === "loading" ||
     failureId.state === "loading" ||
-    trend.state === "loading";
+    trend.state === "loading" ||
+    yieldTrend.state === "loading";
   useEffect(() => {
     onBusyChange?.(loading);
   }, [loading, onBusyChange]);
@@ -156,6 +181,69 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
 
   const trendData = scope.granularity !== "day" ? trend.data : null;
   const trendView = trendData ? trendChart(trendData) : null;
+
+  const yieldData = scope.granularity !== "day" ? yieldTrend.data : null;
+  // 3.8 — beside the category trend, on the same weeks. Kept even with no
+  // failures: a clean week is a 100% FPY point worth seeing.
+  const yieldCard = scope.granularity !== "day" && (
+    <section className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+        <span className="text-[10px] font-black uppercase tracking-wider text-ink-dim">
+          Yield by fiscal week
+          {scope.granularity === "week" && period?.span_label && (
+            <span className="ml-1.5 normal-case font-bold text-ink-dim/80">· {period.span_label}</span>
+          )}
+        </span>
+        {yieldData && (
+          <span className="text-[10.5px] font-bold text-ink-muted">
+            {fmt(yieldData.totals.tested)} tested · {fmt(yieldData.totals.failed)} failed · FPY{" "}
+            <span
+              style={{
+                color: yieldData.totals.below_target ? REWORK_YIELD_COLORS.belowTarget : undefined,
+              }}
+              className={yieldData.totals.below_target ? "" : "text-white"}
+            >
+              {yieldData.totals.fpy_pct === null ? "—" : `${yieldData.totals.fpy_pct.toFixed(1)}%`}
+            </span>
+            {yieldData.target_yield_pct !== null && (
+              <span className="text-ink-dim"> / target {yieldData.target_yield_pct}%</span>
+            )}
+          </span>
+        )}
+      </div>
+      {yieldTrend.state === "error" ? (
+        <div className="py-10 text-center text-[11px] font-bold text-warning">{yieldTrend.error}</div>
+      ) : !yieldData ? (
+        <div className="py-16 text-center text-[11px] font-bold text-ink-dim">Loading yield trend…</div>
+      ) : yieldData.totals.tested === 0 ? (
+        <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
+          Nothing tested in this period.
+        </div>
+      ) : (
+        <>
+          <YieldTrendChart
+            points={yieldPoints(yieldData)}
+            targetPct={yieldData.target_yield_pct}
+            colors={REWORK_YIELD_COLORS}
+            height={260}
+          />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold text-ink-dim mt-2">
+            <LegendSwatch color={REWORK_YIELD_COLORS.passed} label="Passed" />
+            <LegendSwatch color={REWORK_YIELD_COLORS.failed} label="Failed" />
+            <LegendSwatch color={REWORK_YIELD_COLORS.fpy} label="FPY %" line />
+            {yieldData.target_yield_pct !== null && (
+              <LegendSwatch color={REWORK_YIELD_COLORS.target} label="Target" dashed />
+            )}
+            <LegendSwatch color={REWORK_YIELD_COLORS.belowTarget} label="Under target" dot />
+          </div>
+          <div className="text-[10px] text-ink-dim leading-snug mt-1">
+            FPY = (tested − failed) / tested for the week. A week with nothing
+            tested leaves a gap in the line.
+          </div>
+        </>
+      )}
+    </section>
+  );
 
   return (
     <div
@@ -189,9 +277,12 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
       )}
 
       {noFailures ? (
-        <div className="py-16 text-center text-[12px] font-bold text-ink-dim">
-          No failures in this period.
-        </div>
+        <>
+          <div className="py-10 text-center text-[12px] font-bold text-ink-dim">
+            No failures in this period.
+          </div>
+          {yieldCard}
+        </>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           {/* ---- defect category ---------------------------------------- */}
@@ -283,12 +374,12 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
             )}
           </section>
 
-          {/* ---- defect category trend (3.5) ----------------------------- */}
-          {/* Week and Month only: a single day has nothing to stack, and the
-              endpoint refuses it. Full width, under the paretos, because its
-              totals are the category pareto's for the same weeks. */}
+          {/* ---- yield trend (3.8) + defect category trend (3.5) ---------- */}
+          {/* Week and Month only: a single day has nothing to stack, and both
+              endpoints refuse it. Side by side, on the same weeks. */}
+          {yieldCard}
           {scope.granularity !== "day" && (
-            <section className="xl:col-span-2 border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
+            <section className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
               <div className="text-[10px] font-black uppercase tracking-wider text-ink-dim mb-1">
                 Defect category by fiscal week
                 {scope.granularity === "week" && period?.span_label && (
@@ -339,3 +430,31 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
 };
 
 export default ReworkAnalysisPane;
+
+const LegendSwatch = ({
+  color,
+  label,
+  line,
+  dashed,
+  dot,
+}: {
+  color: string;
+  label: string;
+  line?: boolean;
+  dashed?: boolean;
+  dot?: boolean;
+}) => (
+  <span className="inline-flex items-center gap-1.5">
+    {dot ? (
+      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+    ) : line || dashed ? (
+      <span
+        className="w-3.5 h-0 border-t-2"
+        style={{ borderColor: color, borderStyle: dashed ? "dashed" : "solid" }}
+      />
+    ) : (
+      <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: color }} />
+    )}
+    {label}
+  </span>
+);

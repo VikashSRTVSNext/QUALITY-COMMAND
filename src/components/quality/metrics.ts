@@ -54,7 +54,14 @@ export const getProcessTrendData = (trend: any, activeShift: string) => {
     }
   }
 
-  return { points, trendChange, trendDirection };
+  return {
+    points,
+    // Only the daily points built under a date filter carry one ("27 Oct");
+    // live hourly buckets leave it undefined and the tooltip says "hr".
+    labels: selected.map((b) => (b?.pointLabel as string | undefined) ?? null),
+    trendChange,
+    trendDirection,
+  };
 };
 
 // The amber band: how far past target still counts as a warning rather than

@@ -64,3 +64,16 @@ export const REWORK_PARETO_COLORS = {
   line: REWORK_CATEGORY_COLORS.SMT,
   cutoff: REWORK_CATEGORY_COLORS.SMT,
 } as const;
+
+/**
+ * The weekly yield trend (3.8): passed boards in the pareto's dimmed teal so
+ * failed stands out on top, FPY in sky, the target a pale dashed rule, and a
+ * week under target in red — the one colour the handoff names.
+ */
+export const REWORK_YIELD_COLORS = {
+  passed: "#0F766E",
+  failed: REWORK_CATEGORY_COLORS.MOD_REJ,
+  fpy: REWORK_CATEGORY_COLORS.PPH,
+  target: "#CBD5E1",
+  belowTarget: "#F87171",
+} as const;

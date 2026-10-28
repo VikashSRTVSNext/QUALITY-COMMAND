@@ -35,7 +35,7 @@ export const ProcessMetricCard = ({
   lineFiltered = false,
 }: ProcessMetricCardProps) => {
   const { color: cardColor, red: cardIsRed } = cardVerdict(item);
-  const { points } = getProcessTrendData(item.trend, activeShift);
+  const { points, labels } = getProcessTrendData(item.trend, activeShift);
 
   const plotPoints = points;
 
@@ -141,6 +141,7 @@ export const ProcessMetricCard = ({
       target={item.target}
       targetDirection={item.targetDirection}
       bucketLabel={bucketLabel}
+      pointLabels={labels}
     />
     )}
       </div>

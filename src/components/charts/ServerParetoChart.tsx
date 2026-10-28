@@ -31,6 +31,8 @@ export type ServerParetoBar = {
   details?: [string, string][];
   /** A sentence under the figures (a sample tester comment, say). */
   note?: string | null;
+  /** A titled list under the note, e.g. the raw ids a grouped bar stands for. */
+  list?: { title: string; items: string[]; max?: number } | null;
 };
 
 export type ServerParetoColors = {
@@ -112,6 +114,23 @@ export const ServerParetoChart = ({
         {b.note && (
           <div className="mt-1.5 pt-1.5 border-t border-line/60 text-[10px] text-ink-secondary leading-snug break-words">
             {b.note}
+          </div>
+        )}
+        {b.list && b.list.items.length > 0 && (
+          <div className="mt-1.5 pt-1.5 border-t border-line/60">
+            <div className="text-[9px] font-black uppercase tracking-wider text-ink-dim mb-0.5">
+              {b.list.title}
+            </div>
+            {b.list.items.slice(0, b.list.max ?? 10).map((s) => (
+              <div key={s} className="text-[10px] font-mono text-ink-secondary leading-snug break-words">
+                {s}
+              </div>
+            ))}
+            {b.list.items.length > (b.list.max ?? 10) && (
+              <div className="text-[10px] text-ink-dim mt-0.5">
+                +{b.list.items.length - (b.list.max ?? 10)} more
+              </div>
+            )}
           </div>
         )}
       </div>

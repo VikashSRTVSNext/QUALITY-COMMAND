@@ -314,13 +314,14 @@ export const AlertAckPage = () => {
   const [comment, setComment] = useState("");
   const [cause, setCause] = useState("");
   const [snoozeUntil, setSnoozeUntil] = useState("");
-  // Both fields are required for both buttons; the server refuses a blank one
-  // anyway, and finding that out costs a round trip on a phone.
+  // Both fields are required; the server refuses a blank one anyway, and
+  // finding that out costs a round trip on a phone.
   const canSubmit = !!comment.trim() && !!cause.trim() && !submitting;
 
-  const send = (action: "ack" | "resolve") => {
+  // Resolve is the only reply the page offers; "acknowledge only" was removed.
+  const send = () => {
     if (!canSubmit) return;
-    submit({ action, comment, cause, snoozeUntil: snoozeUntil || undefined });
+    submit({ action: "resolve", comment, cause, snoozeUntil: snoozeUntil || undefined });
   };
 
   const nextReminderIn = useMemo(
@@ -446,7 +447,7 @@ export const AlertAckPage = () => {
             className={`${CARD} flex flex-col gap-3`}
             onSubmit={(e) => {
               e.preventDefault();
-              send("resolve");
+              send();
             }}
           >
             {/* Cause first: naming what went wrong comes before describing
@@ -551,14 +552,6 @@ export const AlertAckPage = () => {
               className="w-full rounded-lg bg-info px-4 py-3.5 text-[14px] font-black text-white transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {submitting ? "Recording…" : "Acknowledge & resolve"}
-            </button>
-            <button
-              type="button"
-              disabled={!canSubmit}
-              onClick={() => send("ack")}
-              className="w-full rounded-lg border border-line-strong bg-panel px-4 py-3 text-[13px] font-bold text-ink-muted hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Acknowledge only
             </button>
 
             <p className="text-[11px] text-ink-dim text-center leading-relaxed">

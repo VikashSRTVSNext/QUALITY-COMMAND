@@ -18,14 +18,18 @@ export const TileSparkline = ({
   target,
   targetDirection,
   bucketLabel = "hr",
+  pointLabels,
 }: {
   points: (number | null)[];
   type: string;
   color: string;
   target?: number | null;
   targetDirection?: string | null;
-  /** What one point is. "hr" live, "day" over a range. */
+  /** What one point is. "hr" live, "day" over a range. The fallback when a
+   *  point has no label of its own. */
   bucketLabel?: string;
+  /** One per point, index-aligned: the day each daily point is ("27 Oct"). */
+  pointLabels?: (string | null | undefined)[];
 }) => {
   const width = 100;
   const height = 24;
@@ -117,6 +121,8 @@ export const TileSparkline = ({
         : hovered - target
       : null;
 
+  const pointLabel = hoverIdx !== null ? pointLabels?.[hoverIdx] : null;
+
   return (
     <div className="relative w-full h-full">
       <svg
@@ -184,9 +190,15 @@ export const TileSparkline = ({
             transform: "translateX(-50%)",
           }}
         >
-          <span className="text-ink-muted text-[8.5px] font-bold uppercase mr-1">
-            {bucketLabel}
-          </span>
+          {pointLabel ? (
+            <span className="text-ink-muted text-[8.5px] font-bold mr-1">
+              {pointLabel} ·
+            </span>
+          ) : (
+            <span className="text-ink-muted text-[8.5px] font-bold uppercase mr-1">
+              {bucketLabel}
+            </span>
+          )}
           <span className="text-white text-[9.5px] font-mono font-bold">
             {hovered.toFixed(2)}
             {type === "dpmo" ? "" : "%"}

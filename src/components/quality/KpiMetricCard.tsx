@@ -10,6 +10,8 @@ interface KpiMetricCardProps {
   title: string;
   /** What one trend point is: "hr" live, "day" under a date range. */
   bucketLabel?: string;
+  /** Under a date range: the day of each point ("27 Oct"), for the tooltip. */
+  pointLabels?: (string | null)[];
   /** Set while a line filter is on: these four are not line cards, so they
    *  grey out rather than imply the line narrowed them. */
   lineFiltered?: boolean;
@@ -32,6 +34,7 @@ export const KpiMetricCard = ({
   item,
   title,
   bucketLabel,
+  pointLabels,
   lineFiltered = false,
 }: KpiMetricCardProps) => {
   const target = (item as any).target as number | null | undefined;
@@ -95,6 +98,7 @@ export const KpiMetricCard = ({
             // target the same way a process yield tile does.
             type="yield"
             bucketLabel={bucketLabel}
+            pointLabels={pointLabels}
             color={trendColor}
             target={target}
             targetDirection="higher"

@@ -363,7 +363,7 @@ export interface KpiResponse {
   };
   totals: KpiTotals;
   by_shift: (Partial<KpiTotals> & { shift: string })[];
-  by_date: (Partial<KpiTotals> & { business_date: string })[];
+  by_date: (Partial<KpiTotals> & { business_date: string; label?: string })[];
   /** Equal-length window immediately before the requested one. */
   previous: {
     from: string;
@@ -403,6 +403,8 @@ export interface ProductOption {
   done?: number | null;
   /** KPI entry only: which KPI cards this product moves. */
   level?: "unit" | "module" | "both";
+  /** process-filter-options only: the Product Yield tab this code is on. */
+  product_level?: string | null;
 }
 
 /** Volume of an option, whichever endpoint it came from. */
@@ -424,6 +426,8 @@ export interface ProcessFilterOptions {
    *  under it. Sending the name as ?product= moves all of them at once.
    *  Absent on backends older than 2026-10-22. */
   product_names?: ProductNameOption[];
+  /** Group order for product_names[].levels. */
+  product_levels?: ProductLevel[];
   /** One entry per Process Performance card, keyed by step, plus "KPI" for the
    *  four FPY/SPY cards. */
   steps: Record<string, ProcessFilterStep>;
@@ -435,8 +439,16 @@ export interface ProductNameOption {
   /** The value sent back as ?product=. */
   product: string;
   items: string[];
+  /** The same codes as `items`, split by Product Yield tab (2026-10-28).
+   *  Every key present, a group may be []. Absent on older backends. */
+  levels?: Partial<Record<ProductLevel, string[]>>;
   done?: number | null;
 }
+
+export type ProductLevel = "UNIT" | "TRX" | "PA";
+
+/** The order the groups are shown in when the response omits product_levels. */
+export const PRODUCT_LEVELS: ProductLevel[] = ["UNIT", "TRX", "PA"];
 
 export interface ProductsResponse {
   range: { from: string; to: string; days: number };
