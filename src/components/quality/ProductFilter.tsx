@@ -101,65 +101,51 @@ export const ProductFilter = ({
     if (kept.length !== value.length) onChange(kept);
   }, [options, productNames, optionsState]);
 
-  const optionByItem = useMemo(
-    () => new Map(options.map((o) => [o.item, o])),
-    [options],
-  );
-
-  const codeMatches = (code: string, level: string) => {
-    const o = optionByItem.get(code);
-    return matchesSearch(search, [code, level, o?.label, o?.sub_module]);
-  };
-
-  /**
-   * Each name with its codes grouped Unit / TRX / PA (2026-10-28). A search hit
-   * on the name keeps every code; otherwise only the codes that match stay, so
-   * typing a code finds it under its product. Backends without `levels` get no
-   * groups and the name row alone, as before.
-   */
   const filteredNames = useMemo(
-    () =>
-      productNames.flatMap((n) => {
-        const nameHit = matchesSearch(search, [n.product]);
-        const groups = n.levels
-          ? productLevels
-              .map((level) => ({
-                level,
-                codes: (n.levels?.[level] ?? []).filter(
-                  (code) => nameHit || codeMatches(code, level),
-                ),
-              }))
-              .filter((g) => g.codes.length > 0)
-          : [];
-        const hit = n.levels
-          ? nameHit || groups.length > 0
-          : matchesSearch(search, [n.product, ...(n.items ?? [])]);
-        return hit ? [{ name: n, groups }] : [];
-      }),
-    // codeMatches only reads optionByItem and search.
-    [productNames, productLevels, search, optionByItem],
+    () => productNames.filter((n) => matchesSearch(search, [n.product, ...(n.items ?? [])])),
+    [productNames, search],
   );
 
-  // Codes already listed under a name are not repeated in the flat list.
-  const groupedCodes = useMemo(
-    () =>
-      new Set(
-        productNames.flatMap((n) =>
-          n.levels ? Object.values(n.levels).flatMap((c) => c ?? []) : [],
-        ),
-      ),
-    [productNames],
-  );
+  // code -> UNIT / TRX / PA, from the names' `levels` (2026-10-28), for an
+  // option that does not carry `product_level` itself.
+  const levelByCode = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of productNames) {
+      for (const [level, codes] of Object.entries(n.levels ?? {})) {
+        for (const code of codes ?? []) m.set(code, level);
+      }
+    }
+    return m;
+  }, [productNames]);
+
+  const levelOf = (o: ProductOption): string | null => {
+    const l = (o.product_level ?? levelByCode.get(o.item) ?? "").toUpperCase();
+    return (productLevels as string[]).includes(l) ? l : null;
+  };
 
   const filtered = useMemo(
     () =>
-      options.filter(
-        (o) =>
-          !groupedCodes.has(o.item) &&
-          matchesSearch(search, [o.product, o.item, o.label, o.sub_module]),
+      options.filter((o) =>
+        matchesSearch(search, [o.product, o.item, o.label, o.sub_module, levelOf(o)]),
       ),
-    [options, search, groupedCodes],
+    // levelOf only reads levelByCode and productLevels.
+    [options, search, levelByCode, productLevels],
   );
+
+  /**
+   * The item-code list split Unit / TRX / PA, in the response's order, with
+   * anything of no known level last under "Other". Volume order is kept
+   * inside each group. A list where no code has a level (the yield panel's
+   * own pill) renders as one unheaded group, as it always did.
+   */
+  const levelGroups = useMemo(() => {
+    const groups = [...productLevels, null].map((level) => ({
+      level,
+      items: filtered.filter((o) => levelOf(o) === level),
+    }));
+    return groups.filter((g) => g.items.length > 0);
+  }, [filtered, levelByCode, productLevels]);
+  const showLevelHeads = levelGroups.some((g) => g.level !== null);
 
   const selectedSet = useMemo(() => new Set(value), [value]);
 
@@ -293,11 +279,11 @@ export const ProductFilter = ({
                     Product names · every item
                   </div>
                 )}
-                {filteredNames.map(({ name: n, groups }) => {
+                {filteredNames.map((n) => {
                   const on = selectedSet.has(n.product);
                   return (
-                    <div key={`name:${n.product}`}>
                     <div
+                      key={`name:${n.product}`}
                       onClick={() => toggle(n.product)}
                       title={n.items.join(", ")}
                       className={`flex items-center gap-2 px-2 py-1.5 cursor-pointer transition-colors ${
@@ -317,62 +303,28 @@ export const ProductFilter = ({
                       <span className="flex flex-col min-w-0 flex-1">
                         <span className="text-[11px] font-bold truncate">{n.product}</span>
                         <span className="text-[9px] text-ink-dim truncate">
-                          {n.levels
-                            ? `All ${n.items.length} item${n.items.length === 1 ? "" : "s"}`
-                            : `${n.items.length} item${n.items.length === 1 ? "" : "s"} · ${n.items.join(", ")}`}
+                          {n.items.length} item{n.items.length === 1 ? "" : "s"} · {n.items.join(", ")}
                         </span>
                       </span>
                       <span className="text-[9px] text-ink-dim tabular-nums flex-shrink-0">
                         {isNum(n.done) ? n.done.toLocaleString("en-US") : "—"}
                       </span>
                     </div>
-                    {/* One code here sends ?product=<code>, that code only. */}
-                    {groups.map((g) => (
-                      <div key={g.level} className="pl-6">
-                        <div className="px-2 pt-1 text-[8.5px] font-black uppercase tracking-wider text-ink-dim/80">
-                          {g.level === "UNIT" ? "Unit" : g.level}
-                        </div>
-                        {g.codes.map((code) => {
-                          const codeOn = selectedSet.has(code);
-                          const o = optionByItem.get(code);
-                          const volume = o ? optionVolume(o) : null;
-                          return (
-                            <div
-                              key={code}
-                              onClick={() => toggle(code)}
-                              className={`flex items-center gap-2 px-2 py-1 cursor-pointer transition-colors ${
-                                codeOn
-                                  ? "bg-line text-white"
-                                  : "text-ink-muted hover:bg-tab-active hover:text-white"
-                              }`}
-                            >
-                              <span
-                                className={`w-3 h-3 rounded-sm border flex items-center justify-center flex-shrink-0 ${
-                                  codeOn ? "border-line-strong bg-tab-active" : "border-line"
-                                }`}
-                              >
-                                {codeOn && <Check size={9} className="text-white" />}
-                              </span>
-                              <span className="text-[10.5px] font-mono font-bold truncate flex-1 min-w-0">
-                                {code}
-                              </span>
-                              <span className="text-[9px] text-ink-dim tabular-nums flex-shrink-0">
-                                {isNum(volume) ? volume.toLocaleString("en-US") : ""}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
-                    </div>
                   );
                 })}
                 {filteredNames.length > 0 && filtered.length > 0 && (
                   <div className="px-2 pt-2 pb-0.5 text-[9px] font-black uppercase tracking-wider text-ink-dim border-t border-line/60 mt-1">
-                    {groupedCodes.size > 0 ? "Other item codes" : "Item codes"}
+                    Other item codes
                   </div>
                 )}
-                {filtered.map((o) => {
+                {levelGroups.map((g) => (
+                  <div key={g.level ?? "other"}>
+                  {showLevelHeads && (
+                    <div className="px-2 pt-1.5 pb-0.5 text-[8.5px] font-black uppercase tracking-wider text-info/80">
+                      {g.level === null ? "Other" : g.level === "UNIT" ? "Unit" : g.level}
+                    </div>
+                  )}
+                {g.items.map((o) => {
                   const on = selectedSet.has(o.item);
                   const volume = optionVolume(o);
                   return (
@@ -409,6 +361,8 @@ export const ProductFilter = ({
                     </div>
                   );
                 })}
+                  </div>
+                ))}
                 </>
               )}
             </div>
