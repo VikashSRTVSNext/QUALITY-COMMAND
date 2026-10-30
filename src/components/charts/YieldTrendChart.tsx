@@ -3,6 +3,7 @@ import {
   CartesianGrid,
   Cell,
   ComposedChart,
+  LabelList,
   Line,
   ReferenceLine,
   ResponsiveContainer,
@@ -172,6 +173,41 @@ export const YieldTrendChart = ({
           {points.map((p) => (
             <Cell key={p.key} fillOpacity={p.future ? 0.3 : 0.9} />
           ))}
+          {/* The week's FPY written inside its bar, so the attained figure is
+              read without tracing the line to the right-hand axis. Skipped on a
+              bar too short to hold it, and on a week with nothing tested. */}
+          <LabelList
+            dataKey="fpyPct"
+            content={(props: any) => {
+              const { x, y, width, height, value } = props;
+              if (
+                typeof value !== "number" ||
+                typeof x !== "number" ||
+                typeof y !== "number" ||
+                typeof width !== "number" ||
+                typeof height !== "number" ||
+                height < 16 ||
+                width < 22
+              ) {
+                return null;
+              }
+              // From the value, not points[index]: Recharts drops zero-height
+              // rects before numbering labels, so index can point at another week.
+              const below = targetPct !== null && value < targetPct;
+              return (
+                <text
+                  x={x + width / 2}
+                  y={y + 13}
+                  textAnchor="middle"
+                  fill={below ? colors.belowTarget : palette.white}
+                  fontSize={9.5}
+                  fontWeight={800}
+                >
+                  {`${value.toFixed(1)}%`}
+                </text>
+              );
+            }}
+          />
         </Bar>
         <Bar
           yAxisId="count"

@@ -153,6 +153,10 @@ export const StackedBarChart = ({
     return { rows, shown: head.length, folded: tail.length };
   }, [categories, series, maxCategories, maxLabelChars]);
   const anyDimmed = rows.some((r) => r.__dimmed);
+  // Short labels ("WK41", "P10") sit flat under their bar; only long ones need
+  // the angled tick and the 64px it reserves, which otherwise leaves a band of
+  // empty space under a week axis.
+  const flatTicks = rows.length <= 16 && rows.every((r) => r.label.length <= 7);
 
   if (rows.length === 0 || series.length === 0) {
     return (
@@ -227,7 +231,7 @@ export const StackedBarChart = ({
       <ResponsiveContainer width="100%" height={height}>
         <BarChart
           data={rows}
-          margin={{ top: 18, right: 8, bottom: 64, left: 8 }}
+          margin={{ top: 18, right: 8, bottom: flatTicks ? 0 : 64, left: 8 }}
           barCategoryGap="22%"
         >
           {/* Horizontal only, and dashed: the grid is for reading a value off
@@ -251,8 +255,8 @@ export const StackedBarChart = ({
                         x={x}
                         y={y + 4}
                         dy={8}
-                        textAnchor="end"
-                        transform={`rotate(-35, ${x}, ${y + 4})`}
+                        textAnchor={flatTicks ? "middle" : "end"}
+                        transform={flatTicks ? undefined : `rotate(-35, ${x}, ${y + 4})`}
                         fill={AXIS_TICK.fill}
                         fillOpacity={dim ? 0.45 : 1}
                         fontSize={AXIS_TICK.fontSize}
@@ -264,10 +268,10 @@ export const StackedBarChart = ({
                   }
                 : AXIS_TICK
             }
-            angle={anyDimmed ? undefined : -35}
-            textAnchor={anyDimmed ? undefined : "end"}
+            angle={anyDimmed || flatTicks ? undefined : -35}
+            textAnchor={anyDimmed || flatTicks ? undefined : "end"}
             interval={0}
-            height={64}
+            height={flatTicks ? 22 : 64}
             tickLine={false}
             axisLine={{ stroke: palette.line }}
           />
@@ -332,8 +336,11 @@ export const StackedBarChart = ({
             </Bar>
           ))}
           {/* The totals. Drawn by one invisible cap bar stacked last, not by
-              whichever series tops each bar: under Recharts 3 a label hung off a
-              lower series was dropped on some bars (WK41/43/44 showed none). The
+              whichever series tops each bar. Recharts 3 skips any zero-height
+              rect that has no custom shape (Bar.js: `width === 0 || height ===
+              0` → null), which dropped labels on bars whose top series was 0
+              and, before the shape below, every label on this 0-height cap.
+              The empty custom shape keeps the rect, so its label is drawn. The
               cap is in no tooltip or legend — both list `series` only. */}
           <Bar
             dataKey="__cap"
@@ -342,6 +349,7 @@ export const StackedBarChart = ({
             legendType="none"
             isAnimationActive={false}
             activeBar={false}
+            shape={() => <g />}
           >
             <LabelList
               dataKey="total"
