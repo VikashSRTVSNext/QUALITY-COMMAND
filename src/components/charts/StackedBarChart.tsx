@@ -122,12 +122,10 @@ export const StackedBarChart = ({
       hint: c.hint,
       __dimmed: Boolean(c.dimmed),
       total: series.reduce((acc, s) => acc + (c.values[s.key] ?? 0), 0),
-      // Which series ends up on top of THIS bar. Recharts stacks in series
-      // order, so it is the last one with a value — and it differs per bar,
-      // which is why the total cannot simply hang off the last <Bar>.
-      __topKey:
-        [...series].reverse().find((s) => (c.values[s.key] ?? 0) > 0)?.key ??
-        null,
+      // A zero-height cap stacked above every series. It is the one place the
+      // total is drawn, so every bar gets exactly one label at the top of its
+      // stack whichever series happens to end it.
+      __cap: 0,
       ...Object.fromEntries(series.map((s) => [s.key, c.values[s.key] ?? 0])),
     });
 
@@ -331,40 +329,47 @@ export const StackedBarChart = ({
                   }
                 />
               ))}
-              {/* Every Bar carries the label, and each one draws it only for
-                  the rows where IT is the topmost segment — so exactly one
-                  label lands on each bar, at the top of the stack. Hanging it
-                  off the last <Bar> instead silently skipped any bar whose
-                  last series happened to be zero. */}
-              <LabelList
-                dataKey="total"
-                content={(props: any) => {
-                  const { index, x, y, width, value } = props;
-                  if (
-                    typeof index !== "number" ||
-                    rows[index]?.__topKey !== s.key ||
-                    typeof x !== "number" ||
-                    typeof y !== "number" ||
-                    typeof width !== "number"
-                  ) {
-                    return null;
-                  }
-                  return (
-                    <text
-                      x={x + width / 2}
-                      y={y - 6}
-                      textAnchor="middle"
-                      fill={palette.inkMuted}
-                      fontSize={9.5}
-                      fontWeight={700}
-                    >
-                      {value}
-                    </text>
-                  );
-                }}
-              />
             </Bar>
           ))}
+          {/* The totals. Drawn by one invisible cap bar stacked last, not by
+              whichever series tops each bar: under Recharts 3 a label hung off a
+              lower series was dropped on some bars (WK41/43/44 showed none). The
+              cap is in no tooltip or legend — both list `series` only. */}
+          <Bar
+            dataKey="__cap"
+            stackId="stack"
+            fill="transparent"
+            legendType="none"
+            isAnimationActive={false}
+            activeBar={false}
+          >
+            <LabelList
+              dataKey="total"
+              content={(props: any) => {
+                const { x, y, width, value } = props;
+                if (
+                  typeof x !== "number" ||
+                  typeof y !== "number" ||
+                  typeof width !== "number" ||
+                  !value
+                ) {
+                  return null;
+                }
+                return (
+                  <text
+                    x={x + width / 2}
+                    y={y - 6}
+                    textAnchor="middle"
+                    fill={palette.inkMuted}
+                    fontSize={9.5}
+                    fontWeight={700}
+                  >
+                    {value}
+                  </text>
+                );
+              }}
+            />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
 

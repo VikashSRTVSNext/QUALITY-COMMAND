@@ -53,8 +53,8 @@ export type CategoryParetoRow = {
   category: string;
   label: string;
   units: number;
-  /** Of failed units. Can sum past 100 — a unit reworked under two causes
-   *  counts under both. */
+  /** Of failed units. Each unit is counted once (first disposition) since
+   *  2026-10-29, so these add up to at most 100. */
   pct_of_failed: number | null;
   share_pct: number;
   cum_pct: number;
@@ -72,11 +72,15 @@ export type CategoryParetoResponse = Envelope & {
 };
 
 export type FailureIdParetoRow = {
-  /** "(none)" when the tester recorded no parameter; "Others" for the fold. */
+  /** "(none)" when the board has no FAIL with a parameter; "Others" for the fold. */
   failure_id: string;
+  /** Equals `units` since 2026-10-29; kept for older callers. */
   events: number;
-  /** null on the "Others" row. */
+  /** Boards, each under the failure id of its first test FAIL. A real count
+   *  on "Others" too since 2026-10-29 (null before). */
   units: number | null;
+  /** Of the failed units. Absent on backends before 2026-10-29. */
+  pct_of_failed?: number | null;
   sample_comment: string | null;
   share_pct: number;
   cum_pct: number;
@@ -88,7 +92,8 @@ export type FailureIdParetoRow = {
 };
 
 export type FailureIdParetoResponse = Envelope & {
-  totals: { events: number; distinct_failure_ids: number };
+  /** failed_units equals the category pareto's (2026-10-29); absent before. */
+  totals: { events: number; distinct_failure_ids: number; failed_units?: number };
   rows: FailureIdParetoRow[];
 };
 
@@ -193,16 +198,17 @@ export const useParetoFetch = <T,>(url: string | null, label: string): ParetoQue
 /**
  * Both rework paretos for one product.
  *
- * Two URLs rather than one effect so `top` and `firstPassOnly`, which only the
- * failure-id endpoint takes, refetch that chart alone — the category pareto's
- * URL does not change, so it does not reload.
+ * Two URLs rather than one effect so `top`, which only the failure-id endpoint
+ * takes, refetches that chart alone — the category pareto's URL does not
+ * change, so it does not reload. `first_pass_only` is no longer sent: since
+ * 2026-10-29 every board is counted once, under its first FAIL, and the
+ * parameter has no effect.
  */
 export const useReworkParetos = (
   level: YieldRequestLevel | null,
   item: string | null,
   scope: ReworkScope,
   top: number,
-  firstPassOnly: boolean,
 ) => {
   let categoryUrl: string | null = null;
   let failureIdUrl: string | null = null;
@@ -215,7 +221,6 @@ export const useReworkParetos = (
 
     const fid = new URLSearchParams(common);
     fid.set("top", String(top));
-    if (firstPassOnly) fid.set("first_pass_only", "true");
 
     categoryUrl = apiUrl(`${base}/category?${common}`);
     failureIdUrl = apiUrl(`${base}/failure-id?${fid}`);
@@ -257,6 +262,8 @@ export type CategoryTrendBucket = {
   failed_units: number;
   dispositioned_units: number;
   awaiting_disposition: number;
+  /** Each unit in ONE category (its first disposition), so a bar is the
+   *  week's dispositioned_units. */
   by_category: Record<string, number>;
 };
 

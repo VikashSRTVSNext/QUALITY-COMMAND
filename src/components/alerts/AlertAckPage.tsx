@@ -105,9 +105,10 @@ const CARD =
 const LABEL =
   "text-[9.5px] font-black uppercase tracking-wider text-ink-dim";
 
-/** Said on both the form and the read-only screen, so it is written once. */
-const WATCH_NOTE =
-  "After a reply, the system watches this alert for 2 hours and closes it if no new defect occurs in that time.";
+/** Said on both the form and the read-only screen, so it is written once.
+ *  Hidden for now (both uses are commented out below); restore with them. */
+// const WATCH_NOTE =
+//   "After a reply, the system watches this alert for 2 hours and closes it if no new defect occurs in that time.";
 
 /** The page frame. Every screen sits in this, so the shell is written once. */
 const Frame = ({ children }: { children: React.ReactNode }) => (
@@ -424,12 +425,14 @@ export const AlertAckPage = () => {
           )}
           {/* Still being watched until it closes; once closed_at is set the
               note would describe something that has already happened. */}
+          {/* Watch note hidden for now.
           {!detail.closed_at && (
             <p className="flex items-start gap-1.5 text-[11px] text-ink-dim mt-4 leading-relaxed">
               <Clock size={12} className="flex-shrink-0 mt-0.5" />
               {WATCH_NOTE}
             </p>
           )}
+          */}
         </div>
       ) : (
         <>
@@ -554,9 +557,11 @@ export const AlertAckPage = () => {
               {submitting ? "Recording…" : "Acknowledge & resolve"}
             </button>
 
+            {/* Watch note hidden for now.
             <p className="text-[11px] text-ink-dim text-center leading-relaxed">
               {WATCH_NOTE}
             </p>
+            */}
             {/* deadline_at is the next REMINDER, not a closing time. */}
             {nextReminderIn && (
               <p className="flex items-center justify-center gap-1.5 text-[11px] text-ink-dim">

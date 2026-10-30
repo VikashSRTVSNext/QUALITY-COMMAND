@@ -213,7 +213,7 @@ const SmtStepPane = ({
   );
 };
 
-type SortKey = "name" | "tested" | "failed" | "fpy" | "target" | "status";
+type SortKey = "name" | "item" | "tested" | "failed" | "fpy" | "target" | "status";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -538,7 +538,7 @@ export const ProductYieldPanel = ({
         ) : (
           <>
         <div className="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar">
-          <table className="w-full min-w-[720px] text-left text-[12px] border-collapse relative">
+          <table className="w-full min-w-[800px] text-left text-[12px] border-collapse relative">
             <thead>
               <tr className="text-ink-dim font-bold text-[10px] uppercase">
                 <th className="pb-2 font-black pl-2 sticky top-0 bg-panel border-b border-line z-10">
@@ -547,6 +547,12 @@ export const ProductYieldPanel = ({
                 <SortableTh
                   column="name"
                   label="PRODUCT NAME"
+                  sort={sort}
+                  onSortChange={setSort}
+                />
+                <SortableTh
+                  column="item"
+                  label="ITEM CODE"
                   sort={sort}
                   onSortChange={setSort}
                 />
@@ -601,7 +607,7 @@ export const ProductYieldPanel = ({
               {pageRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={activeTab === "UNITS" ? 8 : 7}
+                    colSpan={activeTab === "UNITS" ? 9 : 8}
                     className="py-10 text-center font-sans text-[12px] font-bold tracking-wide"
                   >
                     {fetchState === "loading" ? (
@@ -664,6 +670,11 @@ export const ProductYieldPanel = ({
                     ) : (
                       row.name
                     )}
+                  </td>
+                  {/* The code the row is keyed on — one product name can
+                      have several (ARDC unit, TRX and PA codes). */}
+                  <td className="py-[2.5px] text-ink-secondary whitespace-nowrap">
+                    {row.item || "—"}
                   </td>
                   <td className="py-[2.5px] text-center text-white">
                     {row.tested}

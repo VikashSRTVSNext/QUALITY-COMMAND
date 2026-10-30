@@ -31,6 +31,7 @@ import {
   useProcessFilterOptions,
   useProductOptions,
   useRangeKpis,
+  useRangeHftpy,
   useRangeProcessPerformance,
   useRangeProductYield,
 } from "../quality/useDashboardFilters";
@@ -1025,6 +1026,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     active: kpiFiltered,
     refreshTick,
   });
+  // Plant-wide: a product selection blanks the card instead, so it is not
+  // asked for then.
+  const rangedHftpy = useRangeHftpy({
+    range: dateRange,
+    active: rangeActive && selectedProducts.length === 0,
+    refreshTick,
+  });
   const rangedProcess = useRangeProcessPerformance({
     range: dateRange,
     products: selectedProducts,
@@ -1598,18 +1606,36 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
     setKpiCards((prev) =>
       prev.map((card) => {
-        // UNIT-HFTPY is projection-against-plan for the whole plant on the
-        // current day; this endpoint has neither a range nor a per-product
-        // equivalent. Blanking it is the honest option: leaving the snapshot
-        // figure in place would put a plant number under a product chip, or a
-        // today number under a historical range.
+        // UNIT-HFTPY over a RANGE comes from /dashboard/hftpy/range
+        // (2026-10-30): products on target / products qualified. It is plant-
+        // wide, so under a product chip it stays blank — a plant number there
+        // would read as the product's. The fiscal-month projection has no range
+        // equivalent, so Proj shows "—".
         if (card.id === 9) {
-          return {
+          const blank = {
             ...card,
             value: "—",
             projectedValue: "—",
-            change: rangeActive ? "Current day only" : "n/a for a product",
             delta_vs_yesterday: 0,
+          };
+          if (productActive) return { ...blank, change: "n/a for a product" };
+          const h = rangedHftpy.data;
+          if (!h) {
+            return {
+              ...blank,
+              change:
+                rangedHftpy.state === "error"
+                  ? (rangedHftpy.error ?? "HFTPY unavailable")
+                  : "Loading…",
+            };
+          }
+          if (!isNum(h.hftpy_pct)) {
+            return { ...blank, change: "No product qualifies (≥50 passed)" };
+          }
+          return {
+            ...blank,
+            value: `${h.hftpy_pct.toFixed(1)}%`,
+            change: `${h.products_on_target} of ${h.products_qualified} products on target`,
           };
         }
 
@@ -1695,7 +1721,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         };
       }),
     );
-  }, [kpiFiltered, rangeActive, rangedKpis.data, selectedProducts.length]);
+  }, [
+    kpiFiltered,
+    rangeActive,
+    rangedKpis.data,
+    selectedProducts.length,
+    rangedHftpy.data,
+    rangedHftpy.state,
+    rangedHftpy.error,
+  ]);
 
   useEffect(() => {
     // One mapping, two sources. The ranged endpoint returns the same per-step

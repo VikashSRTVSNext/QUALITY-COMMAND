@@ -84,21 +84,26 @@ const categoryBars = (data: CategoryParetoResponse): ServerParetoBar[] =>
     details: [
       ["Units", fmt(r.units)],
       ["Of failed units", r.pct_of_failed === null ? "—" : `${r.pct_of_failed.toFixed(1)}%`],
-      ["Of assignments", `${r.share_pct.toFixed(1)}%`],
+      // assignments = dispositioned units since each unit has one category.
+      ["Of dispositioned", `${r.share_pct.toFixed(1)}%`],
     ],
   }));
 
 const failureIdBars = (data: FailureIdParetoResponse): ServerParetoBar[] =>
   data.rows.map((r) => {
     const others = r.failure_id === "Others";
-    const details: [string, string][] = [["Events", fmt(r.events)]];
-    // null on Others: its units are not distinct across the folded ids.
-    if (r.units !== null) details.push(["Units", fmt(r.units)]);
+    // Boards since 2026-10-29 (`events` equals it); an older backend sent a
+    // null `units` on Others, so fall back to events there.
+    const boards = r.units ?? r.events;
+    const details: [string, string][] = [["Units", fmt(boards)]];
+    if (typeof r.pct_of_failed === "number") {
+      details.push(["Of failed units", `${r.pct_of_failed.toFixed(1)}%`]);
+    }
     details.push(["Share", `${r.share_pct.toFixed(1)}%`]);
     return {
       key: r.failure_id,
       label: others && r.folded_ids?.length ? `Others (+${r.folded_ids.length} more)` : r.failure_id,
-      value: r.events,
+      value: boards,
       cumPct: r.cum_pct,
       muted: others || r.failure_id === "(none)",
       details,
@@ -138,9 +143,8 @@ type Props = {
 export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
   const [scope, setScope] = useState<ReworkScope>(DEFAULT_REWORK_SCOPE);
   const [top, setTop] = useState(5);
-  const [firstPassOnly, setFirstPassOnly] = useState(false);
 
-  const { category, failureId } = useReworkParetos(level, item, scope, top, firstPassOnly);
+  const { category, failureId } = useReworkParetos(level, item, scope, top);
   const trend = useCategoryTrend(level, item, scope);
   const yieldTrend = useYieldTrend(level, item, scope);
 
@@ -318,8 +322,8 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
               <>
                 <ServerParetoChart bars={categoryBars(category.data)} valueLabel="Units" labelChars={12} colors={REWORK_PARETO_COLORS} />
                 <div className="text-[10px] text-ink-dim leading-snug mt-1">
-                  A unit reworked under two causes counts under both, so % of failed
-                  units can add up past 100. The line is share of all assignments.
+                  Each failed unit is counted once, under the category of its first
+                  rework disposition. The line is the cumulative share.
                 </div>
               </>
             )}
@@ -332,15 +336,6 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                 Failure id
               </span>
               <div className="flex items-center gap-2">
-                <label className="flex items-center gap-1.5 text-[10px] font-bold text-ink-muted cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={firstPassOnly}
-                    onChange={(e) => setFirstPassOnly(e.target.checked)}
-                    className="accent-[#0091ff]"
-                  />
-                  First attempts only
-                </label>
                 <select
                   value={top}
                   onChange={(e) => setTop(Number(e.target.value))}
@@ -357,7 +352,7 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
             </div>
             {failureId.data && (
               <div className="text-[10.5px] font-bold text-ink-muted mb-1.5">
-                {fmt(failureId.data.totals.events)} failures across{" "}
+                {fmt(failureId.data.totals.failed_units ?? failureId.data.totals.events)} failed units across{" "}
                 {fmt(failureId.data.totals.distinct_failure_ids)} parameters
               </div>
             )}
@@ -370,7 +365,7 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                 No failure records
               </div>
             ) : (
-              <ServerParetoChart bars={failureIdBars(failureId.data)} valueLabel="Events" labelChars={14} colors={REWORK_PARETO_COLORS} />
+              <ServerParetoChart bars={failureIdBars(failureId.data)} valueLabel="Units" labelChars={14} colors={REWORK_PARETO_COLORS} />
             )}
           </section>
 
@@ -406,8 +401,8 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                   />
                   <div className="text-[10px] text-ink-dim leading-snug mt-2">
                     Units per rework category per fiscal week, biggest at the bottom.
-                    A unit reworked for two causes sits in both stacks, so a bar can
-                    stand taller than that week&apos;s failed units. The current week is
+                    Each unit sits in one stack (its first disposition), so a bar is
+                    that week&apos;s dispositioned units. The current week is
                     drawn while still in progress; a week with nothing stays on the
                     axis, empty.
                   </div>
