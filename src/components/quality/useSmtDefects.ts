@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
-import type { DateRange } from "./dashboardFilters";
+import { appendWindowParams, type DateRange } from "./dashboardFilters";
+import { readError } from "./useDashboardFilters";
 
 /** Every breakdown counts BOARDS and RECORDS separately, and they are not
  *  interchangeable: twenty bad joints on one board is one board with a print
@@ -140,8 +141,7 @@ export const useSmtDefects = (
         if (businessDate) params.set("business_date", businessDate);
         // Sent after the single day on purpose: the endpoint ignores
         // business_date once either of these is present, so a range always wins.
-        if (range?.from) params.set("date_from", range.from);
-        if (range?.to) params.set("date_to", range.to);
+        appendWindowParams(params, range);
         if (resource) params.set("resource", resource);
         // "category", not "nc" -- the route is shared with the MES steps and
         // takes their parameter name, even though the response echoes the value
@@ -157,7 +157,7 @@ export const useSmtDefects = (
               `${qs ? `?${qs}` : ""}`,
           ),
         );
-        if (!res.ok) throw new Error(`Failed to fetch SMT defects for ${item}`);
+        if (!res.ok) throw new Error(await readError(res));
 
         const json: SmtDefectsResponse = await res.json();
         if (cancelled) return;
@@ -167,7 +167,7 @@ export const useSmtDefects = (
       } catch (err) {
         if (cancelled) return;
         console.error(`Error fetching SMT defects for ${item}:`, err);
-        setError("Could not load the SMT defect log.");
+        setError(err instanceof Error && err.message ? err.message : "Could not load the SMT defect log.");
         setState("error");
       }
     };
@@ -185,6 +185,8 @@ export const useSmtDefects = (
     businessDate,
     range?.from,
     range?.to,
+    range?.timeFrom,
+    range?.timeTo,
     resource,
     nc,
     timesProcessed,

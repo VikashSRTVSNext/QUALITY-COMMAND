@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { apiUrl } from "../../core/api/config";
-import type { DateRange } from "./dashboardFilters";
+import { appendWindowParams, detailText, timeKeyOf, type DateRange } from "./dashboardFilters";
+import { readError } from "./useDashboardFilters";
 
 // Steps whose failures can be broken down to the NC log. Kept in step with the
 // backend's _REWORK_OPS map: a step's failures are only explainable when its
@@ -181,7 +182,7 @@ export const useProductDefects = (
   // tester's header is worse than showing nothing. Changing only a display
   // filter must NOT, or the plant's two toggles wipe the table on every click
   // and a slow day leaves it blank for a minute.
-  const scopeKey = `${step}|${item}|${businessDate}|${range?.from ?? ""}|${range?.to ?? ""}|${resource}|${category}`;
+  const scopeKey = `${step}|${item}|${businessDate}|${range?.from ?? ""}|${range?.to ?? ""}|${timeKeyOf(range)}|${resource}|${category}`;
   const lastScope = useRef(scopeKey);
 
   useEffect(() => {
@@ -197,8 +198,7 @@ export const useProductDefects = (
       try {
         const params = new URLSearchParams();
         if (businessDate) params.set("business_date", businessDate);
-        if (range?.from) params.set("date_from", range.from);
-        if (range?.to) params.set("date_to", range.to);
+        appendWindowParams(params, range);
         if (resource) params.set("resource", resource);
         if (category) params.set("category", category);
         if (timesProcessed != null)
@@ -218,11 +218,11 @@ export const useProductDefects = (
         if (res.status === 501) {
           if (cancelled) return;
           const body = await res.json().catch(() => null);
-          setError(body?.detail ?? `No defect breakdown available for ${step}.`);
+          setError(detailText(body, `No defect breakdown available for ${step}.`));
           setState("unsupported");
           return;
         }
-        if (!res.ok) throw new Error(`Failed to fetch ${step} defects for ${item}`);
+        if (!res.ok) throw new Error(await readError(res));
 
         const json: ProductDefectsResponse = await res.json();
         if (cancelled) return;
@@ -232,7 +232,7 @@ export const useProductDefects = (
       } catch (err) {
         if (cancelled) return;
         console.error(`Error fetching NC log for ${step}/${item}:`, err);
-        setError("Could not load the NC log.");
+        setError(err instanceof Error && err.message ? err.message : "Could not load the NC log.");
         setState("error");
       }
     };
@@ -257,6 +257,8 @@ export const useProductDefects = (
     businessDate,
     range?.from,
     range?.to,
+    range?.timeFrom,
+    range?.timeTo,
     resource,
     category,
     timesProcessed,

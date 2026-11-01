@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
-import type { YieldRequestLevel } from "./dashboardFilters";
+import { detailText, type YieldRequestLevel } from "./dashboardFilters";
 
 // The two rework paretos behind a Product Yield row, per the 2026-10-22
 // handoff (frontend_filters_and_shift_report.md, Part 3).
@@ -25,6 +25,8 @@ export type ReworkPeriod = {
   /** Week only: every fiscal week in the span, oldest first. Can straddle a
    *  year end (WK50–WK02); fiscal_year tells them apart. */
   weeks?: { label: string; fiscal_year: number | null; from: string; to: string }[];
+  /** Day range only (2026-10-31): every day of the range, oldest first. */
+  days?: string[];
   /** The whole span: the first week's first day to the last week's last. */
   from: string;
   to: string;
@@ -118,8 +120,26 @@ export type ReworkScope = {
    *  refuses both with different values. */
   weekFrom: string | null;
   weekTo: string | null;
+  /** Day only, and only together (2026-10-31): a calendar date range, at most
+   *  31 days. Sent as date_from / date_to INSTEAD of `anchor`; the paretos
+   *  cover the whole range and the two trends give one bar per day. */
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  /** Day range only (2026-11-01): a time window on the :15, making the range
+   *  one continuous block (dateFrom timeFrom → dateTo timeTo). A week or
+   *  month with times is a 400, so they are never sent there. */
+  timeFrom?: string | null;
+  timeTo?: string | null;
   shift: "A" | "B" | "C" | null;
 };
+
+/** True when the scope is a Day range, which the trend charts can draw. */
+export const isDayRange = (scope: ReworkScope): boolean =>
+  scope.granularity === "day" && Boolean(scope.dateFrom && scope.dateTo);
+
+/** The trend endpoints refuse a bare `day`; a Day RANGE they draw per day. */
+export const trendsAvailable = (scope: ReworkScope): boolean =>
+  scope.granularity !== "day" || isDayRange(scope);
 
 /**
  * The parameters every rework endpoint shares, built in one place so the two
@@ -131,6 +151,11 @@ export const scopeParams = (scope: ReworkScope): URLSearchParams => {
   if (scope.granularity === "week" && scope.weekFrom && scope.weekTo) {
     q.set("week_from", scope.weekFrom);
     q.set("week_to", scope.weekTo);
+  } else if (isDayRange(scope)) {
+    q.set("date_from", scope.dateFrom as string);
+    q.set("date_to", scope.dateTo as string);
+    if (scope.timeFrom) q.set("time_from", scope.timeFrom);
+    if (scope.timeTo) q.set("time_to", scope.timeTo);
   } else if (scope.anchor) {
     q.set("anchor", scope.anchor);
   }
@@ -167,10 +192,7 @@ export const useParetoFetch = <T,>(url: string | null, label: string): ParetoQue
             ...q,
             state: "error",
             status: res.status,
-            error:
-              typeof body?.detail === "string"
-                ? body.detail
-                : `Could not load the ${label} pareto (HTTP ${res.status}).`,
+            error: detailText(body, `Could not load the ${label} pareto (HTTP ${res.status}).`),
           }));
           return;
         }
@@ -297,8 +319,8 @@ export const useReworkPeriods = (granularity: ReworkGranularity) =>
 
 /**
  * Defect categories stacked per fiscal week — the weeks of the span on Week,
- * the weeks of the period on Month. Same scope as the paretos; idles on `day`,
- * which the endpoint refuses (one day has nothing to stack).
+ * the weeks of the period on Month, the days of a Day range. Same scope as
+ * the paretos; idles on a bare `day` (no range), which the endpoint refuses.
  */
 export const useCategoryTrend = (
   level: YieldRequestLevel | null,
@@ -306,7 +328,7 @@ export const useCategoryTrend = (
   scope: ReworkScope,
 ) => {
   let url: string | null = null;
-  if (level && item && scope.granularity !== "day") {
+  if (level && item && trendsAvailable(scope)) {
     const q = scopeParams(scope);
     url = apiUrl(
       `/rework/${encodeURIComponent(level)}/products/` +
@@ -334,7 +356,8 @@ export type YieldTrendBucket = {
 };
 
 export type YieldTrendResponse = Envelope & {
-  bucket: "week";
+  /** "day" on a Day range (one bar per day, label "27 Oct"). */
+  bucket: "week" | "day";
   metric: "fpy";
   /** null when the item has no target: no target line. */
   target_yield_pct: number | null;
@@ -350,7 +373,8 @@ export type YieldTrendResponse = Envelope & {
 
 /**
  * Tested / failed / FPY per fiscal week. Same scope and the same buckets as
- * the category trend, so the two charts line up; idles on `day` (a 400).
+ * the category trend, so the two charts line up; per day on a Day range, idle
+ * on a bare `day` (a 400).
  */
 export const useYieldTrend = (
   level: YieldRequestLevel | null,
@@ -358,7 +382,7 @@ export const useYieldTrend = (
   scope: ReworkScope,
 ) => {
   let url: string | null = null;
-  if (level && item && scope.granularity !== "day") {
+  if (level && item && trendsAvailable(scope)) {
     url = apiUrl(
       `/rework/${encodeURIComponent(level)}/products/` +
         `${encodeURIComponent(item)}/trend/yield?${scopeParams(scope)}`,

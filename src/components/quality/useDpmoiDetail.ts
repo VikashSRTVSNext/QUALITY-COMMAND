@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
-import type { DateRange } from "./dashboardFilters";
+import { appendWindowParams, detailText, type DateRange } from "./dashboardFilters";
+import { readError } from "./useDashboardFilters";
 
 /**
  * The AOI defects behind one DPMOI row — level two of the card.
@@ -135,8 +136,7 @@ export const useDpmoiDetail = ({
         if (businessDate) params.set("business_date", businessDate);
         // Sent after the single day on purpose: the endpoint ignores
         // business_date once either of these is present, so a range always wins.
-        if (range?.from) params.set("date_from", range.from);
-        if (range?.to) params.set("date_to", range.to);
+        appendWindowParams(params, range);
 
         const res = await fetch(
           apiUrl(`/process/dpmoi/detail?${params.toString()}`),
@@ -147,10 +147,10 @@ export const useDpmoiDetail = ({
         if (res.status === 404) {
           const body = await res.json().catch(() => null);
           throw new Error(
-            body?.detail ?? "No DPMOI row for this board on this day.",
+            detailText(body, "No DPMOI row for this board on this day."),
           );
         }
-        if (!res.ok) throw new Error("Failed to fetch the DPMOI detail");
+        if (!res.ok) throw new Error(await readError(res));
 
         const json: DpmoiDetailResponse = await res.json();
         if (cancelled) return;
@@ -172,7 +172,7 @@ export const useDpmoiDetail = ({
     return () => {
       cancelled = true;
     };
-  }, [item, operation, businessDate, range?.from, range?.to]);
+  }, [item, operation, businessDate, range?.from, range?.to, range?.timeFrom, range?.timeTo]);
 
   return { data, state, error };
 };

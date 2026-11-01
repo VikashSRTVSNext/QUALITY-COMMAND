@@ -42,6 +42,7 @@ export const ProcessProductsTable = ({
   const {
     data,
     state,
+    error,
     page,
     setPage,
     metric,
@@ -113,14 +114,14 @@ export const ProcessProductsTable = ({
           </div>
         ) : state === "error" ? (
           <div className="flex items-center justify-center py-16 text-[12px] font-bold text-critical">
-            Could not load the product breakdown
+            {error ?? "Could not load the product breakdown"}
           </div>
         ) : (data?.rows ?? []).length === 0 ? (
           <div className="flex items-center justify-center py-16 text-[12px] font-bold text-ink-dim">
             No production for this step in the selected window
           </div>
         ) : (
-          <table className="w-full min-w-[720px] text-left text-[12px] border-collapse relative">
+          <table className="w-full min-w-[800px] text-left text-[12px] border-collapse relative">
             <thead>
               <tr className="text-ink-dim font-bold text-[10px] uppercase">
                 <th className={`${th} pl-2`}>S.No</th>
@@ -130,6 +131,9 @@ export const ProcessProductsTable = ({
                 >
                   Product name{caret("product")}
                 </th>
+                {/* Not sortable: the endpoint has no item sort key and 400s an
+                    unknown one (see SORTABLE). */}
+                <th className={th}>Item code</th>
                 <th
                   className={`${th} ${sortable} text-center`}
                   onClick={() => applySort("done")}
@@ -243,6 +247,9 @@ export const ProcessProductsTable = ({
                       }
                     >
                       {displayName}
+                    </td>
+                    <td className="py-[2.5px] text-ink-secondary whitespace-nowrap">
+                      {row.item ?? "—"}
                     </td>
                     <td className="py-[2.5px] text-center text-white">
                       {fmtCount(row.done)}

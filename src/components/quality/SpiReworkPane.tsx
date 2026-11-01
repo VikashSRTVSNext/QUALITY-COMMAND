@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { exportFileName } from "../charts/exportChart";
 import { REWORK_SURFACE } from "./reworkPalette";
 import ReworkChainCard, {
   chainBars,
@@ -48,6 +49,18 @@ export const SpiReworkPane = ({ item, productName, onBusyChange }: Props) => {
   useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
 
   const totals = defects.data?.totals;
+
+  // What an exported chart says about itself: product, step, period, shift.
+  const name = defects.data?.product_name ?? productName ?? null;
+  const span = period ? `${period.span_label ?? period.label}${period.partial ? " (in progress)" : ""}` : "";
+  const subtitle = [`${name ?? item} (${item})`, "SPI", span, scope.shift ? `Shift ${scope.shift}` : "All shifts"]
+    .filter(Boolean)
+    .join(" · ");
+  const fileFor = (chart: string) =>
+    exportFileName(name, item, "SPI", chart, period?.span_label ?? period?.label);
+  const summary = totals
+    ? `${fmtCount(totals.ng_boards)} NG boards of ${fmtCount(totals.boards_inspected)} inspected · ${fmtCount(totals.components)} defective components`
+    : undefined;
 
   return (
     <div
@@ -107,6 +120,13 @@ export const SpiReworkPane = ({ item, productName, onBusyChange }: Props) => {
             onBarClick={setChosen}
             selectedKey={activeDefect}
             caption="Click a bar to see which components carried that defect. One component on one NG board counts once, however many pins it flagged."
+            exportAs={{
+              filename: fileFor(`Defect-type-top${top}`),
+              title: `SPI defect type · Top ${top}`,
+              subtitle,
+              summary,
+              note: "One component on one NG board counts once, however many pins it flagged.",
+            }}
           />
           <ReworkChainCard
             title={
@@ -132,6 +152,15 @@ export const SpiReworkPane = ({ item, productName, onBusyChange }: Props) => {
             bars={(d) => chainBars(d.rows, "component", "NG boards", ["(unnamed)"])}
             valueLabel="NG boards"
             caption="Each bar is the number of NG boards on which that component had this defect."
+            exportAs={{
+              filename: fileFor(`Components-${components.data?.defect_label ?? activeDefect ?? ""}`),
+              title: `SPI components · ${components.data?.defect_label ?? activeDefect ?? ""}`,
+              subtitle,
+              summary: components.data
+                ? `${fmtCount(components.data.totals.components)} across ${fmtCount(components.data.totals.distinct_components)} components`
+                : undefined,
+              note: "Each bar is the number of NG boards on which that component had this defect.",
+            }}
           />
         </div>
       )}

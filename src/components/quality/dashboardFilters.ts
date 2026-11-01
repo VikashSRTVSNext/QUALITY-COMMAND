@@ -40,9 +40,89 @@ export const MAX_RANGE_DAYS = 30;
 export interface DateRange {
   from: string | null;
   to: string | null;
+  /** Time of day (2026-11-01), "HH:MM" on the :15 — one of HOUR_SLOTS. With
+   *  the dates it makes ONE continuous window: from 27 Oct 08:15 straight
+   *  through to 29 Oct 12:15, not 08:15–12:15 on each day. A time belongs to
+   *  its PRODUCTION day, so 03:15 is that night's shift. `timeTo` is
+   *  exclusive; null means the end of that production day. Only sent with a
+   *  date. */
+  timeFrom?: string | null;
+  timeTo?: string | null;
 }
 
-export const EMPTY_RANGE: DateRange = { from: null, to: null };
+export const EMPTY_RANGE: DateRange = { from: null, to: null, timeFrom: null, timeTo: null };
+
+/**
+ * The 24 hour starts the backend stores, in PRODUCTION-day order: 06:15 (the
+ * day's start) through 05:15 (its last hour). Anything else is a 400.
+ */
+export const HOUR_SLOTS: string[] = Array.from({ length: 24 }, (_, i) => {
+  const h = (6 + i) % 24;
+  return `${`${h}`.padStart(2, "0")}:15`;
+});
+
+/** Position in the production day: 06:15 = 0 … 05:15 = 23. */
+export const slotIndex = (t: string): number => HOUR_SLOTS.indexOf(t);
+
+/** True when a time of day narrows the window. */
+export const hasTimeWindow = (range: DateRange | null | undefined): boolean =>
+  Boolean(range?.timeFrom || range?.timeTo);
+
+/**
+ * Writes the window onto a request: the dates, and the times when set.
+ * Every date-filtered request goes through this, so a time can never reach one
+ * endpoint and not another.
+ */
+export const appendWindowParams = (
+  q: URLSearchParams,
+  range: DateRange | null | undefined,
+): URLSearchParams => {
+  if (!range) return q;
+  if (range.from) q.set("date_from", range.from);
+  if (range.to) q.set("date_to", range.to);
+  // A time only means something on a date; without one the request is the
+  // live day, which takes no time.
+  if (range.from || range.to) {
+    if (range.timeFrom) q.set("time_from", range.timeFrom);
+    if (range.timeTo) q.set("time_to", range.timeTo);
+  }
+  return q;
+};
+
+/** The time part of a range as one string, for effect dependencies. */
+export const timeKeyOf = (range: DateRange | null | undefined): string =>
+  `${range?.timeFrom ?? ""}|${range?.timeTo ?? ""}`;
+
+/** The `window` every time-filtered response echoes. null without times. */
+export type TimeWindow = { from: string; to: string; hours: number } | null;
+
+/** "27 Oct 08:15 – 29 Oct 12:15 · 52 h" from the response's `window`. */
+export const windowLabel = (w: TimeWindow | undefined): string | null => {
+  if (!w) return null;
+  const part = (s: string) => {
+    const [date, time] = s.split("T");
+    return `${shortDay(date)} ${time?.slice(0, 5) ?? ""}`.trim();
+  };
+  return `${part(w.from)} – ${part(w.to)} · ${w.hours} h`;
+};
+
+/**
+ * The readable reason from a FastAPI error body. `detail` is a string, or —
+ * for a time window that reaches before hourly data exists (2026-11-01) — an
+ * object `{message, hourly_data_from}`, which is said as "times available from
+ * 2 Oct". Never returns an object, so it is safe to render.
+ */
+export const detailText = (body: any, fallback: string): string => {
+  const d = body?.detail;
+  if (typeof d === "string") return d;
+  if (d && typeof d === "object") {
+    if (typeof d.hourly_data_from === "string") {
+      return `Times available from ${shortDay(d.hourly_data_from)}.`;
+    }
+    if (typeof d.message === "string") return d.message;
+  }
+  return fallback;
+};
 
 /**
  * True once either end is set.
@@ -172,6 +252,15 @@ export const rangeError = (range: DateRange): string | null => {
   if (range.from && range.to && range.from > range.to) {
     return `Start date (${range.from}) is after end date (${range.to}).`;
   }
+  // One continuous window: on a single production day the start hour has to
+  // come before the end. `timeTo` is exclusive and none means the day's end.
+  const oneDay = !range.from || !range.to || range.from === range.to;
+  if (oneDay && range.timeFrom && range.timeTo && slotIndex(range.timeFrom) >= slotIndex(range.timeTo)) {
+    // 06:15 as an END is the next day's start, i.e. the end of this one.
+    if (range.timeTo !== "06:15") {
+      return `Start time (${range.timeFrom}) must be before end time (${range.timeTo}).`;
+    }
+  }
   const days = rangeDayCount(range);
   if (days !== null && days > MAX_RANGE_DAYS) {
     return `Range of ${days} days exceeds the ${MAX_RANGE_DAYS}-day maximum.`;
@@ -226,8 +315,7 @@ export const buildDashboardParams = ({
   lines,
 }: DashboardQuery): URLSearchParams => {
   const q = new URLSearchParams();
-  if (range.from) q.set("date_from", range.from);
-  if (range.to) q.set("date_to", range.to);
+  appendWindowParams(q, range);
   if (shift) q.set("shift", shift);
   if (level) q.set("level", level);
   // .append, never .set — see rule 3 at the top of this file.
@@ -243,6 +331,12 @@ export const LEVEL_PARAM: Record<"UNITS" | "TRX" | "PA", YieldRequestLevel> = {
   TRX: "TRX",
   PA: "PA",
 };
+
+/** The `level` to send for a Product Yield tab: none for ALL, which asks the
+ *  endpoint for UNIT, TRX and PA together (2026-10-31). */
+export const levelParamFor = (
+  tab: "ALL" | "UNITS" | "TRX" | "PA",
+): YieldRequestLevel | null => (tab === "ALL" ? null : LEVEL_PARAM[tab]);
 
 /**
  * Group rank for the shared line dropdown: the SMT lines first (DPMOI, SMT
@@ -348,7 +442,12 @@ export interface KpiResponse {
     products: string[];
     source: string;
     customer_audit_filtered: boolean;
+    /** Customer Audit is signed off per day, so a time window does not narrow
+     *  it (2026-11-01). */
+    audit_ignores_time?: boolean;
   };
+  /** The time window applied, echoed back; null without times. */
+  window?: TimeWindow;
   range: {
     from: string;
     to: string;

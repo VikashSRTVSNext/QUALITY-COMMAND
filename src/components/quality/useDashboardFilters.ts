@@ -21,6 +21,7 @@ import { apiUrl } from "../../core/api/config";
 import {
   buildDashboardParams,
   compareLines,
+  detailText,
   isRangeActive,
   optionVolume,
   PRODUCT_LEVELS,
@@ -31,6 +32,7 @@ import {
   type ProductOption,
   type ProductYieldResponse,
   type ProductsResponse,
+  type TimeWindow,
   type YieldRequestLevel,
 } from "./dashboardFilters";
 
@@ -46,7 +48,9 @@ export type QueryState = "idle" | "loading" | "ready" | "error";
 export const readError = async (res: Response): Promise<string> => {
   try {
     const body = await res.json();
-    if (typeof body?.detail === "string") return body.detail;
+    // A string, or the {message, hourly_data_from} object a time window
+    // before the hourly history gets (2026-11-01).
+    return detailText(body, `Request failed (${res.status}).`);
   } catch {
     // Non-JSON body (a proxy error page, usually). Fall through.
   }
@@ -133,7 +137,8 @@ const useScopedFetch = <T,>(
 interface YieldQueryArgs {
   range: DateRange;
   shift: "A" | "B" | "C" | null;
-  level: YieldRequestLevel;
+  /** null = every level (UNIT, TRX and PA in one table, 2026-10-31). */
+  level: YieldRequestLevel | null;
   /** Item codes. Empty selects every product. */
   products: string[];
   /** False keeps the hook inert (the snapshot is the source). */
@@ -259,7 +264,11 @@ interface ProcessPerformanceResponse {
     lines: string[];
     line_steps: string[];
     source: string;
+    /** Set when a time window reaches before DPMOI's hourly history: the
+     *  DPMOI card is left out and this says from when times work. */
+    dpmoi_omitted?: { message?: string; hourly_data_from?: string } | null;
   };
+  window?: TimeWindow;
 }
 
 /**
@@ -302,6 +311,7 @@ export const useRangeProcessPerformance = ({
   return {
     data: data?.steps ?? null,
     lineSteps: data?.filters?.line_steps ?? null,
+    dpmoiOmitted: data?.filters?.dpmoi_omitted ?? null,
     state,
     error,
   };
@@ -316,7 +326,9 @@ export const useRangeProcessPerformance = ({
  * omitted.
  */
 export const useProductOptions = (range: DateRange) => {
-  const qs = buildDashboardParams({ range, shift: null }).toString();
+  // Dates only: the dropdowns list what the selected DAYS contain, and the
+  // option endpoints take no time (2026-11-01).
+  const qs = buildDashboardParams({ range: { from: range.from, to: range.to }, shift: null }).toString();
   const invalid = scopeError(range);
   // Skip a request certain to 400 without clearing: the previous options stay
   // up so the control does not empty out while a date is half-typed.
@@ -347,7 +359,8 @@ export const useProductOptions = (range: DateRange) => {
  * reads.
  */
 export const useProcessFilterOptions = (range: DateRange) => {
-  const qs = buildDashboardParams({ range, shift: null }).toString();
+  // Dates only, as for the product options above.
+  const qs = buildDashboardParams({ range: { from: range.from, to: range.to }, shift: null }).toString();
   const invalid = scopeError(range);
   const url = invalid
     ? null

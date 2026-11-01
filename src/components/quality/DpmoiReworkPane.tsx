@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import StackedBarChart from "../charts/StackedBarChart.lazy";
+import { exportFileName } from "../charts/exportChart";
+import ChartExportButtons from "./ChartExportButtons";
 import { reworkSeriesColor, REWORK_CATEGORY_COLORS, REWORK_SURFACE } from "./reworkPalette";
 import ReworkChainCard, {
   chainBars,
@@ -66,6 +68,7 @@ export const DpmoiReworkPane = ({ item, operation, onBusyChange }: Props) => {
   const [top, setTop] = useState(5);
   const [chosenNc, setChosenNc] = useState<string | null>(null);
   const [chosenComponent, setChosenComponent] = useState<string | null>(null);
+  const trendRef = useRef<HTMLElement>(null);
 
   const ncs = useDpmoiNcPareto(item, operation, scope, top);
   const trend = useDpmoiNcTrend(item, operation, scope, top);
@@ -89,6 +92,21 @@ export const DpmoiReworkPane = ({ item, operation, onBusyChange }: Props) => {
   useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
 
   const totals = ncs.data?.totals;
+
+  // What an exported chart says about itself: product, side, period, shift.
+  const name = ncs.data?.product_name ?? null;
+  const span = period ? `${period.span_label ?? period.label}${period.partial ? " (in progress)" : ""}` : "";
+  const subtitle = [
+    `${name ?? item} (${item})`,
+    `DPMOI · AOI ${sideOf(operation)}`,
+    span,
+    scope.shift ? `Shift ${scope.shift}` : "All shifts",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const fileFor = (chart: string) =>
+    exportFileName(name, item, "DPMOI", sideOf(operation).replace(/\s|\+/g, ""), chart, period?.span_label ?? period?.label);
+  const trendView = trend.data ? ncTrendChart(trend.data) : null;
 
   return (
     <div
@@ -156,6 +174,14 @@ export const DpmoiReworkPane = ({ item, operation, onBusyChange }: Props) => {
             }}
             selectedKey={nc}
             caption="Click an NC code for its components."
+            exportAs={{
+              filename: fileFor(`NC-code-top${top}`),
+              title: `DPMOI NC code · Top ${top}`,
+              subtitle,
+              summary: totals
+                ? `${fmtCount(totals.defects)} defects on ${fmtCount(totals.boards_inspected)} boards · ${fmtCount(totals.distinct_ncs)} NC codes`
+                : undefined,
+            }}
           />
 
           {/* ---- NC codes by fiscal week (beside the NC chart) ---------- */}
@@ -163,7 +189,7 @@ export const DpmoiReworkPane = ({ item, operation, onBusyChange }: Props) => {
               Others, in the same order and colours' order — so the two add up
               to the same total. A segment click selects that NC code, the
               same as clicking its bar on the left. */}
-          <section className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
+          <section ref={trendRef} className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
             <div className="flex items-center justify-between gap-2 mb-1 min-h-[20px]">
               <span className="text-[10px] font-black uppercase tracking-wider text-ink-dim truncate">
                 NC code by fiscal week
@@ -171,19 +197,33 @@ export const DpmoiReworkPane = ({ item, operation, onBusyChange }: Props) => {
                   <span className="ml-1.5 normal-case font-bold text-ink-dim/80">· {period.span_label}</span>
                 )}
               </span>
+              <span className="flex items-center gap-2">
+              <ChartExportButtons
+                targetRef={trendRef}
+                filename={fileFor("NC-code-by-week")}
+                disabled={!trendView || trendView.series.length === 0}
+                options={() => ({
+                  title: "DPMOI NC code by fiscal week",
+                  subtitle,
+                  summary: trend.data ? `${fmtCount(trend.data.totals.defects)} defects` : undefined,
+                  legend: (trendView?.series ?? []).map((s) => ({ label: s.label, color: s.color })),
+                  note: "Defects per NC code per fiscal week, biggest at the bottom. The stacks are the NC chart's own top codes plus Others.",
+                })}
+              />
               {trend.data && (
                 <span className="text-[10px] font-bold text-ink-muted whitespace-nowrap">
                   {fmtCount(trend.data.totals.defects)} defects
                 </span>
               )}
+              </span>
             </div>
             {trend.state === "error" && !trend.data ? (
               <div className="py-14 text-center text-[11px] font-bold text-warning">{trend.error}</div>
-            ) : !trend.data ? (
+            ) : !trendView ? (
               <div className="py-14 text-center text-[11px] font-bold text-ink-dim">Loading…</div>
             ) : (
               (() => {
-                const view = ncTrendChart(trend.data);
+                const view = trendView;
                 return (
                   <StackedBarChart
                     categories={view.categories}
@@ -228,6 +268,13 @@ export const DpmoiReworkPane = ({ item, operation, onBusyChange }: Props) => {
             onBarClick={setChosenComponent}
             selectedKey={component}
             caption={components.data?.nc_description ?? "Click a component for its ref_des."}
+            exportAs={{
+              filename: fileFor(`Component-${nc ?? ""}`),
+              title: `DPMOI component · ${nc ?? ""}`,
+              subtitle,
+              summary: components.data ? `${fmtCount(components.data.totals.defects)} defects` : undefined,
+              note: components.data?.nc_description ?? undefined,
+            }}
           />
           <ReworkChainCard
             title={
@@ -249,6 +296,13 @@ export const DpmoiReworkPane = ({ item, operation, onBusyChange }: Props) => {
             bars={(d) => chainBars(d.rows, "ref_des", "Defects")}
             valueLabel="Defects"
             caption="Defect positions on the board for this NC code and component."
+            exportAs={{
+              filename: fileFor(`Ref-des-${nc ?? ""}-${component ?? ""}`),
+              title: `DPMOI ref des · ${nc ?? ""} · ${component ?? ""}`,
+              subtitle,
+              summary: refDes.data ? `${fmtCount(refDes.data.totals.defects)} defects` : undefined,
+              note: "Defect positions on the board for this NC code and component.",
+            }}
           />
         </div>
       )}

@@ -17,14 +17,15 @@ import {
 import { useNavigate } from "react-router-dom";
 import qualityData from "../../data/qualityData.json";
 import { apiUrl, DASHBOARD_STREAM_URLS } from "../../core/api/config";
-import { filterYieldRows } from "../quality/productYieldFilter";
+import { filterYieldRows, levelOfRow } from "../quality/productYieldFilter";
 import {
   EMPTY_RANGE,
-  LEVEL_PARAM,
+  levelParamFor,
   comparisonLabel,
   isFilteredScope,
   isRangeActive,
   shortDay,
+  windowLabel,
   type DateRange,
 } from "../quality/dashboardFilters";
 import {
@@ -825,8 +826,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     "Full Day (06:15 AM - 06:15 AM)",
   );
   const [isShiftDropdownOpen, setIsShiftDropdownOpen] = useState(false);
-  const [activeYieldTab, setActiveYieldTab] = useState<"UNITS" | "TRX" | "PA">(
-    "UNITS",
+  // ALL first and by default (2026-10-31): one table for UNIT, TRX and PA,
+  // each row tagged with its level. The three level tabs still narrow it.
+  const [activeYieldTab, setActiveYieldTab] = useState<"ALL" | "UNITS" | "TRX" | "PA">(
+    "ALL",
   );
   // Both null on open, on purpose: with no date parameters the dashboard reads
   // the live SSE snapshot, which is the fast path for first paint. Setting
@@ -1014,7 +1017,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   const rangedYield = useRangeProductYield({
     range: dateRange,
     shift: shiftLetter,
-    level: LEVEL_PARAM[activeYieldTab],
+    level: levelParamFor(activeYieldTab),
     products: selectedProducts,
     active: kpiFiltered,
     refreshTick,
@@ -1027,11 +1030,19 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     refreshTick,
   });
   // Plant-wide: a product selection blanks the card instead, so it is not
-  // asked for then.
+  // asked for then. With no date range it is TODAY (the endpoint's default),
+  // which gives the live card its "N of M products on target" line. The live
+  // stream does not refresh REST hooks, so today's count re-polls each minute.
+  const [hftpyTodayTick, setHftpyTodayTick] = useState(0);
+  useEffect(() => {
+    if (rangeActive) return;
+    const id = window.setInterval(() => setHftpyTodayTick((t) => t + 1), 60_000);
+    return () => window.clearInterval(id);
+  }, [rangeActive]);
   const rangedHftpy = useRangeHftpy({
     range: dateRange,
-    active: rangeActive && selectedProducts.length === 0,
-    refreshTick,
+    active: selectedProducts.length === 0,
+    refreshTick: rangeActive ? refreshTick : hftpyTodayTick,
   });
   const rangedProcess = useRangeProcessPerformance({
     range: dateRange,
@@ -1042,6 +1053,19 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
   });
   const productOptions = useProductOptions(dateRange);
   const filterOptions = useProcessFilterOptions(dateRange);
+  // Item code -> product name, for tables whose endpoint sends only the code
+  // (the DPMOI breakdown). Built from every card's option list, which includes
+  // DPMOI's own items, plus the product-name groups for bare base codes.
+  const productNameByItem = React.useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const n of filterOptions.productNames) {
+      for (const code of n.items ?? []) m[code] = n.product;
+    }
+    for (const o of filterOptions.products) {
+      if (o.item && o.product) m[o.item] = o.product;
+    }
+    return m;
+  }, [filterOptions.products, filterOptions.productNames]);
   // The cards a line reaches. The filtered response is the authority; the
   // options call covers the moment before the first filtered response lands.
   const lineSteps = rangedProcess.lineSteps ?? filterOptions.lineSteps;
@@ -1073,6 +1097,9 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         // Item code, needed to open the UNIT_TEST drill-down from a UNITS row.
         // The table shows `name`; the endpoint takes the code.
         item: row.item,
+        // UNIT / TRX / PA: the Level column on ALL, and the `{level}` of the
+        // row's rework drill-down.
+        level: levelOfRow(row),
         tested: fmtCount(row.tested, "—"),
         failed: isNum(row.failed) ? row.failed.toString() : "—",
         // The same number unformatted. The table colours the cell on it, and
@@ -1435,15 +1462,25 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           if (!hftpyBlock) return card;
           const actual = hftpyBlock.actual_pct;
           const projection = hftpyBlock.projection_pct;
+          // Today's products on target, from /dashboard/hftpy/range with no
+          // dates. The value and projection stay the fiscal month's.
+          const today = rangedHftpy.data;
+          const todayLine =
+            today && today.products_qualified > 0
+              ? `${today.products_on_target} of ${today.products_qualified} products on target`
+              : today
+                ? "No product qualifies today"
+                : null;
+          const vsProj = isNum(hftpyBlock.delta_vs_projection)
+            ? `${hftpyBlock.delta_vs_projection > 0 ? "+" : ""}${hftpyBlock.delta_vs_projection.toFixed(1)}% vs proj`
+            : "";
           return {
             ...card,
             value: isNum(actual) ? `${actual.toFixed(1)}%` : "—",
             projectedValue: isNum(projection)
               ? `${projection.toFixed(1)}%`
               : "—",
-            change: isNum(hftpyBlock.delta_vs_projection)
-              ? `${hftpyBlock.delta_vs_projection > 0 ? "+" : ""}${hftpyBlock.delta_vs_projection.toFixed(1)}% vs proj`
-              : "",
+            change: [todayLine, vsProj].filter(Boolean).join(" · "),
             delta_vs_yesterday: hftpyBlock.delta_vs_projection ?? 0,
           };
         }
@@ -1583,7 +1620,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         return card;
       });
     });
-  }, [activeShift, rawKpiData, hftpyBlock, kpiFiltered]);
+  }, [activeShift, rawKpiData, hftpyBlock, kpiFiltered, rangedHftpy.data]);
 
   // The same five cards, over a date range, from /dashboard/kpis.
   //
@@ -1609,13 +1646,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         // UNIT-HFTPY over a RANGE comes from /dashboard/hftpy/range
         // (2026-10-30): products on target / products qualified. It is plant-
         // wide, so under a product chip it stays blank — a plant number there
-        // would read as the product's. The fiscal-month projection has no range
-        // equivalent, so Proj shows "—".
+        // would read as the product's. The projection is the FISCAL MONTH's
+        // and does not depend on the dates picked, so it stays on the card
+        // under any filter, read from the live hftpy block.
         if (card.id === 9) {
+          const monthProjection = hftpyBlock?.projection_pct;
           const blank = {
             ...card,
             value: "—",
-            projectedValue: "—",
+            projectedValue: isNum(monthProjection) ? `${monthProjection.toFixed(1)}%` : "—",
             delta_vs_yesterday: 0,
           };
           if (productActive) return { ...blank, change: "n/a for a product" };
@@ -1708,9 +1747,15 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         return {
           ...card,
           value: `${value.toFixed(1)}%`,
-          change: isNum(delta)
-            ? `${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(1)}% ${label}`
-            : label,
+          change:
+            (isNum(delta)
+              ? `${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(1)}% ${label}`
+              : label) +
+            // Signed off per day: a time window does not narrow it, so say so
+            // rather than let it read as the window's figure (2026-11-01).
+            (key === "customer_audit" && kpis.filters?.audit_ignores_time && kpis.window
+              ? " · whole days"
+              : ""),
           points,
           pointLabels,
           // No equivalent series on the range source, and leaving the
@@ -1729,6 +1774,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     rangedHftpy.data,
     rangedHftpy.state,
     rangedHftpy.error,
+    hftpyBlock,
   ]);
 
   useEffect(() => {
@@ -1811,7 +1857,14 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   ? { defects: "0", opportunities: "0", index: "—" }
                   : { failure: "—" },
             status: "Not Run",
-            emptyLabel: "No data for selection",
+            emptyLabel:
+              // A time window reaching before DPMOI's hourly history leaves
+              // only that card out (2026-11-01); say from when times work.
+              apiKey === "DPMOI" && rangedProcess.dpmoiOmitted
+                ? rangedProcess.dpmoiOmitted.hourly_data_from
+                  ? `Times available from ${shortDay(rangedProcess.dpmoiOmitted.hourly_data_from)}`
+                  : (rangedProcess.dpmoiOmitted.message ?? "Not available for these times")
+                : "No data for selection",
             color: palette.accentRail,
             target: null,
           };
@@ -1983,6 +2036,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     rawProcessPerformance,
     processFiltered,
     rangedProcess.data,
+    rangedProcess.dpmoiOmitted,
     linesActive,
     lineSteps,
   ]);
@@ -2322,7 +2376,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
               rangedKpis.error
                 ? rangedKpis.error
                 : rangedKpis.data
-                  ? `${rangedKpis.data.range.from} – ${rangedKpis.data.range.to} · ${rangedKpis.data.range.days_with_data} of ${rangedKpis.data.range.days} days with data`
+                  ? // The backend's own echo of the time window when one is
+                    // set ("27 Oct 08:15 – 29 Oct 12:15 · 52 h"), else the days.
+                    (windowLabel(rangedKpis.data.window) ??
+                    `${rangedKpis.data.range.from} – ${rangedKpis.data.range.to} · ${rangedKpis.data.range.days_with_data} of ${rangedKpis.data.range.days} days with data`)
                   : null
             }
           />
@@ -2552,6 +2609,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           productScope={selectedProducts}
           // The screw breakdown also narrows by line; DPMOI's cannot.
           lineScope={selectedLines}
+          productNameByItem={productNameByItem}
         />
 
         <AttentionCenterPanel

@@ -133,7 +133,9 @@ export const YieldTrendChart = ({
         <CartesianGrid vertical={false} stroke={palette.line} strokeDasharray="2 4" />
         <XAxis
           dataKey="label"
-          interval={0}
+          // Every label for weeks; a long Day range (up to 31 bars) thins them
+          // so "27 Oct" ticks do not overlap.
+          interval={points.length > 14 ? "preserveStartEnd" : 0}
           tick={AXIS_TICK}
           height={18}
           tickLine={false}
@@ -173,37 +175,47 @@ export const YieldTrendChart = ({
           {points.map((p) => (
             <Cell key={p.key} fillOpacity={p.future ? 0.3 : 0.9} />
           ))}
-          {/* The week's FPY written inside its bar, so the attained figure is
-              read without tracing the line to the right-hand axis. Skipped on a
-              bar too short to hold it, and on a week with nothing tested. */}
+          {/* The week's FPY written on its bar, so the attained figure is read
+              without tracing the line to the right-hand axis. Inside the passed
+              segment when it is tall enough; otherwise just above the whole
+              stack (passed + failed), so a low-volume week still shows it.
+              Skipped only on a week with nothing tested.
+
+              valueAccessor hands the content the whole point rather than one
+              field: Recharts drops zero-height rects before numbering labels,
+              so `index` cannot be trusted to find the week's other figures. */}
           <LabelList
-            dataKey="fpyPct"
+            valueAccessor={(entry: any) => entry?.payload}
             content={(props: any) => {
-              const { x, y, width, height, value } = props;
+              const { x, y, width, height } = props;
+              const p = props.value as YieldTrendPoint | undefined;
+              const fpy = p?.fpyPct;
               if (
-                typeof value !== "number" ||
+                !p ||
+                typeof fpy !== "number" ||
                 typeof x !== "number" ||
                 typeof y !== "number" ||
                 typeof width !== "number" ||
                 typeof height !== "number" ||
-                height < 16 ||
                 width < 22
               ) {
                 return null;
               }
-              // From the value, not points[index]: Recharts drops zero-height
-              // rects before numbering labels, so index can point at another week.
-              const below = targetPct !== null && value < targetPct;
+              const below = targetPct !== null && fpy < targetPct;
+              const inside = height >= 16;
+              // Same linear count axis for both segments, so the failed part's
+              // pixel height is the passed part's scaled by failed / passed.
+              const failedPx = p.passed > 0 ? (height * p.failed) / p.passed : 0;
               return (
                 <text
                   x={x + width / 2}
-                  y={y + 13}
+                  y={inside ? y + 13 : y - failedPx - 5}
                   textAnchor="middle"
-                  fill={below ? colors.belowTarget : palette.white}
+                  fill={below ? colors.belowTarget : inside ? palette.white : palette.inkMuted}
                   fontSize={9.5}
                   fontWeight={800}
                 >
-                  {`${value.toFixed(1)}%`}
+                  {`${fpy.toFixed(1)}%`}
                 </text>
               );
             }}

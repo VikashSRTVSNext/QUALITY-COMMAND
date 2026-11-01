@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { shortDay } from "./dashboardFilters";
+import { HOUR_SLOTS, shortDay, slotIndex } from "./dashboardFilters";
 import {
   useReworkPeriods,
   type ReworkGranularity,
@@ -19,11 +19,27 @@ const SHIFTS = [null, "A", "B", "C"] as const;
  *  certain to 400. The server is the authority — and this is deliberately NOT
  *  the dashboard's 30-day validator, which does not apply to these endpoints. */
 const MAX_ANCHOR_DAYS_BACK = 365;
+/** A Day range is at most this many days (handoff 2026-10-31). */
+const MAX_DAY_RANGE = 31;
+/** What Day opens on: the last seven days, today included. */
+const DEFAULT_DAY_SPAN = 7;
+
+/** Local calendar date, YYYY-MM-DD. A Day range is plain calendar days (not
+ *  fiscal), so computing it here is safe in a way a fiscal week is not. */
+const ymd = (d: Date) =>
+  `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, "0")}-${`${d.getDate()}`.padStart(2, "0")}`;
+const addDays = (iso: string, n: number) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return ymd(new Date(y, m - 1, d + n));
+};
+const todayYmd = () => ymd(new Date());
+const minYmd = (a: string, b: string) => (a < b ? a : b);
+const maxYmd = (a: string, b: string) => (a > b ? a : b);
 
 const oldestAnchor = (): string => {
   const d = new Date();
   d.setDate(d.getDate() - MAX_ANCHOR_DAYS_BACK);
-  return `${d.getFullYear()}-${`${d.getMonth() + 1}`.padStart(2, "0")}-${`${d.getDate()}`.padStart(2, "0")}`;
+  return ymd(d);
 };
 
 export const pill = (on: boolean) =>
@@ -43,6 +59,10 @@ export const DEFAULT_REWORK_SCOPE: ReworkScope = {
   anchor: null,
   weekFrom: null,
   weekTo: null,
+  dateFrom: null,
+  dateTo: null,
+  timeFrom: null,
+  timeTo: null,
   shift: null,
 };
 
@@ -95,6 +115,36 @@ export const ReworkPeriodControls = ({
   const fromOption = optionFrom(spanWeeks[0]?.from);
   const toOption = optionFrom(spanWeeks[spanWeeks.length - 1]?.from);
   const isRange = scope.granularity === "week" && Boolean(scope.weekFrom && scope.weekTo);
+  // A Day range has no prev/next anchors either: the two date pickers move it.
+  const isDayRange = scope.granularity === "day" && Boolean(scope.dateFrom && scope.dateTo);
+
+  /** Move one end of the Day range, keeping the other inside 31 days. */
+  const setDayRange = (end: "from" | "to", value: string) => {
+    if (!value) return;
+    onScopeChange((s) => {
+      let from = end === "from" ? value : (s.dateFrom ?? value);
+      let to = end === "to" ? value : (s.dateTo ?? value);
+      if (from > to) {
+        if (end === "from") to = from;
+        else from = to;
+      }
+      // Over 31 days: pull the OTHER end in, so the one just picked stays.
+      if (addDays(from, MAX_DAY_RANGE - 1) < to) {
+        if (end === "from") to = addDays(from, MAX_DAY_RANGE - 1);
+        else from = addDays(to, -(MAX_DAY_RANGE - 1));
+      }
+      // Narrowing to one day can leave an end hour before the start hour.
+      const clash =
+        from === to && s.timeFrom && s.timeTo && slotIndex(s.timeTo) <= slotIndex(s.timeFrom);
+      return {
+        ...s,
+        anchor: null,
+        dateFrom: from,
+        dateTo: minYmd(to, todayYmd()),
+        timeTo: clash ? null : s.timeTo,
+      };
+    });
+  };
 
   const prevDisabled =
     loading || !period?.prev_anchor || period.prev_anchor < oldestAnchor() || rejected;
@@ -120,15 +170,36 @@ export const ReworkPeriodControls = ({
             disabled={loading && scope.granularity !== g.key}
             // Keeps the date, so the user stays around the same place: the
             // last week of a range becomes the anchor. A week range is
-            // Week-only, so it is dropped on the way out.
+            // Week-only, so it is dropped on the way out. Day opens on the
+            // last seven days, ending at that same date.
             onClick={() =>
-              onScopeChange((s) => ({
-                ...s,
-                granularity: g.key,
-                anchor: s.weekTo ?? s.anchor,
-                weekFrom: null,
-                weekTo: null,
-              }))
+              onScopeChange((s) => {
+                const anchor = s.weekTo ?? s.dateTo ?? s.anchor;
+                if (g.key === "day") {
+                  const to = anchor ? minYmd(anchor, todayYmd()) : todayYmd();
+                  return {
+                    ...s,
+                    granularity: "day",
+                    anchor: null,
+                    weekFrom: null,
+                    weekTo: null,
+                    dateFrom: s.dateFrom ?? addDays(to, -(DEFAULT_DAY_SPAN - 1)),
+                    dateTo: s.dateTo ?? to,
+                  };
+                }
+                return {
+                  ...s,
+                  granularity: g.key,
+                  anchor,
+                  weekFrom: null,
+                  weekTo: null,
+                  dateFrom: null,
+                  dateTo: null,
+                  // Times are Day-only: a week or month with them is a 400.
+                  timeFrom: null,
+                  timeTo: null,
+                };
+              })
             }
             className={pill(scope.granularity === g.key)}
           >
@@ -140,7 +211,7 @@ export const ReworkPeriodControls = ({
       {/* Hidden on a picked range: the API sends no prev/next anchors there,
           and the From/To dropdowns are the navigation. On the default five
           weeks they slide the window by one week. */}
-      {!isRange && (
+      {!isRange && !isDayRange && (
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -173,6 +244,113 @@ export const ReworkPeriodControls = ({
             }
           >
             <ChevronRight size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Day: a calendar date range, at most 31 days, today at the latest. One
+          date on both ends is that single day. The paretos cover the whole
+          range; the trend charts draw one bar per day. */}
+      {scope.granularity === "day" && (
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9.5px] font-black uppercase tracking-wider text-ink-dim">From</span>
+          <input
+            type="date"
+            value={scope.dateFrom ?? ""}
+            min={oldestAnchor()}
+            max={scope.dateTo ?? todayYmd()}
+            onChange={(e) => setDayRange("from", e.target.value)}
+            className={`${SELECT} [color-scheme:dark]`}
+            aria-label="From date"
+          />
+          <span className="text-[9.5px] font-black uppercase tracking-wider text-ink-dim">To</span>
+          <input
+            type="date"
+            value={scope.dateTo ?? ""}
+            min={scope.dateFrom ?? oldestAnchor()}
+            max={
+              scope.dateFrom
+                ? minYmd(addDays(scope.dateFrom, MAX_DAY_RANGE - 1), todayYmd())
+                : todayYmd()
+            }
+            onChange={(e) => setDayRange("to", e.target.value)}
+            className={`${SELECT} [color-scheme:dark]`}
+            aria-label="To date"
+          />
+          {/* Time of day (2026-11-01): one continuous window from From + start
+              time to To + end time. Hours start on the :15, matching the
+              shifts; the end is not included. On a single day the end list
+              only offers hours after the start, which the server would
+              otherwise refuse. */}
+          <select
+            value={scope.timeFrom ?? ""}
+            onChange={(e) => {
+              const t = e.target.value || null;
+              onScopeChange((s) => {
+                const sameDay = s.dateFrom === s.dateTo;
+                const clash =
+                  sameDay && t && s.timeTo && slotIndex(s.timeTo) <= slotIndex(t);
+                return { ...s, timeFrom: t, timeTo: clash ? null : s.timeTo };
+              });
+            }}
+            className={SELECT}
+            aria-label="Start time"
+            title="Start time, on the From day"
+          >
+            <option value="">06:15 (day start)</option>
+            {HOUR_SLOTS.filter((t) => t !== "06:15").map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <span className="text-[9.5px] font-black text-ink-dim">–</span>
+          <select
+            value={scope.timeTo ?? ""}
+            onChange={(e) => onScopeChange((s) => ({ ...s, timeTo: e.target.value || null }))}
+            className={SELECT}
+            aria-label="End time"
+            title="End time, on the To day (not included)"
+          >
+            {HOUR_SLOTS.filter(
+              (t) =>
+                t !== "06:15" &&
+                !(scope.dateFrom === scope.dateTo && scope.timeFrom && slotIndex(t) <= slotIndex(scope.timeFrom)),
+            ).map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+            <option value="">06:15 (day end)</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              const t = todayYmd();
+              onScopeChange((s) => ({ ...s, anchor: null, dateFrom: t, dateTo: t, timeFrom: null, timeTo: null }));
+            }}
+            className={pill(scope.dateFrom === todayYmd() && scope.dateTo === todayYmd())}
+            title="Today only"
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const t = todayYmd();
+              onScopeChange((s) => ({
+                ...s,
+                anchor: null,
+                dateFrom: maxYmd(addDays(t, -(DEFAULT_DAY_SPAN - 1)), oldestAnchor()),
+                dateTo: t,
+                timeFrom: null,
+                timeTo: null,
+              }));
+            }}
+            className={pill(false)}
+            title="The last seven days, today included"
+          >
+            Last 7 days
           </button>
         </div>
       )}

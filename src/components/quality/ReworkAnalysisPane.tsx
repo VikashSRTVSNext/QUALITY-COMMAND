@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { exportFileName, type ExportLegendItem } from "../charts/exportChart";
+import ChartExportButtons from "./ChartExportButtons";
 import ServerParetoChart from "../charts/ServerParetoChart.lazy";
 import type { ServerParetoBar } from "../charts/ServerParetoChart";
 import StackedBarChart from "../charts/StackedBarChart.lazy";
@@ -21,6 +23,8 @@ import {
   useCategoryTrend,
   useReworkParetos,
   useYieldTrend,
+  isDayRange,
+  trendsAvailable,
   type CategoryParetoResponse,
   type CategoryTrendResponse,
   type FailureIdParetoResponse,
@@ -143,6 +147,11 @@ type Props = {
 export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
   const [scope, setScope] = useState<ReworkScope>(DEFAULT_REWORK_SCOPE);
   const [top, setTop] = useState(5);
+  // One per card, for the PNG export.
+  const categoryRef = useRef<HTMLElement>(null);
+  const failureIdRef = useRef<HTMLElement>(null);
+  const yieldRef = useRef<HTMLElement>(null);
+  const trendRef = useRef<HTMLElement>(null);
 
   const { category, failureId } = useReworkParetos(level, item, scope, top);
   const trend = useCategoryTrend(level, item, scope);
@@ -183,21 +192,43 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
   const failedUnits = category.data?.totals.failed_units ?? null;
   const noFailures = category.state === "ready" && failedUnits === 0;
 
-  const trendData = scope.granularity !== "day" ? trend.data : null;
+  const showTrends = trendsAvailable(scope);
+  // A Day range draws one bar per day; Week and Month one per fiscal week.
+  const bucketWord = isDayRange(scope) ? "day" : "fiscal week";
+  const trendData = showTrends ? trend.data : null;
   const trendView = trendData ? trendChart(trendData) : null;
 
-  const yieldData = scope.granularity !== "day" ? yieldTrend.data : null;
+  const yieldData = showTrends ? yieldTrend.data : null;
+
+  // ---- PNG export: what every exported chart says about itself -----------
+  // Product, period and shift go on the image, because a pasted chart has no
+  // screen around it to say which product and weeks it covers.
+  const productLabel = `${head?.product_name ?? item} (${item})`;
+  const spanLabel = period
+    ? `${period.span_label ?? period.label}${period.partial ? " (in progress)" : ""}`
+    : "";
+  const shiftLabel = scope.shift ? `Shift ${scope.shift}` : "All shifts";
+  const exportSubtitle = [productLabel, `${level}`, spanLabel, shiftLabel].filter(Boolean).join(" · ");
+  const exportName = (chart: string) =>
+    exportFileName(head?.product_name, item, level, chart, period?.span_label ?? period?.label);
+  const paretoLegend = (bar: string): ExportLegendItem[] => [
+    { label: bar, color: REWORK_PARETO_COLORS.vital },
+    { label: "Cumulative %", color: REWORK_PARETO_COLORS.line, kind: "line" },
+    { label: "80% cut-off", color: REWORK_PARETO_COLORS.cutoff, kind: "dashed" },
+  ];
+
   // 3.8 — beside the category trend, on the same weeks. Kept even with no
   // failures: a clean week is a 100% FPY point worth seeing.
-  const yieldCard = scope.granularity !== "day" && (
-    <section className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
+  const yieldCard = showTrends && (
+    <section ref={yieldRef} className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
         <span className="text-[10px] font-black uppercase tracking-wider text-ink-dim">
-          Yield by fiscal week
-          {scope.granularity === "week" && period?.span_label && (
+          Yield by {bucketWord}
+          {period?.span_label && (
             <span className="ml-1.5 normal-case font-bold text-ink-dim/80">· {period.span_label}</span>
           )}
         </span>
+        <span className="flex items-center gap-2">
         {yieldData && (
           <span className="text-[10.5px] font-bold text-ink-muted">
             {fmt(yieldData.totals.tested)} tested · {fmt(yieldData.totals.failed)} failed · FPY{" "}
@@ -214,6 +245,31 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
             )}
           </span>
         )}
+        <ChartExportButtons
+          targetRef={yieldRef}
+          filename={exportName("Yield-by-week")}
+          disabled={!yieldData || yieldData.totals.tested === 0}
+          options={() => ({
+            title: `Yield by ${bucketWord}`,
+            subtitle: exportSubtitle,
+            summary: yieldData
+              ? `${fmt(yieldData.totals.tested)} tested · ${fmt(yieldData.totals.failed)} failed · FPY ${
+                  yieldData.totals.fpy_pct === null ? "—" : `${yieldData.totals.fpy_pct.toFixed(1)}%`
+                }${yieldData.target_yield_pct !== null ? ` / target ${yieldData.target_yield_pct}%` : ""}`
+              : undefined,
+            legend: [
+              { label: "Passed", color: REWORK_YIELD_COLORS.passed },
+              { label: "Failed", color: REWORK_YIELD_COLORS.failed },
+              { label: "FPY %", color: REWORK_YIELD_COLORS.fpy, kind: "line" },
+              ...(yieldData?.target_yield_pct !== null
+                ? [{ label: "Target", color: REWORK_YIELD_COLORS.target, kind: "dashed" as const }]
+                : []),
+              { label: "Under target", color: REWORK_YIELD_COLORS.belowTarget, kind: "dot" },
+            ],
+            note: "FPY = (tested − failed) / tested for the week.",
+          })}
+        />
+        </span>
       </div>
       {yieldTrend.state === "error" ? (
         <div className="py-10 text-center text-[11px] font-bold text-warning">{yieldTrend.error}</div>
@@ -290,11 +346,28 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           {/* ---- defect category ---------------------------------------- */}
-          <section className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
+          <section ref={categoryRef} className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
             <div className="flex items-center justify-between gap-2 mb-1">
               <span className="text-[10px] font-black uppercase tracking-wider text-ink-dim">
                 Defect category
               </span>
+              <ChartExportButtons
+                targetRef={categoryRef}
+                filename={exportName("Defect-category")}
+                disabled={!category.data || category.data.rows.length === 0}
+                options={() => ({
+                  title: "Defect category",
+                  subtitle: exportSubtitle,
+                  summary: category.data
+                    ? `${fmt(category.data.totals.failed_units)} failed units · ${fmt(category.data.totals.dispositioned_units)} dispositioned` +
+                      (category.data.totals.awaiting_disposition > 0
+                        ? ` · ${fmt(category.data.totals.awaiting_disposition)} awaiting`
+                        : "")
+                    : undefined,
+                  legend: paretoLegend("Units"),
+                  note: "Each first-pass failure is counted once, under the category of its first rework disposition. A board that fails again on a later day counts again that day.",
+                })}
+              />
             </div>
             {category.data && (
               <div className="text-[10.5px] font-bold text-ink-muted mb-1.5">
@@ -322,20 +395,35 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
               <>
                 <ServerParetoChart bars={categoryBars(category.data)} valueLabel="Units" labelChars={12} colors={REWORK_PARETO_COLORS} />
                 <div className="text-[10px] text-ink-dim leading-snug mt-1">
-                  Each failed unit is counted once, under the category of its first
-                  rework disposition. The line is the cumulative share.
+                  Each first-pass failure is counted once, under the category of its
+                  first rework disposition; a board that fails again on a later day
+                  counts again that day. The line is the cumulative share.
                 </div>
               </>
             )}
           </section>
 
           {/* ---- failure id --------------------------------------------- */}
-          <section className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
+          <section ref={failureIdRef} className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
               <span className="text-[10px] font-black uppercase tracking-wider text-ink-dim">
                 Failure id
               </span>
               <div className="flex items-center gap-2">
+                <ChartExportButtons
+                  targetRef={failureIdRef}
+                  filename={exportName(`Failure-id-top${top}`)}
+                  disabled={!failureId.data || failureId.data.rows.length === 0}
+                  options={() => ({
+                    title: `Failure id · Top ${top}`,
+                    subtitle: exportSubtitle,
+                    summary: failureId.data
+                      ? `${fmt(failureId.data.totals.failed_units ?? failureId.data.totals.events)} failed units across ${fmt(failureId.data.totals.distinct_failure_ids)} parameters`
+                      : undefined,
+                    legend: paretoLegend("Units"),
+                    note: "Each first-pass failure is counted once, under the failure id of that test FAIL.",
+                  })}
+                />
                 <select
                   value={top}
                   onChange={(e) => setTop(Number(e.target.value))}
@@ -373,13 +461,26 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
           {/* Week and Month only: a single day has nothing to stack, and both
               endpoints refuse it. Side by side, on the same weeks. */}
           {yieldCard}
-          {scope.granularity !== "day" && (
-            <section className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
-              <div className="text-[10px] font-black uppercase tracking-wider text-ink-dim mb-1">
-                Defect category by fiscal week
-                {scope.granularity === "week" && period?.span_label && (
+          {showTrends && (
+            <section ref={trendRef} className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
+              <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="text-[10px] font-black uppercase tracking-wider text-ink-dim">
+                Defect category by {bucketWord}
+                {period?.span_label && (
                   <span className="ml-1.5 normal-case font-bold text-ink-dim/80">· {period.span_label}</span>
                 )}
+              </div>
+              <ChartExportButtons
+                targetRef={trendRef}
+                filename={exportName("Defect-category-by-week")}
+                disabled={!trendView || trendView.series.length === 0}
+                options={() => ({
+                  title: `Defect category by ${bucketWord}`,
+                  subtitle: exportSubtitle,
+                  legend: (trendView?.series ?? []).map((s) => ({ label: s.label, color: s.color })),
+                  note: `Units per rework category per ${bucketWord}, biggest at the bottom. Each failure sits in one stack (its first disposition).`,
+                })}
+              />
               </div>
               {trend.state === "error" ? (
                 <div className="py-10 text-center text-[11px] font-bold text-warning">{trend.error}</div>
@@ -400,10 +501,10 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                     surfaceColor={REWORK_SURFACE.panel}
                   />
                   <div className="text-[10px] text-ink-dim leading-snug mt-2">
-                    Units per rework category per fiscal week, biggest at the bottom.
-                    Each unit sits in one stack (its first disposition), so a bar is
-                    that week&apos;s dispositioned units. The current week is
-                    drawn while still in progress; a week with nothing stays on the
+                    Units per rework category per {bucketWord}, biggest at the bottom.
+                    Each failure sits in one stack (its first disposition), so a bar is
+                    that {bucketWord}&apos;s dispositioned failures. The current one is
+                    drawn while still in progress; one with nothing stays on the
                     axis, empty.
                   </div>
                 </>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
-import type { DateRange } from "./dashboardFilters";
+import { appendWindowParams, detailText, type DateRange } from "./dashboardFilters";
+import { readError } from "./useDashboardFilters";
 
 export type CauseCell = {
   /** FCR / SMT / PPH / PPF / PPA / SQA / MOD_REJ. */
@@ -115,8 +116,7 @@ export const useProductTesters = (
       try {
         const params = new URLSearchParams();
         if (businessDate) params.set("business_date", businessDate);
-        if (range?.from) params.set("date_from", range.from);
-        if (range?.to) params.set("date_to", range.to);
+        appendWindowParams(params, range);
         const qs = params.toString();
         const res = await fetch(
           apiUrl(
@@ -130,11 +130,11 @@ export const useProductTesters = (
         if (res.status === 501) {
           if (cancelled) return;
           const body = await res.json().catch(() => null);
-          setError(body?.detail ?? `No tester breakdown available for ${step}.`);
+          setError(detailText(body, `No tester breakdown available for ${step}.`));
           setState("unsupported");
           return;
         }
-        if (!res.ok) throw new Error(`Failed to fetch ${step} testers for ${item}`);
+        if (!res.ok) throw new Error(await readError(res));
 
         const json: ProductTestersResponse = await res.json();
         if (cancelled) return;
@@ -144,7 +144,7 @@ export const useProductTesters = (
       } catch (err) {
         if (cancelled) return;
         console.error(`Error fetching testers for ${step}/${item}:`, err);
-        setError("Could not load the tester breakdown.");
+        setError(err instanceof Error && err.message ? err.message : "Could not load the tester breakdown.");
         setState("error");
       }
     };
@@ -157,7 +157,7 @@ export const useProductTesters = (
     };
     // The two range STRINGS, not the object: the caller rebuilds it each
     // render and an object dependency would refetch on every one.
-  }, [step, item, businessDate, range?.from, range?.to]);
+  }, [step, item, businessDate, range?.from, range?.to, range?.timeFrom, range?.timeTo]);
 
   return { data, state, error };
 };

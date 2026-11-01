@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
-import type { DateRange } from "./dashboardFilters";
+import { appendWindowParams, timeKeyOf, type DateRange } from "./dashboardFilters";
+import { readError } from "./useDashboardFilters";
 
 export type DpmoiRow = {
   item: string | null;
+  /** The product the item is filed under (ARDC). Being added by the backend;
+   *  until then the table looks the name up from the filter options. */
+  product_name?: string | null;
   /** AOI_TOP_REWORK_IN04 / AOI_BOT_REWORK_IN04. Null on `grain: "item"`
    *  rows, which cover TOP and BOT together. */
   operation: string | null;
@@ -79,6 +83,7 @@ export const useDpmoiProducts = (
   // on every render and an object dependency would refetch on each one.
   const rangeFrom = range?.from ?? null;
   const rangeTo = range?.to ?? null;
+  const rangeTimes = timeKeyOf(range);
   // Serialised so a fresh array literal from the caller does not refetch.
   const productKey = (products ?? []).join("\u0001");
   const lineKey = (lines ?? []).join("\u0001");
@@ -90,8 +95,7 @@ export const useDpmoiProducts = (
       try {
         const params = new URLSearchParams();
         if (businessDate) params.set("business_date", businessDate);
-        if (range?.from) params.set("date_from", range.from);
-        if (range?.to) params.set("date_to", range.to);
+        appendWindowParams(params, range);
         if (shift) params.set("shift", shift);
         // Repeated, never .set: several products are several parameters.
         if (productKey) {
@@ -106,7 +110,9 @@ export const useDpmoiProducts = (
         const res = await fetch(
           apiUrl(`/process/dpmoi/breakdown${qs ? `?${qs}` : ""}`),
         );
-        if (!res.ok) throw new Error("Failed to fetch DPMOI breakdown");
+        // The backend's own reason: a time window before the hourly history
+        // says from when times work.
+        if (!res.ok) throw new Error(await readError(res));
         const json: DpmoiResponse = await res.json();
         if (cancelled) return;
         setData(json);
@@ -115,7 +121,7 @@ export const useDpmoiProducts = (
       } catch (err) {
         if (cancelled) return;
         console.error("Error fetching DPMOI breakdown:", err);
-        setError("Could not load the DPMOI breakdown.");
+        setError(err instanceof Error && err.message ? err.message : "Could not load the DPMOI breakdown.");
         setState("error");
       }
     };
@@ -125,7 +131,7 @@ export const useDpmoiProducts = (
     return () => {
       cancelled = true;
     };
-  }, [businessDate, rangeFrom, rangeTo, shift, productKey, lineKey]);
+  }, [businessDate, rangeFrom, rangeTo, rangeTimes, shift, productKey, lineKey]);
 
   return { data, state, error };
 };

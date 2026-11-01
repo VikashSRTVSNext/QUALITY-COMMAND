@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
-import type { DateRange } from "./dashboardFilters";
+import { appendWindowParams, timeKeyOf, type DateRange } from "./dashboardFilters";
 import { readError } from "./useDashboardFilters";
 
 export type ProcessProductRow = {
@@ -172,6 +172,9 @@ export const useProcessProducts = (
 ) => {
   const [data, setData] = useState<ProcessProductsResponse | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  // The backend's reason, so a time window before the hourly history says
+  // "Times available from …" rather than a generic failure.
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   // null lets the server choose: worst-first on whichever metric the step
   // reports, which is the ordering that makes this useful on open.
@@ -185,6 +188,7 @@ export const useProcessProducts = (
   // the table on each one.
   const rangeFrom = range?.from ?? null;
   const rangeTo = range?.to ?? null;
+  const rangeTimes = timeKeyOf(range);
   // Serialised so a fresh array literal from the caller does not refetch.
   const productKey = (products ?? []).join("\u0001");
   const lineKey = LINE_PRODUCT_STEPS[step] ? (lines ?? []).join("\u0001") : "";
@@ -206,7 +210,7 @@ export const useProcessProducts = (
    * keeping the previous page visible is right — it is the same question, one
    * page further on, and blanking the table between pages would be worse.
    */
-  const subject = `${step}\u0000${shift ?? ""}\u0000${rangeFrom ?? ""}\u0000${rangeTo ?? ""}\u0000${productKey}\u0000${lineKey}`;
+  const subject = `${step}\u0000${shift ?? ""}\u0000${rangeFrom ?? ""}\u0000${rangeTo ?? ""}\u0000${rangeTimes}\u0000${productKey}\u0000${lineKey}`;
   const [lastSubject, setLastSubject] = useState(subject);
   if (subject !== lastSubject) {
     setLastSubject(subject);
@@ -233,8 +237,7 @@ export const useProcessProducts = (
         if (sort && order) params.set("order", order);
         // Sent only when set. Omitting both is what asks for the live current
         // day, so a range of nulls must NOT become empty query parameters.
-        if (range?.from) params.set("date_from", range.from);
-        if (range?.to) params.set("date_to", range.to);
+        appendWindowParams(params, range);
         // Repeated, never .set: several products are several parameters.
         if (productKey) {
           for (const item of productKey.split("\u0001")) {
@@ -252,10 +255,12 @@ export const useProcessProducts = (
         const json: ProcessProductsResponse = await res.json();
         if (cancelled) return;
         setData(json);
+        setError(null);
         setState("ready");
       } catch (err) {
         if (cancelled) return;
         console.error(`Error fetching ${step} product breakdown:`, err);
+        setError(err instanceof Error ? err.message : null);
         setState("error");
       }
     };
@@ -265,7 +270,7 @@ export const useProcessProducts = (
     return () => {
       cancelled = true;
     };
-  }, [step, shift, rangeFrom, rangeTo, productKey, lineKey, page, sort, order]);
+  }, [step, shift, rangeFrom, rangeTo, rangeTimes, productKey, lineKey, page, sort, order]);
 
   // The page/sort reset that used to live here is now part of the subject check
   // above, which runs a frame earlier. It mattered for the same reason the data
@@ -323,6 +328,7 @@ export const useProcessProducts = (
   return {
     data,
     state,
+    error,
     page,
     setPage,
     metric,

@@ -26,25 +26,27 @@ import {
 } from "./yieldTabs";
 import ProductFilter from "./ProductFilter";
 import {
-  LEVEL_PARAM,
   type DateRange,
   type ProductOption,
   type ProductYieldMeta,
   type YieldRequestLevel,
 } from "./dashboardFilters";
 
-export type YieldTab = "UNITS" | "TRX" | "PA";
+export type YieldTab = "ALL" | "UNITS" | "TRX" | "PA";
 
 // Which process step explains a failure at each level.
 //
 // TRX and PA share one step on purpose: both are MODULE_TEST_IN04, split only by
 // the item's sub_module. The drill-down is addressed per item, so the item decides
-// which slice it came from and one step serves both.
-const LEVEL_STEP: Record<YieldTab, string> = {
-  UNITS: "UNIT_TEST",
+// which slice it came from and one step serves both. Keyed by the ROW's level,
+// because on the ALL tab every row brings its own.
+const LEVEL_STEP: Record<YieldRequestLevel, string> = {
+  UNIT: "UNIT_TEST",
   TRX: "MODULE_TEST",
   PA: "MODULE_TEST",
 };
+
+const YIELD_TABS: YieldTab[] = ["ALL", "UNITS", "TRX", "PA"];
 
 const TAB_CLASS =
   "border text-[11px] font-bold px-4 py-1 rounded uppercase transition-colors whitespace-nowrap flex-shrink-0";
@@ -213,7 +215,7 @@ const SmtStepPane = ({
   );
 };
 
-type SortKey = "name" | "item" | "tested" | "failed" | "fpy" | "target" | "status";
+type SortKey = "name" | "item" | "level" | "tested" | "failed" | "fpy" | "target" | "status";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -260,6 +262,9 @@ interface ProductYieldPanelProps {
   /** The Process strip's line selection. Only the screw breakdown takes it;
    *  the DPMOI breakdown reports itself not filterable while it is set. */
   lineScope?: string[];
+  /** Item code -> product name, for the DPMOI table, whose rows carry only
+   *  the code. */
+  productNameByItem?: Record<string, string>;
 }
 
 // Product Yield panel: level tabs, a sortable and paginated table, and the AI
@@ -286,6 +291,7 @@ export const ProductYieldPanel = ({
   dateRange = null,
   productScope = [],
   lineScope = [],
+  productNameByItem,
 }: ProductYieldPanelProps) => {
   // Product opened from a UNITS row. Lives here rather than in StepPane because
   // the UNITS tab is the panel's own table, not a step pane.
@@ -465,7 +471,7 @@ export const ProductYieldPanel = ({
             ref={tabStripRef}
             className="flex gap-2 overflow-x-auto no-scrollbar"
           >
-          {(["UNITS", "TRX", "PA"] as const).map((tab) => (
+          {YIELD_TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => {
@@ -516,6 +522,7 @@ export const ProductYieldPanel = ({
             shift={shift}
             products={productScope}
             lines={lineScope}
+            productNameByItem={productNameByItem}
           />
         ) : activeStep === SCREW_DEFECTS_TAB ? (
           // Its own pane: screws-driven denominator, and a line/station/item
@@ -556,6 +563,15 @@ export const ProductYieldPanel = ({
                   sort={sort}
                   onSortChange={setSort}
                 />
+                {activeTab === "ALL" && (
+                  <SortableTh
+                    column="level"
+                    label="LEVEL"
+                    sort={sort}
+                    onSortChange={setSort}
+                    align="center"
+                  />
+                )}
                 <SortableTh
                   column="tested"
                   label="TESTED"
@@ -607,7 +623,7 @@ export const ProductYieldPanel = ({
               {pageRows.length === 0 && (
                 <tr>
                   <td
-                    colSpan={activeTab === "UNITS" ? 9 : 8}
+                    colSpan={(activeTab === "UNITS" ? 9 : 8) + (activeTab === "ALL" ? 1 : 0)}
                     className="py-10 text-center font-sans text-[12px] font-bold tracking-wide"
                   >
                     {fetchState === "loading" ? (
@@ -650,16 +666,16 @@ export const ProductYieldPanel = ({
                         explained: UNITS to UNIT_TEST, TRX and PA to MODULE_TEST.
                         Gated on the same list the step panes use, so unmapping
                         the step removes this click too. */}
-                    {DEFECT_DRILLDOWN_STEPS[LEVEL_STEP[activeTab]] &&
+                    {DEFECT_DRILLDOWN_STEPS[LEVEL_STEP[row.level as YieldRequestLevel]] &&
                     row.item ? (
                       <button
                         type="button"
                         onClick={() =>
                           setLevelSelection({
-                            step: LEVEL_STEP[activeTab],
+                            step: LEVEL_STEP[row.level as YieldRequestLevel],
                             item: row.item,
                             name: row.name,
-                            level: LEVEL_PARAM[activeTab],
+                            level: row.level as YieldRequestLevel,
                           })
                         }
                         className="text-white font-bold hover:text-info focus-visible:outline focus-visible:outline-1 cursor-pointer text-left"
@@ -676,6 +692,11 @@ export const ProductYieldPanel = ({
                   <td className="py-[2.5px] text-ink-secondary whitespace-nowrap">
                     {row.item || "—"}
                   </td>
+                  {activeTab === "ALL" && (
+                    <td className="py-[2.5px] text-center font-sans text-[10px] font-black text-ink-muted">
+                      {row.level === "UNIT" ? "Unit" : row.level}
+                    </td>
+                  )}
                   <td className="py-[2.5px] text-center text-white">
                     {row.tested}
                     {/* Range source only: the days THIS product ran, out of the

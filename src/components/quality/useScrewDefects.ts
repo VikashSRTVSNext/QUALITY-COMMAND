@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
-import type { DateRange } from "./dashboardFilters";
+import { appendWindowParams, timeKeyOf, type DateRange } from "./dashboardFilters";
+import { readError } from "./useDashboardFilters";
 
 export type ScrewRow = {
   /** MAC_LINE02 etc, taken from the resource prefix (MAC_LINE02_SCREW_01). */
@@ -78,6 +79,7 @@ export const useScrewDefects = (
   // The two strings, not the object — see the DPMOI hook for why.
   const rangeFrom = range?.from ?? null;
   const rangeTo = range?.to ?? null;
+  const rangeTimes = timeKeyOf(range);
   // Serialised so fresh array literals from the caller do not refetch.
   const productKey = (products ?? []).join("\u0001");
   const lineKey = (lines ?? []).join("\u0001");
@@ -89,8 +91,7 @@ export const useScrewDefects = (
       try {
         const params = new URLSearchParams();
         if (businessDate) params.set("business_date", businessDate);
-        if (range?.from) params.set("date_from", range.from);
-        if (range?.to) params.set("date_to", range.to);
+        appendWindowParams(params, range);
         if (shift) params.set("shift", shift);
         // Repeated, never .set: several values are several parameters.
         if (productKey) {
@@ -107,7 +108,7 @@ export const useScrewDefects = (
         const res = await fetch(
           apiUrl(`/process/screw-defects/breakdown${qs ? `?${qs}` : ""}`),
         );
-        if (!res.ok) throw new Error("Failed to fetch screw defects");
+        if (!res.ok) throw new Error(await readError(res));
         const json: ScrewDefectsResponse = await res.json();
         if (cancelled) return;
         setData(json);
@@ -116,7 +117,7 @@ export const useScrewDefects = (
       } catch (err) {
         if (cancelled) return;
         console.error("Error fetching screw defects:", err);
-        setError("Could not load the screw defect breakdown.");
+        setError(err instanceof Error && err.message ? err.message : "Could not load the screw defect breakdown.");
         setState("error");
       }
     };
@@ -126,7 +127,7 @@ export const useScrewDefects = (
     return () => {
       cancelled = true;
     };
-  }, [businessDate, rangeFrom, rangeTo, shift, productKey, lineKey]);
+  }, [businessDate, rangeFrom, rangeTo, rangeTimes, shift, productKey, lineKey]);
 
   return { data, state, error };
 };

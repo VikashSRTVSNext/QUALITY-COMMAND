@@ -20,6 +20,7 @@
 import { useEffect, useState } from "react";
 import { CalendarDays, ChevronDown, X } from "lucide-react";
 import {
+  HOUR_SLOTS,
   MAX_RANGE_DAYS,
   rangeDayCount,
   rangeEarliest,
@@ -39,6 +40,23 @@ const FIELD_CLASS =
 const PRESET_CLASS =
   "text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded " +
   "border border-line text-ink-dim hover:bg-line hover:text-white transition-colors";
+
+const TIME_CLASS =
+  "bg-page border border-line rounded px-1.5 py-1 text-[12px] text-white " +
+  "font-bold outline-none focus:border-line-strong cursor-pointer disabled:opacity-40 " +
+  "disabled:cursor-not-allowed w-[130px]";
+
+// The 24 stored hour starts, in production-day order. "06:15" is left out of
+// both lists because it IS the open end: as a start it is the day's first
+// hour (= none), as an end the day's last instant (= none).
+const FROM_SLOTS = HOUR_SLOTS.filter((t) => t !== "06:15");
+const TO_SLOTS = HOUR_SLOTS.filter((t) => t !== "06:15");
+
+const sameRange = (a: DateRange, b: DateRange) =>
+  a.from === b.from &&
+  a.to === b.to &&
+  (a.timeFrom ?? null) === (b.timeFrom ?? null) &&
+  (a.timeTo ?? null) === (b.timeTo ?? null);
 
 /** Today as a production-day label, in the viewer's own calendar.
  *
@@ -65,6 +83,16 @@ const daysAgoLabel = (n: number): string => {
  *  1366px, where the bar is already close to full. */
 const pillLabel = (range: DateRange): string => {
   if (!range.from && !range.to) return "LIVE";
+  const start = range.from ?? range.to;
+  const end = range.to ?? range.from;
+  const at = (day: string, time: string | null | undefined) =>
+    time ? `${shortDay(day)} ${time}` : shortDay(day);
+  if (range.timeFrom || range.timeTo) {
+    // One continuous window: name both ends with their times.
+    return `${at(start as string, range.timeFrom)} – ${
+      range.timeTo ? at(end as string, range.timeTo) : `${shortDay(end as string)} end`
+    }`;
+  }
   if (range.from && range.to) {
     return range.from === range.to
       ? shortDay(range.from)
@@ -108,7 +136,7 @@ export const DateRangeFilter = ({
   // Re-sync when the range is changed from outside (a preset, or Clear).
   useEffect(() => {
     setDraft(value);
-  }, [value.from, value.to]);
+  }, [value.from, value.to, value.timeFrom, value.timeTo]);
 
   const draftError = rangeError(draft);
 
@@ -116,20 +144,39 @@ export const DateRangeFilter = ({
     // An invalid draft is never committed: it would spend a round trip to be
     // told what rangeError already knows.
     if (draftError) return;
-    if (draft.from === value.from && draft.to === value.to) return;
+    if (sameRange(draft, value)) return;
 
     const id = setTimeout(() => onChange(draft), COMMIT_DELAY_MS);
     return () => clearTimeout(id);
-  }, [draft.from, draft.to, draftError, value.from, value.to, onChange]);
+  }, [
+    draft.from,
+    draft.to,
+    draft.timeFrom,
+    draft.timeTo,
+    draftError,
+    value.from,
+    value.to,
+    value.timeFrom,
+    value.timeTo,
+    onChange,
+  ]);
+
+  /** Clearing both dates is the live day, which takes no time. */
+  const setDates = (patch: Partial<DateRange>) =>
+    setDraft((d) => {
+      const next = { ...d, ...patch };
+      return next.from || next.to ? next : { ...next, timeFrom: null, timeTo: null };
+    });
 
   const applyPreset = (span: number) => {
-    const next = { from: daysAgoLabel(span - 1), to: todayLabel() };
+    // A preset is whole production days; any time window is dropped with it.
+    const next = { from: daysAgoLabel(span - 1), to: todayLabel(), timeFrom: null, timeTo: null };
     setDraft(next);
     onChange(next); // A preset is a finished choice — no debounce to wait for.
   };
 
   const clear = () => {
-    const next = { from: null, to: null };
+    const next = { from: null, to: null, timeFrom: null, timeTo: null };
     setDraft(next);
     onChange(next);
   };
@@ -181,7 +228,7 @@ export const DateRangeFilter = ({
                 // state (one date alone is a single-day query), so it maps to
                 // null.
                 onChange={(e) =>
-                  setDraft((d) => ({ ...d, from: e.target.value || null }))
+                  setDates({ from: e.target.value || null })
                 }
                 // The window is a ROLLING one — today back MAX_RANGE_DAYS —
                 // so both ends are pinned to it as well as to each other. The
@@ -198,13 +245,52 @@ export const DateRangeFilter = ({
                 className={FIELD_CLASS}
                 value={draft.to ?? ""}
                 onChange={(e) =>
-                  setDraft((d) => ({ ...d, to: e.target.value || null }))
+                  setDates({ to: e.target.value || null })
                 }
                 // Today at the latest: there is no data after it, and a
                 // future date is a request that can only come back empty.
                 max={rangeLatest()}
                 min={draft.from ?? rangeEarliest()}
               />
+            </div>
+
+            {/* Time of day (2026-11-01). Hours start on the :15, matching the
+                shifts. With the dates it is ONE continuous window — 27 Oct
+                08:15 through 29 Oct 12:15 — and a time belongs to its
+                production day, so 03:15 is that day's night shift. Needs a
+                date: without one the dashboard is the live day. */}
+            <div className="flex items-center gap-1.5">
+              <select
+                aria-label="Start time"
+                className={TIME_CLASS}
+                value={draft.timeFrom ?? ""}
+                disabled={!draft.from && !draft.to}
+                onChange={(e) => setDraft((d) => ({ ...d, timeFrom: e.target.value || null }))}
+                title="Start time, on the start day"
+              >
+                <option value="">06:15 (day start)</option>
+                {FROM_SLOTS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <span className="text-ink-dim text-[11px]">–</span>
+              <select
+                aria-label="End time"
+                className={TIME_CLASS}
+                value={draft.timeTo ?? ""}
+                disabled={!draft.from && !draft.to}
+                onChange={(e) => setDraft((d) => ({ ...d, timeTo: e.target.value || null }))}
+                title="End time, on the end day (not included)"
+              >
+                {TO_SLOTS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+                <option value="">06:15 (day end)</option>
+              </select>
             </div>
 
             <div className="flex items-center gap-1.5">

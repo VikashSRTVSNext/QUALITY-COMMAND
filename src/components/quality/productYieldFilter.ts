@@ -9,18 +9,29 @@
 // this has to change with it — a mismatch shows up as rows appearing under the
 // wrong tab, which is not obvious from looking at the table.
 
-export type YieldLevel = "UNITS" | "TRX" | "PA";
+export type YieldLevel = "ALL" | "UNITS" | "TRX" | "PA";
 
-/** Levels are decided by `sub_module`, not by a level column. */
-const matchesLevel = (row: any, level: YieldLevel): boolean => {
+/**
+ * A row's level as the API names it (UNIT / TRX / PA). Rows carry `level`
+ * since 2026-10-31; older ones are classified from `sub_module` by the same
+ * rule the tabs use.
+ */
+export const levelOfRow = (row: any): "UNIT" | "TRX" | "PA" => {
+  const lvl = String(row?.level ?? "").toUpperCase();
+  if (lvl === "UNIT" || lvl === "TRX" || lvl === "PA") return lvl;
   const sub = String(row?.sub_module ?? "").toUpperCase();
-  // The UI says UNITS, the data says UNIT.
-  if (level === "UNITS") return sub === "UNIT";
-  if (level === "PA") return sub === "PA" || sub === "PSU";
+  if (sub === "UNIT") return "UNIT";
   // TRX is everything that is neither a unit nor a power supply — defined by
   // exclusion server-side too, so a new sub_module lands here rather than
   // vanishing from every tab.
-  return sub !== "UNIT" && sub !== "PA" && sub !== "PSU";
+  if (sub === "PA" || sub === "PSU") return "PA";
+  return "TRX";
+};
+
+const matchesLevel = (row: any, level: YieldLevel): boolean => {
+  if (level === "ALL") return true;
+  // The UI says UNITS, the data says UNIT.
+  return levelOfRow(row) === (level === "UNITS" ? "UNIT" : level);
 };
 
 /**

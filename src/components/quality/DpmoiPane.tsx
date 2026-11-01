@@ -54,6 +54,7 @@ export const DpmoiPane = ({
   shift,
   products,
   lines,
+  productNameByItem,
 }: {
   businessDate?: string | null;
   range?: DateRange | null;
@@ -61,6 +62,8 @@ export const DpmoiPane = ({
   products?: string[];
   /** The Process strip's line selection. */
   lines?: string[];
+  /** Item code -> product name. The breakdown sends only the code. */
+  productNameByItem?: Record<string, string>;
 }) => {
   const { data, state, error } = useDpmoiProducts(
     businessDate,
@@ -79,11 +82,25 @@ export const DpmoiPane = ({
    * AOI_TOP_REWORK_IN04. A column that sorts by something the reader cannot see
    * looks broken.
    */
+  // The backend's own product_name first. Older responses lack it, so it is
+  // then looked up: the dotted code (089338A.112), then its base code
+  // (089338A), which is how the product-name groups list them.
+  const nameOf = (r: DpmoiRow): string | null => {
+    if (r.product_name) return r.product_name;
+    const item = r.item;
+    if (!item || !productNameByItem) return null;
+    return productNameByItem[item] ?? productNameByItem[item.split(".")[0]] ?? null;
+  };
+
   const { sort, setSort, sorted: sortedRows } = useTableSort<
     DpmoiRow,
-    "item" | "operation" | "description" | "qty" | "dpmo"
+    "product" | "item" | "operation" | "description" | "qty" | "dpmo"
   >(data?.rows ?? [], (r, key) =>
-    key === "operation" ? opLabel(r.operation) : r[key],
+    key === "operation"
+      ? opLabel(r.operation)
+      : key === "product"
+        ? (nameOf(r) ?? r.item)
+        : r[key],
   );
   // The (item, operation) whose AOI defects are open. One at a time, which is
   // what a modal implies.
@@ -123,8 +140,15 @@ export const DpmoiPane = ({
           <thead>
             <tr>
               <SortableTh
+                column="product"
+                label="Product name"
+                sort={sort}
+                onSortChange={setSort}
+                className={`${TH} text-left`}
+              />
+              <SortableTh
                 column="item"
-                label="Item"
+                label="Item code"
                 sort={sort}
                 onSortChange={setSort}
                 className={`${TH} text-left`}
@@ -154,8 +178,9 @@ export const DpmoiPane = ({
               />
               {/* Defects and Opportunities hidden on request. The data is
                   still in the payload (defects_total, opportunities), so
-                  uncommenting these three blocks and putting the footer colSpan
-                  back to 3 restores them with no backend change. */}
+                  uncommenting these three blocks restores them with no backend
+                  change. The footer's "Total" cell spans the four text columns
+                  (Product name, Item code, Op, Description) and stays at 4. */}
               {/*
               <th className={`${TH} text-right`}>Defects</th>
               <th className={`${TH} text-right`} title="Boards x opportunities per board">
@@ -199,7 +224,10 @@ export const DpmoiPane = ({
                       : `Rework analysis for ${r.item}: NC code, component and ref_des (TOP and BOT together under a line filter)`
                   }
                 >
-                  <td className={`${TD} text-left text-white font-bold`}>
+                  <td className={`${TD} text-left text-white font-bold font-sans`}>
+                    {nameOf(r) ?? "—"}
+                  </td>
+                  <td className={`${TD} text-left text-ink-secondary`}>
                     <span className="inline-flex items-center gap-1.5">
                       {r.item ?? "—"}
                       <ChevronRight size={12} className="text-ink-dim" />
@@ -256,7 +284,7 @@ export const DpmoiPane = ({
             <tr className="border-t-2 border-line-strong bg-page/60 font-mono">
               <td
                 className={`${TD} text-left text-[10px] font-black uppercase tracking-wider text-ink-dim`}
-                colSpan={3}
+                colSpan={4}
               >
                 Total
               </td>

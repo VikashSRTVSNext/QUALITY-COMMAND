@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import ServerParetoChart from "../charts/ServerParetoChart.lazy";
 import type { ServerParetoBar } from "../charts/ServerParetoChart";
+import ChartExportButtons from "./ChartExportButtons";
 import { REWORK_PARETO_COLORS, REWORK_SURFACE } from "./reworkPalette";
 import type { ParetoQuery } from "./useReworkParetos";
 import type { ChainParetoRow } from "./useSpiRework";
@@ -61,6 +63,15 @@ type Props<T extends { rows: ChainParetoRow[] }> = {
   onBarClick?: (key: string) => void;
   selectedKey?: string | null;
   caption?: React.ReactNode;
+  /** Adds PNG / Copy buttons. The title and subtitle are what the image says
+   *  about itself, since a pasted chart has no screen around it. */
+  exportAs?: {
+    filename: string;
+    title: string;
+    subtitle?: string;
+    summary?: string;
+    note?: string;
+  };
 };
 
 /**
@@ -79,13 +90,37 @@ export const ReworkChainCard = <T extends { rows: ChainParetoRow[] }>({
   onBarClick,
   selectedKey = null,
   caption,
-}: Props<T>) => (
-  <section className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
+  exportAs,
+}: Props<T>) => {
+  const cardRef = useRef<HTMLElement>(null);
+  const hasChart = Boolean(query.data && query.data.rows.length > 0);
+  return (
+  <section ref={cardRef} className="border border-line rounded-lg px-4 pt-3 pb-3 min-w-0" style={CARD_STYLE}>
     <div className="flex items-center justify-between gap-2 mb-1 min-h-[20px]">
       <span className="text-[10px] font-black uppercase tracking-wider text-ink-dim truncate">
         {title}
       </span>
-      {aside}
+      <span className="flex items-center gap-2">
+        {exportAs && (
+          <ChartExportButtons
+            targetRef={cardRef}
+            filename={exportAs.filename}
+            disabled={!hasChart}
+            options={() => ({
+              title: exportAs.title,
+              subtitle: exportAs.subtitle,
+              summary: exportAs.summary,
+              note: exportAs.note,
+              legend: [
+                { label: valueLabel, color: REWORK_PARETO_COLORS.vital },
+                { label: "Cumulative %", color: REWORK_PARETO_COLORS.line, kind: "line" },
+                { label: "80% cut-off", color: REWORK_PARETO_COLORS.cutoff, kind: "dashed" },
+              ],
+            })}
+          />
+        )}
+        {aside}
+      </span>
     </div>
     {query.state === "idle" ? (
       <div className="py-14 text-center text-[11px] font-bold text-ink-dim">{idleLabel}</div>
@@ -110,7 +145,8 @@ export const ReworkChainCard = <T extends { rows: ChainParetoRow[] }>({
       </>
     )}
   </section>
-);
+  );
+};
 
 /** The first bar worth drilling into — what a level shows before any click. */
 export const firstPickable = (

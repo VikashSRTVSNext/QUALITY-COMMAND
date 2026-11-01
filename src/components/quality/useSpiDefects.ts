@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
-import type { DateRange } from "./dashboardFilters";
+import { appendWindowParams, detailText, type DateRange } from "./dashboardFilters";
+import { readError } from "./useDashboardFilters";
 
 /** One defect code from the inspection machine.
  *
@@ -177,8 +178,7 @@ export const useSpiDefects = (
         if (businessDate) params.set("business_date", businessDate);
         // Sent after the single day on purpose: the endpoint ignores
         // business_date once either of these is present, so a range always wins.
-        if (range?.from) params.set("date_from", range.from);
-        if (range?.to) params.set("date_to", range.to);
+        appendWindowParams(params, range);
         if (resource) params.set("resource", resource);
         if (category) params.set("category", category);
         if (pcbSide) params.set("pcb_side", pcbSide);
@@ -197,13 +197,12 @@ export const useSpiDefects = (
           if (cancelled) return;
           const body = await res.json().catch(() => null);
           setError(
-            body?.detail ??
-              `No inspected boards for ${item} in this window.`,
+            detailText(body, `No inspected boards for ${item} in this window.`),
           );
           setState("stale");
           return;
         }
-        if (!res.ok) throw new Error(`Failed to fetch SPI defects for ${item}`);
+        if (!res.ok) throw new Error(await readError(res));
 
         const json: SpiDefectsResponse = await res.json();
         if (cancelled) return;
@@ -213,7 +212,7 @@ export const useSpiDefects = (
       } catch (err) {
         if (cancelled) return;
         console.error(`Error fetching SPI defects for ${item}:`, err);
-        setError("Could not load the pad defects.");
+        setError(err instanceof Error && err.message ? err.message : "Could not load the pad defects.");
         setState("error");
       }
     };
@@ -226,7 +225,7 @@ export const useSpiDefects = (
     // `data` is intentionally NOT cleared before a refetch: the filters change
     // often, and blanking the summary blocks on every chip click would make the
     // panel flicker even though those blocks never change.
-  }, [item, businessDate, range?.from, range?.to, resource, category, pcbSide]);
+  }, [item, businessDate, range?.from, range?.to, range?.timeFrom, range?.timeTo, resource, category, pcbSide]);
 
   return { data, state, error };
 };
