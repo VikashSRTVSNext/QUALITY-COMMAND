@@ -321,7 +321,7 @@ export const ReworkPeriodControls = ({
                 {t}
               </option>
             ))}
-            <option value="">06:15 (day end)</option>
+            <option value="">06:15</option>
           </select>
           <button
             type="button"

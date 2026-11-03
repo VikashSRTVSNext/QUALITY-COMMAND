@@ -64,9 +64,15 @@ export const HOUR_SLOTS: string[] = Array.from({ length: 24 }, (_, i) => {
 /** Position in the production day: 06:15 = 0 … 05:15 = 23. */
 export const slotIndex = (t: string): number => HOUR_SLOTS.indexOf(t);
 
+/** A time the user actually picked. 06:15 is the production-day boundary —
+ *  the default at either end — so it is never sent: 06:15 / 06:15 would make
+ *  the backend read the default selection as a different span (1 day vs 2). */
+export const isPickedTime = (t: string | null | undefined): t is string =>
+  Boolean(t) && t !== "06:15";
+
 /** True when a time of day narrows the window. */
 export const hasTimeWindow = (range: DateRange | null | undefined): boolean =>
-  Boolean(range?.timeFrom || range?.timeTo);
+  isPickedTime(range?.timeFrom) || isPickedTime(range?.timeTo);
 
 /**
  * Writes the window onto a request: the dates, and the times when set.
@@ -83,8 +89,8 @@ export const appendWindowParams = (
   // A time only means something on a date; without one the request is the
   // live day, which takes no time.
   if (range.from || range.to) {
-    if (range.timeFrom) q.set("time_from", range.timeFrom);
-    if (range.timeTo) q.set("time_to", range.timeTo);
+    if (isPickedTime(range.timeFrom)) q.set("time_from", range.timeFrom);
+    if (isPickedTime(range.timeTo)) q.set("time_to", range.timeTo);
   }
   return q;
 };

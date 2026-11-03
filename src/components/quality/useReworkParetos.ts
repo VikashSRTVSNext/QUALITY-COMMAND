@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiUrl } from "../../core/api/config";
-import { detailText, type YieldRequestLevel } from "./dashboardFilters";
+import { detailText, isPickedTime, type YieldRequestLevel } from "./dashboardFilters";
 
 // The two rework paretos behind a Product Yield row, per the 2026-10-22
 // handoff (frontend_filters_and_shift_report.md, Part 3).
@@ -154,8 +154,8 @@ export const scopeParams = (scope: ReworkScope): URLSearchParams => {
   } else if (isDayRange(scope)) {
     q.set("date_from", scope.dateFrom as string);
     q.set("date_to", scope.dateTo as string);
-    if (scope.timeFrom) q.set("time_from", scope.timeFrom);
-    if (scope.timeTo) q.set("time_to", scope.timeTo);
+    if (isPickedTime(scope.timeFrom)) q.set("time_from", scope.timeFrom);
+    if (isPickedTime(scope.timeTo)) q.set("time_to", scope.timeTo);
   } else if (scope.anchor) {
     q.set("anchor", scope.anchor);
   }

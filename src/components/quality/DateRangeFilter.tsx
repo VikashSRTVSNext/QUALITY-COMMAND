@@ -289,7 +289,7 @@ export const DateRangeFilter = ({
                     {t}
                   </option>
                 ))}
-                <option value="">06:15 (day end)</option>
+                <option value="">06:15</option>
               </select>
             </div>
 
