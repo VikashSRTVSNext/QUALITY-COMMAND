@@ -27,6 +27,7 @@ import {
   shortDay,
   windowLabel,
   type DateRange,
+  errorTone,
 } from "../quality/dashboardFilters";
 import {
   useProcessFilterOptions,
@@ -1732,7 +1733,16 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           return { ...card, value: "—", change: label, delta_vs_yesterday: 0 };
         }
 
-        const delta = kpis.delta_vs_previous?.[key];
+        const rawDelta = kpis.delta_vs_previous?.[key];
+        // A comparison window that is only partly covered by the time-filter
+        // history (previous.complete false, 2026-11-04) would give a delta
+        // against a fraction of it: drop the arrow and say why. Customer
+        // Audit ignores times, so its comparison is whole either way.
+        const partialPrevious =
+          kpis.previous?.complete === false &&
+          !(key === "customer_audit" && kpis.filters?.audit_ignores_time);
+        const delta = partialPrevious ? null : rawDelta;
+        const compareText = partialPrevious ? `${label} · partly covered, not compared` : label;
         // Daily percentages are fine for the sparkline's SHAPE, which is all
         // they are used for here — the headline figure above comes from totals.
         const points = kpis.by_date?.length
@@ -1749,8 +1759,8 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
           value: `${value.toFixed(1)}%`,
           change:
             (isNum(delta)
-              ? `${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(1)}% ${label}`
-              : label) +
+              ? `${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta).toFixed(1)}% ${compareText}`
+              : compareText) +
             // Signed off per day: a time window does not narrow it, so say so
             // rather than let it read as the window's figure (2026-11-01).
             (key === "customer_audit" && kpis.filters?.audit_ignores_time && kpis.window
@@ -1857,14 +1867,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   ? { defects: "0", opportunities: "0", index: "—" }
                   : { failure: "—" },
             status: "Not Run",
-            emptyLabel:
-              // A time window reaching before DPMOI's hourly history leaves
-              // only that card out (2026-11-01); say from when times work.
-              apiKey === "DPMOI" && rangedProcess.dpmoiOmitted
-                ? rangedProcess.dpmoiOmitted.hourly_data_from
-                  ? `Times available from ${shortDay(rangedProcess.dpmoiOmitted.hourly_data_from)}`
-                  : (rangedProcess.dpmoiOmitted.message ?? "Not available for these times")
-                : "No data for selection",
+            emptyLabel: "No data for selection",
             color: palette.accentRail,
             target: null,
           };
@@ -2036,7 +2039,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     rawProcessPerformance,
     processFiltered,
     rangedProcess.data,
-    rangedProcess.dpmoiOmitted,
     linesActive,
     lineSteps,
   ]);
@@ -2463,7 +2465,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
             </span>
             {rangedProcess.error && (
               <span
-                className="text-[10px] font-bold text-critical truncate"
+                className={`text-[10px] font-bold truncate ${errorTone(rangedProcess.error, "text-critical")}`}
                 title={rangedProcess.error}
               >
                 {rangedProcess.error}

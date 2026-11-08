@@ -2,6 +2,7 @@ import { useRef } from "react";
 import ServerParetoChart from "../charts/ServerParetoChart.lazy";
 import type { ServerParetoBar } from "../charts/ServerParetoChart";
 import ChartExportButtons from "./ChartExportButtons";
+import { errorTone } from "./dashboardFilters";
 import { REWORK_PARETO_COLORS, REWORK_SURFACE } from "./reworkPalette";
 import type { ParetoQuery } from "./useReworkParetos";
 import type { ChainParetoRow } from "./useSpiRework";
@@ -125,7 +126,7 @@ export const ReworkChainCard = <T extends { rows: ChainParetoRow[] }>({
     {query.state === "idle" ? (
       <div className="py-14 text-center text-[11px] font-bold text-ink-dim">{idleLabel}</div>
     ) : query.state === "error" && !query.data ? (
-      <div className="py-14 text-center text-[11px] font-bold text-warning">{query.error}</div>
+      <div className={`py-14 text-center text-[11px] font-bold ${errorTone(query.error)}`}>{query.error}</div>
     ) : !query.data ? (
       <div className="py-14 text-center text-[11px] font-bold text-ink-dim">Loading…</div>
     ) : query.data.rows.length === 0 ? (

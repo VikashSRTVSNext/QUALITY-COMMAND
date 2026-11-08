@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import StackedBarChart from "../charts/StackedBarChart.lazy";
 import { exportFileName } from "../charts/exportChart";
 import ChartExportButtons from "./ChartExportButtons";
+import { errorTone } from "./dashboardFilters";
 import { reworkSeriesColor, REWORK_CATEGORY_COLORS, REWORK_SURFACE } from "./reworkPalette";
 import ReworkChainCard, {
   chainBars,
@@ -138,7 +139,7 @@ export const DpmoiReworkPane = ({ item, operation, onBusyChange }: Props) => {
       </div>
 
       {ncs.state === "error" && ncs.data && (
-        <div className="text-[11px] font-bold text-warning">{ncs.error}</div>
+        <div className={`text-[11px] font-bold ${errorTone(ncs.error)}`}>{ncs.error}</div>
       )}
 
       {totals && (
@@ -218,7 +219,7 @@ export const DpmoiReworkPane = ({ item, operation, onBusyChange }: Props) => {
               </span>
             </div>
             {trend.state === "error" && !trend.data ? (
-              <div className="py-14 text-center text-[11px] font-bold text-warning">{trend.error}</div>
+              <div className={`py-14 text-center text-[11px] font-bold ${errorTone(trend.error)}`}>{trend.error}</div>
             ) : !trendView ? (
               <div className="py-14 text-center text-[11px] font-bold text-ink-dim">Loading…</div>
             ) : (

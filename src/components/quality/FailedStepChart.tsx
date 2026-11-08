@@ -8,7 +8,7 @@ import { MAX_SERIES, OTHER_COLOR, seriesColor } from "../charts/seriesPalette";
 import type { NcLogRow, ProductDefectsQuery } from "./useProductDefects";
 import type { ChartView } from "./ChartViewToggle";
 import { defectDateBars } from "./defectDateBars";
-import { productionDayOf, shortDay } from "./dashboardFilters";
+import { errorTone, productionDayOf, shortDay } from "./dashboardFilters";
 
 /** What goes on the x-axis. */
 type Dimension = "failure" | "nc" | "cause" | "date";
@@ -286,7 +286,7 @@ export const FailedStepChart = ({
   }
   if (state === "unsupported" || state === "error") {
     return (
-      <div className="py-16 text-center text-[12px] font-bold text-warning">
+      <div className={`py-16 text-center text-[12px] font-bold ${errorTone(error)}`}>
         {error}
       </div>
     );

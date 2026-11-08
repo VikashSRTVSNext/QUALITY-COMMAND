@@ -5,6 +5,7 @@ import {
   type NcLogRow,
   type ProductDefectsQuery,
 } from "./useProductDefects";
+import { errorTone } from "./dashboardFilters";
 import type { ProductImagesResponse } from "./useUnitImages";
 
 const fmtPct = (v: number | null | undefined) =>
@@ -114,7 +115,7 @@ export const NcLogTable = ({
 
   if (state === "error") {
     return (
-      <div className="py-16 text-center text-[12px] font-bold text-critical">
+      <div className={`py-16 text-center text-[12px] font-bold ${errorTone(error, "text-critical")}`}>
         {error}
       </div>
     );

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { exportFileName } from "../charts/exportChart";
+import { errorTone } from "./dashboardFilters";
 import { REWORK_SURFACE } from "./reworkPalette";
 import ReworkChainCard, {
   chainBars,
@@ -89,7 +90,7 @@ export const SpiReworkPane = ({ item, productName, onBusyChange }: Props) => {
       </div>
 
       {defects.state === "error" && defects.data && (
-        <div className="text-[11px] font-bold text-warning">{defects.error}</div>
+        <div className={`text-[11px] font-bold ${errorTone(defects.error)}`}>{defects.error}</div>
       )}
 
       {totals && (

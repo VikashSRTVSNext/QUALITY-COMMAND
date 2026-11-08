@@ -8,6 +8,7 @@ import {
   rangeDayCount,
   type DateRange,
   type YieldRequestLevel,
+  errorTone,
 } from "./dashboardFilters";
 import ChartViewToggle, {
   paretoAvailable,
@@ -324,7 +325,7 @@ export const ProductDrilldownModal: React.FC<Props> = ({
             </div>
           )}
           {testers.state === "error" && (
-            <div className="py-16 text-center text-[12px] font-bold text-critical">
+            <div className={`py-16 text-center text-[12px] font-bold ${errorTone(testers.error, "text-critical")}`}>
               {testers.error}
             </div>
           )}

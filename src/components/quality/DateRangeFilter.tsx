@@ -22,6 +22,8 @@ import { CalendarDays, ChevronDown, X } from "lucide-react";
 import {
   HOUR_SLOTS,
   MAX_RANGE_DAYS,
+  endBeforeStart,
+  hasTimeWindow,
   rangeDayCount,
   rangeEarliest,
   rangeError,
@@ -46,11 +48,10 @@ const TIME_CLASS =
   "font-bold outline-none focus:border-line-strong cursor-pointer disabled:opacity-40 " +
   "disabled:cursor-not-allowed w-[130px]";
 
-// The 24 stored hour starts, in production-day order. "06:15" is left out of
-// both lists because it IS the open end: as a start it is the day's first
-// hour (= none), as an end the day's last instant (= none).
-const FROM_SLOTS = HOUR_SLOTS.filter((t) => t !== "06:15");
-const TO_SLOTS = HOUR_SLOTS.filter((t) => t !== "06:15");
+// The 24 whole hours (2026-11-04), 06:00 first. All of them are real picks
+// — 06:00 included, which is a calendar 06:00, not the production day's 06:15.
+// Leaving a select on "--:--" is what keeps whole production days.
+const NO_TIME_TITLE = "No time: whole production days (06:15 → 06:15). Pick a time to use calendar times.";
 
 const sameRange = (a: DateRange, b: DateRange) =>
   a.from === b.from &&
@@ -87,8 +88,9 @@ const pillLabel = (range: DateRange): string => {
   const end = range.to ?? range.from;
   const at = (day: string, time: string | null | undefined) =>
     time ? `${shortDay(day)} ${time}` : shortDay(day);
-  if (range.timeFrom || range.timeTo) {
-    // One continuous window: name both ends with their times.
+  if (hasTimeWindow(range)) {
+    // One continuous window: name both ends with their times. An unpicked
+    // time is the production-day edge.
     return `${at(start as string, range.timeFrom)} – ${
       range.timeTo ? at(end as string, range.timeTo) : `${shortDay(end as string)} end`
     }`;
@@ -183,12 +185,15 @@ export const DateRangeFilter = ({
 
   const days = rangeDayCount(draft);
   const isActive = Boolean(value.from || value.to);
+  const sameDate = !draft.from || !draft.to || draft.from === draft.to;
 
   const status = draftError
     ? draftError
     : appliedLabel
       ? appliedLabel
-      : isActive && days !== null
+      : isActive && hasTimeWindow(value)
+        ? "Calendar dates and times"
+        : isActive && days !== null
         ? `${days} production day${days === 1 ? "" : "s"}`
         : isActive
           ? "Single production day"
@@ -254,11 +259,12 @@ export const DateRangeFilter = ({
               />
             </div>
 
-            {/* Time of day (2026-11-01). Hours start on the :15, matching the
-                shifts. With the dates it is ONE continuous window — 27 Oct
-                08:15 through 29 Oct 12:15 — and a time belongs to its
-                production day, so 03:15 is that day's night shift. Needs a
-                date: without one the dashboard is the live day. */}
+            {/* Time of day: whole hours, 06:00 … 05:00 (2026-11-04). With the
+                dates it is ONE continuous window on CALENDAR dates — 27 Oct
+                08:00 through 29 Oct 12:00 — so a night shift ends on the next
+                date (30 Oct 22:00 → 31 Oct 06:00). "--:--" sends no time and
+                keeps whole production days. Needs a date: without one the
+                dashboard is the live day. */}
             <div className="flex items-center gap-1.5">
               <select
                 aria-label="Start time"
@@ -266,10 +272,10 @@ export const DateRangeFilter = ({
                 value={draft.timeFrom ?? ""}
                 disabled={!draft.from && !draft.to}
                 onChange={(e) => setDraft((d) => ({ ...d, timeFrom: e.target.value || null }))}
-                title="Start time, on the start day"
+                title={`Start time, on the start date. ${NO_TIME_TITLE}`}
               >
-                <option value="">06:15 (day start)</option>
-                {FROM_SLOTS.map((t) => (
+                <option value="">--:--</option>
+                {HOUR_SLOTS.map((t) => (
                   <option key={t} value={t}>
                     {t}
                   </option>
@@ -282,14 +288,16 @@ export const DateRangeFilter = ({
                 value={draft.timeTo ?? ""}
                 disabled={!draft.from && !draft.to}
                 onChange={(e) => setDraft((d) => ({ ...d, timeTo: e.target.value || null }))}
-                title="End time, on the end day (not included)"
+                title={`End time, on the end date (not included). For a night shift pick the next date as the end. ${NO_TIME_TITLE}`}
               >
-                {TO_SLOTS.map((t) => (
+                <option value="">--:--</option>
+                {/* The current pick stays listed even if a later start makes it
+                    clash, so the select shows it and the status line says why. */}
+                {HOUR_SLOTS.filter((t) => t === draft.timeTo || !endBeforeStart(sameDate, draft.timeFrom, t)).map((t) => (
                   <option key={t} value={t}>
                     {t}
                   </option>
                 ))}
-                <option value="">06:15</option>
               </select>
             </div>
 

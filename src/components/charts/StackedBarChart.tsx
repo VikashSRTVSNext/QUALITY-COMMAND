@@ -31,6 +31,14 @@ export type BarCategory = {
   /** Greyed on the axis and in its segments — e.g. a week not reached yet,
    *  kept so the axis keeps its full length. */
   dimmed?: boolean;
+  /** Tooltip text per series, shown instead of the count — e.g. a rate
+   *  ("1.25%"). The bars still stack the counts. When set, the count Total
+   *  row is left out so the tooltip never mixes counts and rates. */
+  tooltipValues?: Record<string, string>;
+  /** Bold line under the tooltip title, e.g. "Failure rate 6.00%". */
+  tooltipHeadline?: string;
+  /** Rows after the series in the tooltip, for parts that are not a series. */
+  tooltipExtra?: { label: string; value: string }[];
 };
 
 export type StackedBarChartProps = {
@@ -120,6 +128,9 @@ export const StackedBarChart = ({
       label: truncate(c.label, maxLabelChars),
       fullLabel: c.label,
       hint: c.hint,
+      tooltipValues: c.tooltipValues,
+      tooltipHeadline: c.tooltipHeadline,
+      tooltipExtra: c.tooltipExtra,
       __dimmed: Boolean(c.dimmed),
       total: series.reduce((acc, s) => acc + (c.values[s.key] ?? 0), 0),
       // A zero-height cap stacked above every series. It is the one place the
@@ -179,6 +190,8 @@ export const StackedBarChart = ({
       .map((s) => ({ ...s, value: row[s.key] as number }))
       .filter((s) => s.value > 0)
       .sort((a, b) => b.value - a.value);
+    const override: Record<string, string> | undefined = row.tooltipValues;
+    const extra: { label: string; value: string }[] = row.tooltipExtra ?? [];
 
     return (
       <div className="bg-panel border border-line-soft rounded-lg px-3 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.6)] max-w-[320px]">
@@ -188,6 +201,11 @@ export const StackedBarChart = ({
         {row.hint && (
           <div className="text-[10px] text-ink-dim leading-snug mt-0.5">
             {row.hint}
+          </div>
+        )}
+        {row.tooltipHeadline && (
+          <div className="text-[10.5px] font-black text-white leading-snug mt-1 tabular-nums">
+            {row.tooltipHeadline}
           </div>
         )}
         <div className="mt-1.5 pt-1.5 border-t border-line/60 space-y-0.5">
@@ -202,11 +220,18 @@ export const StackedBarChart = ({
               />
               <span className="text-ink-muted font-mono">{s.label}</span>
               <span className="ml-auto font-mono font-bold text-white tabular-nums">
-                {s.value}
-                {unit}
+                {override?.[s.key] ?? `${s.value}${unit}`}
               </span>
             </div>
           ))}
+          {extra.map((x) => (
+            <div key={x.label} className="flex items-center gap-2 text-[10px] whitespace-nowrap">
+              <span className="w-2 h-2 flex-shrink-0" />
+              <span className="text-ink-dim font-mono">{x.label}</span>
+              <span className="ml-auto font-mono font-bold text-white tabular-nums">{x.value}</span>
+            </div>
+          ))}
+          {!override && (
           <div className="flex items-center gap-2 text-[10px] pt-1 mt-1 border-t border-line/60">
             <span className="text-ink-dim font-black uppercase tracking-wider">
               Total
@@ -216,6 +241,7 @@ export const StackedBarChart = ({
               {unit}
             </span>
           </div>
+          )}
         </div>
         {onSegmentClick && (
           <div className="text-[9.5px] text-ink-dim/80 mt-1.5">

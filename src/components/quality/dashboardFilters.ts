@@ -40,12 +40,13 @@ export const MAX_RANGE_DAYS = 30;
 export interface DateRange {
   from: string | null;
   to: string | null;
-  /** Time of day (2026-11-01), "HH:MM" on the :15 — one of HOUR_SLOTS. With
-   *  the dates it makes ONE continuous window: from 27 Oct 08:15 straight
-   *  through to 29 Oct 12:15, not 08:15–12:15 on each day. A time belongs to
-   *  its PRODUCTION day, so 03:15 is that night's shift. `timeTo` is
-   *  exclusive; null means the end of that production day. Only sent with a
-   *  date. */
+  /** Time of day, "HH:00" — one of HOUR_SLOTS (whole hours since
+   *  2026-11-04; the :15 slots before that). With the dates it makes ONE
+   *  continuous window: from 27 Oct 08:00 straight through to 29 Oct 12:00,
+   *  not 08:00–12:00 on each day. With a time the dates are CALENDAR dates
+   *  (2026-11-03), so a night is 30 Oct 22:00 → 31 Oct 06:00. `timeTo` is
+   *  exclusive. null = not picked = the production-day edge (06:15 on `from`,
+   *  06:15 the morning after `to`) and is never sent. Only sent with a date. */
   timeFrom?: string | null;
   timeTo?: string | null;
 }
@@ -53,22 +54,45 @@ export interface DateRange {
 export const EMPTY_RANGE: DateRange = { from: null, to: null, timeFrom: null, timeTo: null };
 
 /**
- * The 24 hour starts the backend stores, in PRODUCTION-day order: 06:15 (the
- * day's start) through 05:15 (its last hour). Anything else is a 400.
+ * The 24 times the picker offers (2026-11-04): whole hours, listed from 06:00
+ * through 05:00 so the list reads in shift order. They are clock times on
+ * CALENDAR dates — 06:00 is NOT the production day's 06:15 start, which is
+ * what "no time" means.
  */
 export const HOUR_SLOTS: string[] = Array.from({ length: 24 }, (_, i) => {
   const h = (6 + i) % 24;
-  return `${`${h}`.padStart(2, "0")}:15`;
+  return `${`${h}`.padStart(2, "0")}:00`;
 });
 
-/** Position in the production day: 06:15 = 0 … 05:15 = 23. */
+/** Position in the picker's list: 06:00 = 0 … 05:00 = 23. Display order only;
+ *  compare times on the same date with plain string order (clock order). */
 export const slotIndex = (t: string): number => HOUR_SLOTS.indexOf(t);
 
-/** A time the user actually picked. 06:15 is the production-day boundary —
- *  the default at either end — so it is never sent: 06:15 / 06:15 would make
- *  the backend read the default selection as a different span (1 day vs 2). */
+/** The production day's edge, which an unpicked time stands for. */
+export const PRODUCTION_DAY_EDGE = "06:15";
+
+/** A time the user actually picked. Anything else — null, or a stale value
+ *  from the old :15 list — is not sent: the request then keeps whole
+ *  production days, where sending 06:00/06:00 would turn every range into
+ *  calendar 06:00 → 06:00 (and 30–31 Oct from 2 days into 1). */
 export const isPickedTime = (t: string | null | undefined): t is string =>
-  Boolean(t) && t !== "06:15";
+  typeof t === "string" && HOUR_SLOTS.includes(t);
+
+/**
+ * True when an end time on the same date as the start is at or before it,
+ * which the backend refuses (400). Clock order: on one calendar date 04:00 is
+ * before 22:00 — a night shift ends on the NEXT date. An unpicked start is
+ * the production day's 06:15.
+ */
+export const endBeforeStart = (
+  sameDate: boolean,
+  timeFrom: string | null | undefined,
+  timeTo: string | null | undefined,
+): boolean => {
+  if (!sameDate || !isPickedTime(timeTo)) return false;
+  const start = isPickedTime(timeFrom) ? timeFrom : PRODUCTION_DAY_EDGE;
+  return timeTo <= start;
+};
 
 /** True when a time of day narrows the window. */
 export const hasTimeWindow = (range: DateRange | null | undefined): boolean =>
@@ -109,8 +133,13 @@ export const windowLabel = (w: TimeWindow | undefined): string | null => {
     const [date, time] = s.split("T");
     return `${shortDay(date)} ${time?.slice(0, 5) ?? ""}`.trim();
   };
-  return `${part(w.from)} – ${part(w.to)} · ${w.hours} h`;
+  return `${part(w.from)} – ${part(w.to)} · ${formatHours(w.hours)} h`;
 };
+
+/** 52 → "52", 0.25 → "0.25", 24.5 → "24.5": a quarter-hour edge makes
+ *  `window.hours` a decimal (2026-11-04). */
+export const formatHours = (h: number): string =>
+  Number.isInteger(h) ? `${h}` : `${Number(h.toFixed(2))}`;
 
 /**
  * The readable reason from a FastAPI error body. `detail` is a string, or —
@@ -123,12 +152,25 @@ export const detailText = (body: any, fallback: string): string => {
   if (typeof d === "string") return d;
   if (d && typeof d === "object") {
     if (typeof d.hourly_data_from === "string") {
-      return `Times available from ${shortDay(d.hourly_data_from)}.`;
+      return `${TIMES_NOTICE_PREFIX}${shortDay(d.hourly_data_from)} — pick a later start or clear the times.`;
     }
     if (typeof d.message === "string") return d.message;
   }
   return fallback;
 };
+
+const TIMES_NOTICE_PREFIX = "Times available from ";
+
+/** True for the "times available from …" answer: not a failure, just a window
+ *  before the time-filter history (and, right after a deploy, until its
+ *  backfill finishes). Shown as a notice, never in the error colour. */
+export const isTimesNotice = (msg: string | null | undefined): boolean =>
+  typeof msg === "string" && msg.startsWith(TIMES_NOTICE_PREFIX);
+
+/** The text colour for a query's error line: neutral for the times notice,
+ *  `errorClass` (the site's own warning colour) for a real error. */
+export const errorTone = (msg: string | null | undefined, errorClass = "text-warning"): string =>
+  isTimesNotice(msg) ? "text-ink-muted" : errorClass;
 
 /**
  * True once either end is set.
@@ -258,14 +300,15 @@ export const rangeError = (range: DateRange): string | null => {
   if (range.from && range.to && range.from > range.to) {
     return `Start date (${range.from}) is after end date (${range.to}).`;
   }
-  // One continuous window: on a single production day the start hour has to
-  // come before the end. `timeTo` is exclusive and none means the day's end.
+  // One continuous window on calendar dates: on one date the end has to come
+  // after the start. A night shift ends on the next date.
   const oneDay = !range.from || !range.to || range.from === range.to;
-  if (oneDay && range.timeFrom && range.timeTo && slotIndex(range.timeFrom) >= slotIndex(range.timeTo)) {
-    // 06:15 as an END is the next day's start, i.e. the end of this one.
-    if (range.timeTo !== "06:15") {
-      return `Start time (${range.timeFrom}) must be before end time (${range.timeTo}).`;
-    }
+  if (endBeforeStart(oneDay, range.timeFrom, range.timeTo)) {
+    const start = isPickedTime(range.timeFrom) ? range.timeFrom : `${PRODUCTION_DAY_EDGE} (day start)`;
+    return (
+      `End time (${range.timeTo}) must be after the start (${start}) on the same date. ` +
+      `For a night shift pick the next date as the end, e.g. 30 Oct 22:00 → 31 Oct 06:00.`
+    );
   }
   const days = rangeDayCount(range);
   if (days !== null && days > MAX_RANGE_DAYS) {
@@ -474,6 +517,10 @@ export interface KpiResponse {
     from: string;
     to: string;
     spy_exact: boolean;
+    /** With times (2026-11-04): false when the comparison window reaches
+     *  before the time-filter history, so its figures cover only part of it.
+     *  The delta is then not shown. Absent = complete. */
+    complete?: boolean;
   } & Partial<KpiTotals>;
   /** Percentage points, null when either side is missing. */
   delta_vs_previous: Record<KpiMetricKey, number | null>;

@@ -14,7 +14,7 @@ import {
   REWORK_SURFACE,
   REWORK_YIELD_COLORS,
 } from "./reworkPalette";
-import { shortDay, type YieldRequestLevel } from "./dashboardFilters";
+import { errorTone, shortDay, type YieldRequestLevel } from "./dashboardFilters";
 import ReworkPeriodControls, {
   DEFAULT_REWORK_SCOPE,
   ReworkPeriodTitle,
@@ -50,17 +50,37 @@ const trendChart = (
     color: categoryColor(c.category),
   })),
   // Every bucket, future ones included, so a week always reads as seven bars.
-  categories: data.buckets.map((b) => ({
-    key: b.from,
-    // Week buckets are dates; month buckets are already "WK37".
-    label: data.bucket === "day" ? shortDay(b.label) : b.label,
-    values: b.by_category,
-    hint: b.in_future
-      ? "Not reached yet"
-      : `${fmt(b.failed_units)} failed` +
-        (b.awaiting_disposition > 0 ? ` · ${fmt(b.awaiting_disposition)} awaiting` : ""),
-  })),
+  categories: data.buckets.map((b) => {
+    // 2026-11-04: the tooltip reads rates (% of units tested) so its parts add
+    // up to the failure rate; the bars still stack the counts. Null when the
+    // bucket tested nothing (or an older backend) -- then it stays on counts.
+    const rates = b.by_category_pct && typeof b.failure_rate_pct === "number" ? b.by_category_pct : null;
+    return {
+      key: b.from,
+      // Week buckets are dates; month buckets are already "WK37".
+      label: data.bucket === "day" ? shortDay(b.label) : b.label,
+      values: b.by_category,
+      hint: b.in_future
+        ? "Not reached yet"
+        : `${fmt(b.failed_units)} failed` +
+          (typeof b.tested === "number" ? ` of ${fmt(b.tested)} tested` : "") +
+          (b.awaiting_disposition > 0 ? ` · ${fmt(b.awaiting_disposition)} awaiting` : ""),
+      ...(rates && {
+        tooltipHeadline: `Failure rate ${pct2(b.failure_rate_pct)}`,
+        tooltipValues: Object.fromEntries(
+          Object.entries(rates).map(([cat, v]) => [cat, pct2(v)]),
+        ),
+        tooltipExtra:
+          typeof b.awaiting_pct === "number" && b.awaiting_pct > 0
+            ? [{ label: "Awaiting", value: pct2(b.awaiting_pct) }]
+            : [],
+      }),
+    };
+  }),
 });
+
+const pct2 = (n: number | null | undefined) =>
+  typeof n === "number" ? `${n.toFixed(2)}%` : "—";
 
 const fmt = (n: number | null | undefined) =>
   typeof n === "number" ? n.toLocaleString("en-US") : "—";
@@ -266,13 +286,13 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                 : []),
               { label: "Under target", color: REWORK_YIELD_COLORS.belowTarget, kind: "dot" },
             ],
-            note: "FPY = (tested − failed) / tested for the week.",
+            note: `FPY = (tested − failed) / tested for the ${bucketWord}. Calendar days (00:00 → 00:00), not production days.`,
           })}
         />
         </span>
       </div>
       {yieldTrend.state === "error" ? (
-        <div className="py-10 text-center text-[11px] font-bold text-warning">{yieldTrend.error}</div>
+        <div className={`py-10 text-center text-[11px] font-bold ${errorTone(yieldTrend.error)}`}>{yieldTrend.error}</div>
       ) : !yieldData ? (
         <div className="py-16 text-center text-[11px] font-bold text-ink-dim">Loading yield trend…</div>
       ) : yieldData.totals.tested === 0 ? (
@@ -297,8 +317,10 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
             <LegendSwatch color={REWORK_YIELD_COLORS.belowTarget} label="Under target" dot />
           </div>
           <div className="text-[10px] text-ink-dim leading-snug mt-1">
-            FPY = (tested − failed) / tested for the week. A week with nothing
-            tested leaves a gap in the line.
+            FPY = (tested − failed) / tested for the {bucketWord}. A {bucketWord} with
+            nothing tested leaves a gap in the line. Buckets are calendar days
+            (00:00 → 00:00); the category chart beside it uses production days
+            (06:15 → 06:15), so their edges differ slightly.
           </div>
         </>
       )}
@@ -478,12 +500,16 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                   title: `Defect category by ${bucketWord}`,
                   subtitle: exportSubtitle,
                   legend: (trendView?.series ?? []).map((s) => ({ label: s.label, color: s.color })),
-                  note: `Units per rework category per ${bucketWord}, biggest at the bottom. Each failure sits in one stack (its first disposition).`,
+                  note:
+                    `Units per rework category per ${bucketWord}, biggest at the bottom. Each failure sits in one stack (its first disposition).` +
+                    (typeof trendData?.totals.failure_rate_pct === "number"
+                      ? ` Failure rate over the period ${pct2(trendData.totals.failure_rate_pct)} of ${fmt(trendData.totals.tested)} tested.`
+                      : ""),
                 })}
               />
               </div>
               {trend.state === "error" ? (
-                <div className="py-10 text-center text-[11px] font-bold text-warning">{trend.error}</div>
+                <div className={`py-10 text-center text-[11px] font-bold ${errorTone(trend.error)}`}>{trend.error}</div>
               ) : !trendView ? (
                 <div className="py-16 text-center text-[11px] font-bold text-ink-dim">
                   Loading category trend…
@@ -505,7 +531,8 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                     Each failure sits in one stack (its first disposition), so a bar is
                     that {bucketWord}&apos;s dispositioned failures. The current one is
                     drawn while still in progress; one with nothing stays on the
-                    axis, empty.
+                    axis, empty. Hover a bar for each category as a % of the units
+                    tested that {bucketWord}; together they make its failure rate.
                   </div>
                 </>
               )}

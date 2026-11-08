@@ -30,6 +30,7 @@ import {
   type ProductOption,
   type ProductYieldMeta,
   type YieldRequestLevel,
+  errorTone,
 } from "./dashboardFilters";
 
 export type YieldTab = "ALL" | "UNITS" | "TRX" | "PA";
@@ -632,7 +633,7 @@ export const ProductYieldPanel = ({
                       // The backend's own wording. Its 400s name the field to
                       // fix (dates reversed, range over the 400-day ceiling),
                       // which a generic failure message would throw away.
-                      <span className="text-warning">{rangeError}</span>
+                      <span className={errorTone(rangeError)}>{rangeError}</span>
                     ) : fetchState === "error" ? (
                       <span className="text-warning">
                         Product yield unavailable — API unreachable

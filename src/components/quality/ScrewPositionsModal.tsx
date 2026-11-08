@@ -6,7 +6,7 @@ import DrilldownModalShell from "./DrilldownModalShell";
 import SortableTh, { type SortState } from "./SortableTh";
 import { sortRows } from "./tableSort";
 import DateRangeFilter from "./DateRangeFilter";
-import { EMPTY_RANGE, type DateRange } from "./dashboardFilters";
+import { EMPTY_RANGE, errorTone, type DateRange } from "./dashboardFilters";
 import {
   useScrewPositions,
   type ScrewLogRow,
@@ -323,7 +323,7 @@ export const ScrewPositionsModal: React.FC<Props> = ({
         </div>
       )}
       {state === "error" && (
-        <div className="py-16 text-center text-[12px] font-bold text-critical">
+        <div className={`py-16 text-center text-[12px] font-bold ${errorTone(error, "text-critical")}`}>
           {error}
         </div>
       )}

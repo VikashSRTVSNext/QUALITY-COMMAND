@@ -287,12 +287,26 @@ export type CategoryTrendBucket = {
   /** Each unit in ONE category (its first disposition), so a bar is the
    *  week's dispositioned_units. */
   by_category: Record<string, number>;
+  /** 2026-11-04: rates as a % of units tested in the bucket (the same
+   *  `tested` as /trend/yield), so by_category_pct + awaiting_pct =
+   *  failure_rate_pct. All null when nothing was tested; absent on an older
+   *  backend. */
+  tested?: number;
+  failure_rate_pct?: number | null;
+  by_category_pct?: Record<string, number> | null;
+  awaiting_pct?: number | null;
 };
 
 export type CategoryTrendResponse = Envelope & {
   bucket: "day" | "week";
   /** Stack order, biggest first — so the biggest sits at the bottom. */
-  categories: { category: string; label: string; units: number }[];
+  categories: {
+    category: string;
+    label: string;
+    units: number;
+    /** % of the period's tested units (2026-11-04); null when none tested. */
+    pct_of_tested?: number | null;
+  }[];
   buckets: CategoryTrendBucket[];
   /** Equal to /pareto/category's totals for the same anchor. */
   totals: {
@@ -300,6 +314,11 @@ export type CategoryTrendResponse = Envelope & {
     dispositioned_units: number;
     awaiting_disposition: number;
     assignments: number;
+    /** 2026-11-04, same meaning as the bucket fields, over the period. */
+    tested?: number;
+    failure_rate_pct?: number | null;
+    by_category_pct?: Record<string, number> | null;
+    awaiting_pct?: number | null;
   };
 };
 

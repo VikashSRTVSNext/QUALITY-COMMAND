@@ -15,6 +15,7 @@ import {
   EMPTY_RANGE,
   rangeDayCount,
   type DateRange,
+  errorTone,
 } from "./dashboardFilters";
 import SpiPadLogTable from "./SpiPadLogTable";
 import SpiReworkPane from "./SpiReworkPane";
@@ -275,7 +276,7 @@ export const SpiDefectsModal: React.FC<Props> = ({
       )}
 
       {!rework && state === "error" && (
-        <div className="py-16 text-center text-[12px] font-bold text-critical">
+        <div className={`py-16 text-center text-[12px] font-bold ${errorTone(error, "text-critical")}`}>
           {error}
         </div>
       )}

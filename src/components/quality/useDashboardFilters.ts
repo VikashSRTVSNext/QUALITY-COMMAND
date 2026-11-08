@@ -264,9 +264,6 @@ interface ProcessPerformanceResponse {
     lines: string[];
     line_steps: string[];
     source: string;
-    /** Set when a time window reaches before DPMOI's hourly history: the
-     *  DPMOI card is left out and this says from when times work. */
-    dpmoi_omitted?: { message?: string; hourly_data_from?: string } | null;
   };
   window?: TimeWindow;
 }
@@ -311,7 +308,6 @@ export const useRangeProcessPerformance = ({
   return {
     data: data?.steps ?? null,
     lineSteps: data?.filters?.line_steps ?? null,
-    dpmoiOmitted: data?.filters?.dpmoi_omitted ?? null,
     state,
     error,
   };

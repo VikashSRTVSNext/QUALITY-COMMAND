@@ -6,7 +6,7 @@ import ScrewPositionsModal from "./ScrewPositionsModal";
 import SortableTh, { type SortState } from "./SortableTh";
 import { sortRows } from "./tableSort";
 import { useScrewDefects, type ScrewRow } from "./useScrewDefects";
-import type { DateRange } from "./dashboardFilters";
+import { errorTone, type DateRange } from "./dashboardFilters";
 
 const fmtPct = (v: number | null | undefined) =>
   isNum(v) ? `${v.toFixed(2)}%` : "—";
@@ -120,7 +120,7 @@ export const ScrewDefectsPane = ({
   }
   if (state === "error") {
     return (
-      <div className="py-16 text-center text-[12px] font-bold text-critical">
+      <div className={`py-16 text-center text-[12px] font-bold ${errorTone(error, "text-critical")}`}>
         {error}
       </div>
     );

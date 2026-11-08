@@ -5,7 +5,7 @@ import DpmoiDetailModal from "./DpmoiDetailModal";
 import SortableTh from "./SortableTh";
 import { useTableSort } from "./tableSort";
 import { useDpmoiProducts, type DpmoiRow } from "./useDpmoiProducts";
-import type { DateRange } from "./dashboardFilters";
+import { errorTone, type DateRange } from "./dashboardFilters";
 
 const fmtNum = (v: number | null | undefined) =>
   isNum(v) ? v.toLocaleString("en-US") : "—";
@@ -115,7 +115,7 @@ export const DpmoiPane = ({
   }
   if (state === "error") {
     return (
-      <div className="py-16 text-center text-[12px] font-bold text-critical">
+      <div className={`py-16 text-center text-[12px] font-bold ${errorTone(error, "text-critical")}`}>
         {error}
       </div>
     );

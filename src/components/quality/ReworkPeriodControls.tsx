@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { HOUR_SLOTS, shortDay, slotIndex } from "./dashboardFilters";
+import { HOUR_SLOTS, endBeforeStart, shortDay } from "./dashboardFilters";
 import {
   useReworkPeriods,
   type ReworkGranularity,
@@ -133,9 +133,8 @@ export const ReworkPeriodControls = ({
         if (end === "from") to = addDays(from, MAX_DAY_RANGE - 1);
         else from = addDays(to, -(MAX_DAY_RANGE - 1));
       }
-      // Narrowing to one day can leave an end hour before the start hour.
-      const clash =
-        from === to && s.timeFrom && s.timeTo && slotIndex(s.timeTo) <= slotIndex(s.timeFrom);
+      // Narrowing to one date can leave the end time at or before the start.
+      const clash = endBeforeStart(from === to, s.timeFrom, s.timeTo);
       return {
         ...s,
         anchor: null,
@@ -287,18 +286,16 @@ export const ReworkPeriodControls = ({
             onChange={(e) => {
               const t = e.target.value || null;
               onScopeChange((s) => {
-                const sameDay = s.dateFrom === s.dateTo;
-                const clash =
-                  sameDay && t && s.timeTo && slotIndex(s.timeTo) <= slotIndex(t);
+                const clash = endBeforeStart(s.dateFrom === s.dateTo, t, s.timeTo);
                 return { ...s, timeFrom: t, timeTo: clash ? null : s.timeTo };
               });
             }}
             className={SELECT}
             aria-label="Start time"
-            title="Start time, on the From day"
+            title="Start time, on the From date. --:-- = whole production days (06:15)"
           >
-            <option value="">06:15 (day start)</option>
-            {HOUR_SLOTS.filter((t) => t !== "06:15").map((t) => (
+            <option value="">--:--</option>
+            {HOUR_SLOTS.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
@@ -310,18 +307,16 @@ export const ReworkPeriodControls = ({
             onChange={(e) => onScopeChange((s) => ({ ...s, timeTo: e.target.value || null }))}
             className={SELECT}
             aria-label="End time"
-            title="End time, on the To day (not included)"
+            title="End time, on the To date (not included). For a night shift pick the next date as To, e.g. 30 Oct 22:00 → 31 Oct 06:00"
           >
+            <option value="">--:--</option>
             {HOUR_SLOTS.filter(
-              (t) =>
-                t !== "06:15" &&
-                !(scope.dateFrom === scope.dateTo && scope.timeFrom && slotIndex(t) <= slotIndex(scope.timeFrom)),
+              (t) => !endBeforeStart(scope.dateFrom === scope.dateTo, scope.timeFrom, t),
             ).map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
             ))}
-            <option value="">06:15</option>
           </select>
           <button
             type="button"
