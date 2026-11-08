@@ -39,48 +39,72 @@ const categoryColor = (code: string): string =>
 
 const CARD_STYLE = { backgroundColor: REWORK_SURFACE.panel };
 
+/** Stack key for failures still awaiting disposition — not a category code. */
+const AWAITING_KEY = "__awaiting";
+
+/** True when the server sends the % fields (2026-11-04). An older backend
+ *  does not, and the chart then stacks counts as before. */
+const trendHasRates = (data: CategoryTrendResponse): boolean =>
+  data.buckets.some((b) => b.by_category_pct != null);
+
+/**
+ * The defect category trend as a % of units tested (by_category_pct), so a
+ * bar's height is its failure rate. Failures not yet dispositioned are their
+ * own "Awaiting" segment on top: by_category_pct + awaiting_pct =
+ * failure_rate_pct. A bucket that tested nothing has null rates and an empty
+ * bar.
+ */
 const trendChart = (
   data: CategoryTrendResponse,
-): { categories: BarCategory[]; series: BarSeries[] } => ({
-  // In the server's order, biggest first: Recharts stacks the first series at
-  // the bottom, which is where the handoff wants the biggest.
-  series: data.categories.map((c) => ({
-    key: c.category,
-    label: c.label,
-    color: categoryColor(c.category),
-  })),
-  // Every bucket, future ones included, so a week always reads as seven bars.
-  categories: data.buckets.map((b) => {
-    // 2026-11-04: the tooltip reads rates (% of units tested) so its parts add
-    // up to the failure rate; the bars still stack the counts. Null when the
-    // bucket tested nothing (or an older backend) -- then it stays on counts.
-    const rates = b.by_category_pct && typeof b.failure_rate_pct === "number" ? b.by_category_pct : null;
-    return {
-      key: b.from,
-      // Week buckets are dates; month buckets are already "WK37".
-      label: data.bucket === "day" ? shortDay(b.label) : b.label,
-      values: b.by_category,
-      hint: b.in_future
+): { categories: BarCategory[]; series: BarSeries[]; rates: boolean } => {
+  const rates = trendHasRates(data);
+  const anyAwaiting = rates && data.buckets.some((b) => (b.awaiting_pct ?? 0) > 0);
+  return {
+    rates,
+    // In the server's order, biggest first: Recharts stacks the first series at
+    // the bottom, which is where the handoff wants the biggest.
+    series: [
+      ...data.categories.map((c) => ({
+        key: c.category,
+        label: c.label,
+        color: categoryColor(c.category),
+      })),
+      ...(anyAwaiting
+        ? [{ key: AWAITING_KEY, label: "Awaiting", color: REWORK_UNKNOWN_CATEGORY }]
+        : []),
+    ],
+    // Every bucket, future ones included, so a week always reads as seven bars.
+    categories: data.buckets.map((b) => {
+      const hint = b.in_future
         ? "Not reached yet"
         : `${fmt(b.failed_units)} failed` +
           (typeof b.tested === "number" ? ` of ${fmt(b.tested)} tested` : "") +
-          (b.awaiting_disposition > 0 ? ` · ${fmt(b.awaiting_disposition)} awaiting` : ""),
-      ...(rates && {
-        tooltipHeadline: `Failure rate ${pct2(b.failure_rate_pct)}`,
-        tooltipValues: Object.fromEntries(
-          Object.entries(rates).map(([cat, v]) => [cat, pct2(v)]),
-        ),
-        tooltipExtra:
-          typeof b.awaiting_pct === "number" && b.awaiting_pct > 0
-            ? [{ label: "Awaiting", value: pct2(b.awaiting_pct) }]
-            : [],
-      }),
-    };
-  }),
-});
+          (b.awaiting_disposition > 0 ? ` · ${fmt(b.awaiting_disposition)} awaiting` : "");
+      // Week buckets are dates; month buckets are already "WK37".
+      const label = data.bucket === "day" ? shortDay(b.label) : b.label;
+      if (!rates) return { key: b.from, label, values: b.by_category, hint };
+      const hasRate = typeof b.failure_rate_pct === "number";
+      return {
+        key: b.from,
+        label,
+        values: {
+          ...(b.by_category_pct ?? {}),
+          ...(anyAwaiting ? { [AWAITING_KEY]: b.awaiting_pct ?? 0 } : {}),
+        },
+        // The server's own rate, not a re-added sum of rounded parts.
+        total: hasRate ? (b.failure_rate_pct as number) : 0,
+        hint: hasRate || b.in_future ? hint : `${hint} · nothing tested`,
+        tooltipHeadline: hasRate ? `Failure rate ${pct2(b.failure_rate_pct)}` : undefined,
+      };
+    }),
+  };
+};
 
 const pct2 = (n: number | null | undefined) =>
   typeof n === "number" ? `${n.toFixed(2)}%` : "—";
+
+/** Axis ticks and bar totals: "6%", "1.25%" — no trailing zeros. */
+const pctShort = (n: number) => `${Number(n.toFixed(2))}%`;
 
 const fmt = (n: number | null | undefined) =>
   typeof n === "number" ? n.toLocaleString("en-US") : "—";
@@ -500,11 +524,12 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                   title: `Defect category by ${bucketWord}`,
                   subtitle: exportSubtitle,
                   legend: (trendView?.series ?? []).map((s) => ({ label: s.label, color: s.color })),
-                  note:
-                    `Units per rework category per ${bucketWord}, biggest at the bottom. Each failure sits in one stack (its first disposition).` +
-                    (typeof trendData?.totals.failure_rate_pct === "number"
-                      ? ` Failure rate over the period ${pct2(trendData.totals.failure_rate_pct)} of ${fmt(trendData.totals.tested)} tested.`
-                      : ""),
+                  note: trendView?.rates
+                    ? `Each rework category as a % of the units tested per ${bucketWord}, biggest at the bottom; a bar's height is its failure rate (failures awaiting disposition on top).` +
+                      (typeof trendData?.totals.failure_rate_pct === "number"
+                        ? ` Failure rate over the period ${pct2(trendData.totals.failure_rate_pct)} of ${fmt(trendData.totals.tested)} tested.`
+                        : "")
+                    : `Units per rework category per ${bucketWord}, biggest at the bottom. Each failure sits in one stack (its first disposition).`,
                 })}
               />
               </div>
@@ -520,19 +545,30 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
                     categories={trendView.categories}
                     series={trendView.series}
                     height={260}
-                    yLabel="Units"
+                    yLabel={trendView.rates ? "% of tested" : "Units"}
+                    formatValue={trendView.rates ? pctShort : undefined}
                     maxCategories={31}
                     maxLabelChars={10}
                     emptyLabel="No dispositioned failures to stack in this period."
                     surfaceColor={REWORK_SURFACE.panel}
                   />
                   <div className="text-[10px] text-ink-dim leading-snug mt-2">
-                    Units per rework category per {bucketWord}, biggest at the bottom.
-                    Each failure sits in one stack (its first disposition), so a bar is
-                    that {bucketWord}&apos;s dispositioned failures. The current one is
-                    drawn while still in progress; one with nothing stays on the
-                    axis, empty. Hover a bar for each category as a % of the units
-                    tested that {bucketWord}; together they make its failure rate.
+                    {trendView.rates ? (
+                      <>
+                        Each rework category as a % of the units tested that {bucketWord},
+                        biggest at the bottom, so a bar&apos;s height is its failure rate.
+                        Failures not yet dispositioned sit on top as Awaiting. A{" "}
+                        {bucketWord} with nothing tested stays on the axis, empty.
+                      </>
+                    ) : (
+                      <>
+                        Units per rework category per {bucketWord}, biggest at the bottom.
+                        Each failure sits in one stack (its first disposition), so a bar is
+                        that {bucketWord}&apos;s dispositioned failures. The current one is
+                        drawn while still in progress; one with nothing stays on the
+                        axis, empty.
+                      </>
+                    )}
                   </div>
                 </>
               )}

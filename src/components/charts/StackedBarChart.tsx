@@ -31,14 +31,12 @@ export type BarCategory = {
   /** Greyed on the axis and in its segments — e.g. a week not reached yet,
    *  kept so the axis keeps its full length. */
   dimmed?: boolean;
-  /** Tooltip text per series, shown instead of the count — e.g. a rate
-   *  ("1.25%"). The bars still stack the counts. When set, the count Total
-   *  row is left out so the tooltip never mixes counts and rates. */
-  tooltipValues?: Record<string, string>;
-  /** Bold line under the tooltip title, e.g. "Failure rate 6.00%". */
+  /** The bar's total when the caller knows it exactly (e.g. a rate the
+   *  server rounded); otherwise the sum of `values`. */
+  total?: number;
+  /** Bold line under the tooltip title, e.g. "Failure rate 6.00%". Replaces
+   *  the tooltip's Total row, which would say the same. */
   tooltipHeadline?: string;
-  /** Rows after the series in the tooltip, for parts that are not a series. */
-  tooltipExtra?: { label: string; value: string }[];
 };
 
 export type StackedBarChartProps = {
@@ -47,6 +45,10 @@ export type StackedBarChartProps = {
   height?: number;
   /** Suffix on every count, e.g. "u". */
   unit?: string;
+  /** Formats every value — axis ticks, tooltip, bar totals — for charts
+   *  that stack rates rather than counts (then `unit` is ignored and the axis
+   *  allows decimals). */
+  formatValue?: (n: number) => string;
   /** Y-axis title. Name the unit here so no bar has to. */
   yLabel?: string;
   /** Categories past this many are folded into one "Other" bar rather than
@@ -107,6 +109,7 @@ export const StackedBarChart = ({
   series,
   height = 260,
   unit = "",
+  formatValue,
   yLabel,
   maxCategories = 12,
   maxLabelChars = 22,
@@ -128,11 +131,9 @@ export const StackedBarChart = ({
       label: truncate(c.label, maxLabelChars),
       fullLabel: c.label,
       hint: c.hint,
-      tooltipValues: c.tooltipValues,
       tooltipHeadline: c.tooltipHeadline,
-      tooltipExtra: c.tooltipExtra,
       __dimmed: Boolean(c.dimmed),
-      total: series.reduce((acc, s) => acc + (c.values[s.key] ?? 0), 0),
+      total: c.total ?? series.reduce((acc, s) => acc + (c.values[s.key] ?? 0), 0),
       // A zero-height cap stacked above every series. It is the one place the
       // total is drawn, so every bar gets exactly one label at the top of its
       // stack whichever series happens to end it.
@@ -164,6 +165,7 @@ export const StackedBarChart = ({
     return { rows, shown: head.length, folded: tail.length };
   }, [categories, series, maxCategories, maxLabelChars]);
   const anyDimmed = rows.some((r) => r.__dimmed);
+  const fmtValue = (n: number) => (formatValue ? formatValue(n) : `${n}${unit}`);
   // Short labels ("WK41", "P10") sit flat under their bar; only long ones need
   // the angled tick and the 64px it reserves, which otherwise leaves a band of
   // empty space under a week axis.
@@ -190,8 +192,6 @@ export const StackedBarChart = ({
       .map((s) => ({ ...s, value: row[s.key] as number }))
       .filter((s) => s.value > 0)
       .sort((a, b) => b.value - a.value);
-    const override: Record<string, string> | undefined = row.tooltipValues;
-    const extra: { label: string; value: string }[] = row.tooltipExtra ?? [];
 
     return (
       <div className="bg-panel border border-line-soft rounded-lg px-3 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.6)] max-w-[320px]">
@@ -220,25 +220,17 @@ export const StackedBarChart = ({
               />
               <span className="text-ink-muted font-mono">{s.label}</span>
               <span className="ml-auto font-mono font-bold text-white tabular-nums">
-                {override?.[s.key] ?? `${s.value}${unit}`}
+                {fmtValue(s.value)}
               </span>
             </div>
           ))}
-          {extra.map((x) => (
-            <div key={x.label} className="flex items-center gap-2 text-[10px] whitespace-nowrap">
-              <span className="w-2 h-2 flex-shrink-0" />
-              <span className="text-ink-dim font-mono">{x.label}</span>
-              <span className="ml-auto font-mono font-bold text-white tabular-nums">{x.value}</span>
-            </div>
-          ))}
-          {!override && (
+          {!row.tooltipHeadline && (
           <div className="flex items-center gap-2 text-[10px] pt-1 mt-1 border-t border-line/60">
             <span className="text-ink-dim font-black uppercase tracking-wider">
               Total
             </span>
             <span className="ml-auto font-mono font-black text-white tabular-nums">
-              {row.total}
-              {unit}
+              {fmtValue(row.total)}
             </span>
           </div>
           )}
@@ -303,7 +295,8 @@ export const StackedBarChart = ({
           />
           <YAxis
             tick={AXIS_TICK}
-            allowDecimals={false}
+            allowDecimals={Boolean(formatValue)}
+            tickFormatter={formatValue}
             width={44}
             tickLine={false}
             axisLine={false}
@@ -398,7 +391,7 @@ export const StackedBarChart = ({
                     fontSize={9.5}
                     fontWeight={700}
                   >
-                    {value}
+                    {formatValue ? formatValue(value) : value}
                   </text>
                 );
               }}
