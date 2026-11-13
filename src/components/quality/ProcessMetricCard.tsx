@@ -148,7 +148,7 @@ export const ProcessMetricCard = ({
 
       {isNum(item.target) && (
     <span className="absolute bottom-1 right-1.5 2xl:right-2 text-ink-dim text-[7.5px] 2xl:text-[9px] font-bold leading-none pointer-events-none">
-      Tgt {item.target}
+      Limit {item.target}
       {item.targetUnit === "percent" ? "%" : ""}
     </span>
       )}

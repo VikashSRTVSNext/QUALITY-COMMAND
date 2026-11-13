@@ -1,0 +1,1 @@
+import{o as i,q as s,v as c,w as n}from"./index-CeQE_s-O.js";function t(e){return new Promise(o=>setTimeout(()=>o(e),200))}const m={productionLines:()=>t(n),lineDetail:e=>t(s(e)),qualityDefects:()=>t(c),defectDetail:e=>t(i(e))};export{m as e};

@@ -1,0 +1,1 @@
+import{h as a}from"./index-CeQE_s-O.js";import{ae as t,af as o}from"./CartesianChart-C4eLbnht.js";var i=["axis","item"],s=a.forwardRef((r,e)=>a.createElement(t,{chartName:"BarChart",defaultTooltipEventType:"axis",validateTooltipEventTypes:i,tooltipPayloadSearcher:o,categoricalChartProps:r,ref:e}));export{s as B};
