@@ -33,7 +33,6 @@ import {
   useProcessFilterOptions,
   useProductOptions,
   useRangeKpis,
-  useRangeHftpy,
   useRangeProcessPerformance,
   useRangeProductYield,
 } from "../quality/useDashboardFilters";
@@ -90,6 +89,37 @@ interface EriData {
 // ("27 Oct"), or its business_date shortened on a backend that predates it.
 const dayLabel = (d: { label?: string | null; business_date?: string | null }) =>
   d.label || (d.business_date ? shortDay(d.business_date) : null);
+
+/**
+ * The UNIT-HFTPY card from the fiscal-month `hftpy` block (2026-11-13). It
+ * takes no filter, so the live and filtered dashboards show the same card,
+ * labelled with the block's `period` (e.g. "2026 P10"), never the selected
+ * dates. actual_pct = products_on_target / products_qualified, where a product
+ * qualifies with at least `min_tested` (200) tested in the month; the
+ * projection is the plan sheet's for the period.
+ */
+const hftpyCard = <C extends Record<string, any>>(card: C, block: any): C => {
+  if (!block) return card;
+  const actual = block.actual_pct;
+  const projection = block.projection_pct;
+  const qualified = isNum(block.products_qualified) ? block.products_qualified : null;
+  const productsLine =
+    qualified === null
+      ? null
+      : qualified > 0
+        ? `${block.products_on_target} of ${qualified} products on target`
+        : `No product qualifies (≥${block.min_tested ?? 200} tested)`;
+  const vsProj = isNum(block.delta_vs_projection)
+    ? `${block.delta_vs_projection > 0 ? "+" : ""}${block.delta_vs_projection.toFixed(1)}% vs proj`
+    : null;
+  return {
+    ...card,
+    value: isNum(actual) ? `${actual.toFixed(1)}%` : "—",
+    projectedValue: isNum(projection) ? `${projection.toFixed(1)}%` : "—",
+    change: [block.period, productsLine, vsProj].filter(Boolean).join(" · "),
+    delta_vs_yesterday: isNum(block.delta_vs_projection) ? block.delta_vs_projection : 0,
+  };
+};
 
 // Inline SVG icons for the few tiles lucide-react has no equivalent for.
 const ScrewIcon = ({
@@ -1030,21 +1060,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     active: kpiFiltered,
     refreshTick,
   });
-  // Plant-wide: a product selection blanks the card instead, so it is not
-  // asked for then. With no date range it is TODAY (the endpoint's default),
-  // which gives the live card its "N of M products on target" line. The live
-  // stream does not refresh REST hooks, so today's count re-polls each minute.
-  const [hftpyTodayTick, setHftpyTodayTick] = useState(0);
-  useEffect(() => {
-    if (rangeActive) return;
-    const id = window.setInterval(() => setHftpyTodayTick((t) => t + 1), 60_000);
-    return () => window.clearInterval(id);
-  }, [rangeActive]);
-  const rangedHftpy = useRangeHftpy({
-    range: dateRange,
-    active: selectedProducts.length === 0,
-    refreshTick: rangeActive ? refreshTick : hftpyTodayTick,
-  });
+  // UNIT-HFTPY is the current fiscal month only (2026-11-13) and comes with
+  // the live stream's `hftpy` block under every filter, so there is no
+  // filtered request for it any more (/dashboard/hftpy/range now just echoes
+  // that block).
   const rangedProcess = useRangeProcessPerformance({
     range: dateRange,
     products: selectedProducts,
@@ -1459,32 +1478,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
     setKpiCards((prev) => {
       return prev.map((card) => {
-        if (card.id === 9) {
-          if (!hftpyBlock) return card;
-          const actual = hftpyBlock.actual_pct;
-          const projection = hftpyBlock.projection_pct;
-          // Today's products on target, from /dashboard/hftpy/range with no
-          // dates. The value and projection stay the fiscal month's.
-          const today = rangedHftpy.data;
-          const todayLine =
-            today && today.products_qualified > 0
-              ? `${today.products_on_target} of ${today.products_qualified} products on target`
-              : today
-                ? "No product qualifies today"
-                : null;
-          const vsProj = isNum(hftpyBlock.delta_vs_projection)
-            ? `${hftpyBlock.delta_vs_projection > 0 ? "+" : ""}${hftpyBlock.delta_vs_projection.toFixed(1)}% vs proj`
-            : "";
-          return {
-            ...card,
-            value: isNum(actual) ? `${actual.toFixed(1)}%` : "—",
-            projectedValue: isNum(projection)
-              ? `${projection.toFixed(1)}%`
-              : "—",
-            change: [todayLine, vsProj].filter(Boolean).join(" · "),
-            delta_vs_yesterday: hftpyBlock.delta_vs_projection ?? 0,
-          };
-        }
+        if (card.id === 9) return hftpyCard(card, hftpyBlock);
 
         const keyMap: Record<number, string> = {
           1: "fpy_unit",
@@ -1621,7 +1615,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
         return card;
       });
     });
-  }, [activeShift, rawKpiData, hftpyBlock, kpiFiltered, rangedHftpy.data]);
+  }, [activeShift, rawKpiData, hftpyBlock, kpiFiltered]);
 
   // The same five cards, over a date range, from /dashboard/kpis.
   //
@@ -1644,40 +1638,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
 
     setKpiCards((prev) =>
       prev.map((card) => {
-        // UNIT-HFTPY over a RANGE comes from /dashboard/hftpy/range
-        // (2026-10-30): products on target / products qualified. It is plant-
-        // wide, so under a product chip it stays blank — a plant number there
-        // would read as the product's. The projection is the FISCAL MONTH's
-        // and does not depend on the dates picked, so it stays on the card
-        // under any filter, read from the live hftpy block.
-        if (card.id === 9) {
-          const monthProjection = hftpyBlock?.projection_pct;
-          const blank = {
-            ...card,
-            value: "—",
-            projectedValue: isNum(monthProjection) ? `${monthProjection.toFixed(1)}%` : "—",
-            delta_vs_yesterday: 0,
-          };
-          if (productActive) return { ...blank, change: "n/a for a product" };
-          const h = rangedHftpy.data;
-          if (!h) {
-            return {
-              ...blank,
-              change:
-                rangedHftpy.state === "error"
-                  ? (rangedHftpy.error ?? "HFTPY unavailable")
-                  : "Loading…",
-            };
-          }
-          if (!isNum(h.hftpy_pct)) {
-            return { ...blank, change: "No product qualifies (≥50 passed)" };
-          }
-          return {
-            ...blank,
-            value: `${h.hftpy_pct.toFixed(1)}%`,
-            change: `${h.products_on_target} of ${h.products_qualified} products on target`,
-          };
-        }
+        // UNIT-HFTPY takes no filter (2026-11-13): always the current fiscal
+        // month, whatever dates, times, shift or product are selected, so it
+        // reads the same block as the live card.
+        if (card.id === 9) return hftpyCard(card, hftpyBlock);
 
         const keyMap: Record<
           number,
@@ -1781,9 +1745,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     rangeActive,
     rangedKpis.data,
     selectedProducts.length,
-    rangedHftpy.data,
-    rangedHftpy.state,
-    rangedHftpy.error,
     hftpyBlock,
   ]);
 

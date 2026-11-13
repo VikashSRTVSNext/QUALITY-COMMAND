@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { HOUR_SLOTS, endBeforeStart, shortDay } from "./dashboardFilters";
 import {
+  useReworkHistoryFrom,
   useReworkPeriods,
   type ReworkGranularity,
   type ReworkPeriod,
@@ -97,6 +98,11 @@ export const ReworkPeriodControls = ({
   allowDay = true,
 }: Props) => {
   const periods = useReworkPeriods(scope.granularity);
+  // Week counts calendar days from timestamped data (2026-11-13), which starts
+  // on this day; a week before it is a 400. Known once a request said so.
+  const historyFrom = useReworkHistoryFrom();
+  const weekBeforeHistory = (from: string) =>
+    scope.granularity === "week" && historyFrom !== null && from < historyFrom;
 
   // Read only when the list is for the granularity on screen, so a stale
   // month list never fills the week dropdowns for a frame.
@@ -146,7 +152,12 @@ export const ReworkPeriodControls = ({
   };
 
   const prevDisabled =
-    loading || !period?.prev_anchor || period.prev_anchor < oldestAnchor() || rejected;
+    loading ||
+    !period?.prev_anchor ||
+    period.prev_anchor < oldestAnchor() ||
+    rejected ||
+    // Sliding the 5-week span back one week moves its first week 7 days back.
+    (spanWeeks[0] ? weekBeforeHistory(addDays(spanWeeks[0].from, -7)) : false);
   const nextDisabled = loading || !period?.next_anchor;
 
   /** Pick one end of the week range; the other end stays where it is on screen. */
@@ -371,7 +382,11 @@ export const ReworkPeriodControls = ({
               </option>
             )}
             {periodOptions.map((o) => (
-              <option key={o.anchor} value={o.anchor} disabled={!!toOption && o.from > toOption.from}>
+              <option
+                key={o.anchor}
+                value={o.anchor}
+                disabled={(!!toOption && o.from > toOption.from) || weekBeforeHistory(o.from)}
+              >
                 {optionLabel(o)}
               </option>
             ))}
@@ -392,7 +407,11 @@ export const ReworkPeriodControls = ({
               </option>
             )}
             {periodOptions.map((o) => (
-              <option key={o.anchor} value={o.anchor} disabled={!!fromOption && o.from < fromOption.from}>
+              <option
+                key={o.anchor}
+                value={o.anchor}
+                disabled={(!!fromOption && o.from < fromOption.from) || weekBeforeHistory(o.from)}
+              >
                 {optionLabel(o)}
               </option>
             ))}

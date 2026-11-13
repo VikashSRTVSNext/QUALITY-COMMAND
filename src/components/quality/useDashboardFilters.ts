@@ -211,51 +211,9 @@ export const useRangeKpis = ({
   return { data, state, error, isEmpty };
 };
 
-/** /dashboard/hftpy/range (2026-10-30). Plant-wide: there is no product filter. */
-export interface HftpyRangeResponse {
-  /** products_on_target / products_qualified, as a percentage. null when no
-   *  product qualifies. */
-  hftpy_pct: number | null;
-  products_on_target: number;
-  /** Unit products with at least 50 first-pass passed units in the range. */
-  products_qualified: number;
-  products?: {
-    item?: string;
-    product?: string;
-    tested: number;
-    passed: number;
-    fpy_pct: number | null;
-    target_yield_pct: number | null;
-    qualifies: boolean;
-    on_target: boolean;
-  }[];
-}
-
-/**
- * HFTPY over the dashboard's date range. Only a date range moves it: the
- * endpoint is plant-wide, so a product selection is not sent (and the card
- * says the figure is n/a for a product). `products=false` drops the per-product
- * list the card does not show.
- */
-export const useRangeHftpy = ({
-  range,
-  active,
-  refreshTick = 0,
-}: {
-  range: DateRange;
-  active: boolean;
-  refreshTick?: number;
-}) => {
-  const q = buildDashboardParams({ range, shift: null });
-  q.set("products", "false");
-  const url = active ? apiUrl(`/dashboard/hftpy/range?${q}`) : null;
-  return useScopedFetch<HftpyRangeResponse>(
-    url,
-    active ? scopeError(range) : null,
-    refreshTick,
-    "HFTPY for the range",
-  );
-};
+// /dashboard/hftpy/range is not called any more: since 2026-11-13 UNIT-HFTPY
+// takes no filter and the endpoint only echoes the fiscal-month block the live
+// stream already carries (QualityLayout's hftpyCard).
 
 interface ProcessPerformanceResponse {
   steps?: Record<string, any>;

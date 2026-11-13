@@ -239,6 +239,9 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
   const showTrends = trendsAvailable(scope);
   // A Day range draws one bar per day; Week and Month one per fiscal week.
   const bucketWord = isDayRange(scope) ? "day" : "fiscal week";
+  // Week counts calendar days, 00:00 → 00:00, on every rework chart
+  // (2026-11-13); Day and Month stay on 06:15 production days.
+  const weekCalendar = scope.granularity === "week";
   const trendData = showTrends ? trend.data : null;
   const trendView = trendData ? trendChart(trendData) : null;
 
@@ -343,8 +346,9 @@ export const ReworkAnalysisPane = ({ level, item, onBusyChange }: Props) => {
           <div className="text-[10px] text-ink-dim leading-snug mt-1">
             FPY = (tested − failed) / tested for the {bucketWord}. A {bucketWord} with
             nothing tested leaves a gap in the line. Buckets are calendar days
-            (00:00 → 00:00); the category chart beside it uses production days
-            (06:15 → 06:15), so their edges differ slightly.
+            (00:00 → 00:00){weekCalendar
+              ? ", like every chart in the Week view."
+              : "; the category chart beside it uses production days (06:15 → 06:15), so their edges differ slightly."}
           </div>
         </>
       )}

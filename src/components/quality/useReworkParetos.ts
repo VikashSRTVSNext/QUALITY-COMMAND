@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { apiUrl } from "../../core/api/config";
 import { detailText, isPickedTime, type YieldRequestLevel } from "./dashboardFilters";
 
@@ -37,6 +37,12 @@ export type ReworkPeriod = {
   prev_anchor: string | null;
   /** null on the current period — there is nothing after it yet. */
   next_anchor: string | null;
+  /** Week (2026-11-13): the exact span, calendar days 00:00 → 00:00, e.g.
+   *  {from: "2026-09-21T00:00", to: "2026-10-26T00:00", hours: 840}. */
+  window?: { from: string; to: string; hours: number } | null;
+  /** "calendar" on Week (midnight to midnight); Day and Month stay on 06:15
+   *  production days. */
+  day_basis?: "calendar" | "production";
 };
 
 type Envelope = {
@@ -164,6 +170,32 @@ export const scopeParams = (scope: ReworkScope): URLSearchParams => {
 };
 
 /** One request, abortable, keeping the last good body while the next loads. */
+/**
+ * The first day the rework charts' timestamped history covers, once any
+ * rework request has been refused for reaching before it (400 with
+ * `detail.hourly_data_from`). /rework/periods does not say, so it is learnt
+ * from the first refusal and shared by every rework view: the week dropdowns
+ * then stop offering the weeks before it (2026-11-13).
+ */
+let reworkHistoryFrom: string | null = null;
+const historyListeners = new Set<() => void>();
+
+const noteHistoryFrom = (body: any) => {
+  const from = body?.detail?.hourly_data_from;
+  if (typeof from !== "string" || from === reworkHistoryFrom) return;
+  reworkHistoryFrom = from;
+  historyListeners.forEach((l) => l());
+};
+
+export const useReworkHistoryFrom = (): string | null =>
+  useSyncExternalStore(
+    (l) => {
+      historyListeners.add(l);
+      return () => historyListeners.delete(l);
+    },
+    () => reworkHistoryFrom,
+  );
+
 export const useParetoFetch = <T,>(url: string | null, label: string): ParetoQuery<T> => {
   const [query, setQuery] = useState<ParetoQuery<T>>({
     data: null,
@@ -188,6 +220,7 @@ export const useParetoFetch = <T,>(url: string | null, label: string): ParetoQue
           // FastAPI's {"detail": "..."}, documented as safe to show.
           const body = await res.json().catch(() => null);
           if (controller.signal.aborted) return;
+          noteHistoryFrom(body);
           setQuery((q) => ({
             ...q,
             state: "error",
