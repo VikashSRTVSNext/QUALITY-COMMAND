@@ -205,11 +205,13 @@ const SafetyChart = ({
   yTicks,
   xTicks,
   color = palette.critical,
+  getPointColor,
 }: {
   points: number[];
   yTicks: number[];
   xTicks: string[];
   color?: string;
+  getPointColor?: (value: number) => string;
 }) => {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const width = 200;
@@ -328,7 +330,7 @@ const SafetyChart = ({
             y1={paddingTop}
             x2={paddingLeft + (hoveredIdx / (points.length - 1)) * chartWidth}
             y2={paddingTop + chartHeight}
-            stroke={color}
+            stroke={getPointColor?.(points[hoveredIdx]) ?? color}
             strokeWidth="0.5"
             strokeDasharray="2,2"
             opacity="0.5"
@@ -347,7 +349,7 @@ const SafetyChart = ({
                 cx={x}
                 cy={y}
                 r={isHovered ? "2.5" : "1.8"}
-                fill={color}
+                fill={getPointColor?.(p) ?? color}
                 stroke={isHovered ? palette.white : "#050b12"}
                 strokeWidth="0.4"
                 style={{
@@ -413,7 +415,7 @@ const SafetyChart = ({
                     height={tooltipHeight}
                     rx="3"
                     fill="#050b12"
-                    stroke={color}
+                    stroke={getPointColor?.(points[hoveredIdx]) ?? color}
                     strokeWidth="0.8"
                     opacity="0.95"
                   />
@@ -2613,7 +2615,10 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                   points={accidentPoints}
                   yTicks={incidentYTicks}
                   xTicks={safetyXTicks}
-                  color={incidentColor}
+                  color={palette.healthy}
+                  getPointColor={(value) =>
+                    value > 0 ? palette.critical : palette.healthy
+                  }
                 />
               </div>
             </div>
