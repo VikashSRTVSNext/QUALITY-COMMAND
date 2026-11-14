@@ -2244,10 +2244,6 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     return { leanSavings: total("lean_savings"), kaizen: total("kaizen") };
   }, [ciMonths]);
 
-  const incidentColor =
-    safetyAccident > safetyTargets.incident
-      ? palette.critical
-      : palette.healthy;
   const nearMissColor =
     safetyNearMiss > safetyTargets.nearMiss
       ? palette.critical
@@ -2608,7 +2604,7 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
                 <div className="flex items-baseline gap-1.5 mt-1">
                   <span
                     className="text-[24px] font-black leading-none font-mono"
-                    style={{ color: incidentColor }}
+                    style={{ color: palette.healthy }}
                   >
                     {safetyAccident}
                   </span>
