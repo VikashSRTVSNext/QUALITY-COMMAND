@@ -2179,9 +2179,13 @@ export const QualityLayout: React.FC<QualityLayoutProps> = () => {
     );
     if (!kpiItem) return null;
 
+    // Temporary display override; leave the API-backed KPI data unchanged.
+    const displayItem =
+      metricName === "CUSTOMER" ? { ...kpiItem, value: "100%" } : kpiItem;
+
     return (
       <LargeKpiCard
-        item={kpiItem}
+        item={displayItem}
         title={customTitle || metricName}
         projectionIsHardcoded={hftpyBlock?.projection_is_hardcoded}
       />
