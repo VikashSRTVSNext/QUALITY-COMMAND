@@ -26,6 +26,9 @@ RUN npm run build
 # ---- Production stage ----
 FROM nginx:alpine
 
+# Require the patched libxslt package before dropping privileges.
+RUN apk add --no-cache --upgrade 'libxslt>=1.1.43-r4'
+
 # Copy custom Nginx configuration listening on port 8080
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 
