@@ -1,4 +1,49 @@
-## Frontend NESC Deployment Steps
+## Deploy branch demo/factory-production
+
+Local source: `D:\Projects\nokia-factory-frontend`, branch `demo/factory-production`.
+Do not use the sibling Production Experience Centre repository's deployment script.
+Target URL: `https://digitwin.dyn.nesc.nokia.net/factory-command-center/production-demo/`.
+
+The dedicated image and Service/Deployment/Ingress are named
+`factory-production-demo`, in existing namespace `nokia-factory-command-center`.
+Existing Factory and PEC resources are not modified. This is a separate frontend
+deployment, not an offline-data mode: the existing Factory API and stream URLs
+remain configured, with `VITE_USE_MOCKS=false` as in the original Docker build.
+
+PowerShell preview (safe; builds the local working tree only when `-Deploy` is passed):
+
+```powershell
+& "D:\Projects\nokia-factory-frontend\scripts\deploy-production-demo.ps1"
+```
+
+After Docker/ACR access, the intended cluster context, existing `acr-auth` and
+`frontend-nokia-tls` secrets, Nginx ingress and NESC-only access are confirmed:
+
+```powershell
+& "D:\Projects\nokia-factory-frontend\scripts\deploy-production-demo.ps1" -Context YOUR_CONFIRMED_CONTEXT -NetworkRestricted -Deploy
+```
+
+For MobaXterm/Bash, first copy this branch **including these deployment files**
+to the server. Run from that checkout, with an explicitly confirmed context:
+
+```bash
+CONTEXT=YOUR_CONFIRMED_CONTEXT
+test "$(git branch --show-current)" = "demo/factory-production" &&
+kubectl --context "$CONTEXT" apply --dry-run=server -f k8s/production-demo/deployment.yaml &&
+docker build --pull --no-cache -f Dockerfile.production-demo -t tvsnext.azurecr.io/factory-production-demo:latest . &&
+docker push tvsnext.azurecr.io/factory-production-demo:latest &&
+kubectl --context "$CONTEXT" apply -f k8s/production-demo/deployment.yaml &&
+kubectl --context "$CONTEXT" -n nokia-factory-command-center rollout restart deployment/factory-production-demo &&
+kubectl --context "$CONTEXT" -n nokia-factory-command-center rollout status deployment/factory-production-demo --timeout=180s
+```
+
+Use only the demo manifest, not `kubectl apply -f k8s/` or recursive apply.
+These commands build, push and deploy; the PowerShell preview does not.
+The `latest` tag is mutable; retain the previous image digest for recovery.
+Verify `/production-demo/` assets and deep links, the unchanged Factory URL,
+TLS and API access after rollout. Local preparation does not prove live routing.
+
+## Original Factory deployment (not the demo branch workflow)
 
 #### Build Image
 

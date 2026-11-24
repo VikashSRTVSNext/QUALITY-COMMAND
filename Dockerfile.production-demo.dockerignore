@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-demo
+dist-production-demo
+dist-electron
+release
+.git
+.snowflake
+.claude
+.env
+.env.*
+**/*.pem
+**/*.key
+**/*.pfx
